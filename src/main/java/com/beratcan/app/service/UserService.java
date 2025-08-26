@@ -2,14 +2,17 @@ package com.beratcan.app.service;
 
 import com.beratcan.app.dto.LoginRequest;
 import com.beratcan.app.dto.UserDTO;
+import com.beratcan.app.entity.Question;
 import com.beratcan.app.entity.Role;
 import com.beratcan.app.entity.User;
+import com.beratcan.app.repository.QuestionRepository;
 import com.beratcan.app.repository.UserRepository;
 import com.beratcan.app.security.JwtUtil;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.util.Optional;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 @Service
@@ -17,12 +20,14 @@ public class UserService {
 
     private final UserRepository userRepository;
     private final BCryptPasswordEncoder passwordEncoder;
+    private final QuestionRepository questionRepository;
 
     private static final Pattern PHONE_PATTERN = Pattern.compile("^\\+?[0-9]{10,13}$");
 
-    public UserService(UserRepository userRepository) {
+    public UserService(UserRepository userRepository, QuestionRepository questionRepository) {
         this.userRepository = userRepository;
         this.passwordEncoder = new BCryptPasswordEncoder();
+        this.questionRepository = questionRepository;
     }
 
     public User registerUser(UserDTO dto) {
@@ -77,6 +82,38 @@ public class UserService {
 
         // Login başarılı → JWT döndür
         return user;
+    }
+
+    // Soru flagleme
+    public void flagQuestion(Long userId, Long questionId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        Question question = questionRepository.findById(questionId)
+                .orElseThrow(() -> new RuntimeException("Question not found"));
+
+        user.getFlaggedQuestions().add(question);
+        userRepository.save(user);
+    }
+
+    // Flag kaldırma
+    public void unflagQuestion(Long userId, Long questionId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        Question question = questionRepository.findById(questionId)
+                .orElseThrow(() -> new RuntimeException("Question not found"));
+
+        user.getFlaggedQuestions().remove(question);
+        userRepository.save(user);
+    }
+
+    // Kullanıcının flagged questions listesi
+    public Set<Question> getFlaggedQuestions(Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        return user.getFlaggedQuestions();
     }
 
 }

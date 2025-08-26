@@ -47,4 +47,12 @@ public class User {
             inverseJoinColumns = @JoinColumn(name = "book_id")
     )
     private Set<Book> ownedBooks;
+
+    @ManyToMany
+    @JoinTable(
+            name = "user_flagged_questions",
+            joinColumns = @JoinColumn(name = "user_id"),
+            inverseJoinColumns = @JoinColumn(name = "question_id")
+    )
+    private Set<Question> flaggedQuestions;
 }

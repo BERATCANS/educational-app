@@ -1,10 +1,13 @@
 package com.beratcan.app.service;
 
+import com.beratcan.app.dto.BookRequestDTO;
 import com.beratcan.app.entity.Book;
 import com.beratcan.app.entity.BookCode;
+import com.beratcan.app.entity.Topic;
 import com.beratcan.app.entity.User;
 import com.beratcan.app.repository.BookCodeRepository;
 import com.beratcan.app.repository.BookRepository;
+import com.beratcan.app.repository.TopicRepository;
 import com.beratcan.app.repository.UserRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,25 +22,30 @@ public class BookService {
     private final BookRepository bookRepository;
     private final BookCodeRepository codeRepository;
     private final UserRepository userRepository;
+    private final TopicRepository topicRepository;
 
-    public BookService(BookRepository bookRepository, BookCodeRepository codeRepository, UserRepository userRepository) {
+    public BookService(BookRepository bookRepository, BookCodeRepository codeRepository, UserRepository userRepository, TopicRepository topicRepository) {
         this.bookRepository = bookRepository;
         this.codeRepository = codeRepository;
         this.userRepository = userRepository;
+        this.topicRepository = topicRepository;
     }
 
-    // Kitap ekleme
-    public Book addBook(Book book, List<String> codes) {
+    public Book addBook(Book book, List<String> topics) {
+
+        // book’u önce kaydet
         Book savedBook = bookRepository.save(book);
-        if (book.isPaid() && codes != null) {
-            for (String codeValue : codes) {
-                BookCode code = new BookCode();
-                code.setBook(savedBook);
-                code.setCode(codeValue);
-                code.setUsed(false);
-                codeRepository.save(code);
+
+        if (topics != null) {
+            for (String topicName : topics) {
+                Topic topic = new Topic();
+                topic.setTitle(topicName);
+                topic = topicRepository.save(topic);
+                savedBook.getTopics().add(topic);
             }
+            savedBook = bookRepository.save(savedBook);
         }
+
         return savedBook;
     }
 
@@ -80,6 +88,28 @@ public class BookService {
         paidBooks.addAll(freeBooks);
 
         return paidBooks;
+    }
+
+    // 📌 Kitap güncelleme
+    public Book updateBook(Long bookId, BookRequestDTO request) {
+        Book book = bookRepository.findById(bookId)
+                .orElseThrow(() -> new RuntimeException("Book not found"));
+
+        book.setTitle(request.getTitle());
+        book.setPublisher(request.getPublisher());
+        book.setCoverImageUrl(request.getCoverImageUrl());
+        book.setPaid(request.isPaid());
+
+        // Kod güncellemesi gerekiyorsa buraya eklenebilir
+        return bookRepository.save(book);
+    }
+
+    // 📌 Kitap silme
+    public void deleteBook(Long bookId) {
+        if (!bookRepository.existsById(bookId)) {
+            throw new RuntimeException("Book not found");
+        }
+        bookRepository.deleteById(bookId);
     }
 }
 

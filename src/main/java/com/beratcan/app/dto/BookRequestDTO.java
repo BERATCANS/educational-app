@@ -11,5 +11,5 @@ public class BookRequestDTO {
     private String publisher;
     private String coverImageUrl;
     private boolean paid;
-    private List<String> codes;
+    private List<String> topics;
 }

@@ -1,8 +1,6 @@
 package com.beratcan.app.controller;
 
-import com.beratcan.app.dto.OptionRequest;
-import com.beratcan.app.dto.QuestionPartRequest;
-import com.beratcan.app.entity.OptionLetter;
+import com.beratcan.app.dto.QuestionRequest;
 import com.beratcan.app.entity.Question;
 import com.beratcan.app.service.QuestionService;
 import org.springframework.web.bind.annotation.*;
@@ -20,12 +18,8 @@ public class QuestionController {
     }
 
     @PostMapping("/add")
-    public Question addQuestion(@RequestParam Long testId,
-                                @RequestBody List<QuestionPartRequest> parts,
-                                @RequestBody List<OptionRequest> options,
-                                @RequestParam OptionLetter correctAnswer,
-                                @RequestParam int pageNumber) {
-        return questionService.addQuestion(testId, parts, options, correctAnswer, pageNumber);
+    public Question addQuestion(@RequestBody QuestionRequest request) {
+        return questionService.addQuestion(request);
     }
 
     @GetMapping("/by-test/{testId}")

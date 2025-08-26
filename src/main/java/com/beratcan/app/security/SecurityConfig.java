@@ -23,7 +23,7 @@ public class SecurityConfig {
         http
                 .csrf(csrf -> csrf.disable()) // CSRF kapalı (REST API için gerekli değil)
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/users/register", "/users/login").permitAll() // herkes erişebilir
+                        .requestMatchers("/api/users/register", "/api/users/login").permitAll() // herkes erişebilir
                         .anyRequest().authenticated() // diğer tüm endpointler login gerektirir
                 )
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)); // JWT stateless

@@ -11,7 +11,7 @@ import java.util.List;
 @Getter
 @Setter
 @Table(name = "questions")
-//question sadece imagedan oluşacak test test karşısına çıkacak kitap her test için belirli bir sayfa sayısı olmayacak
+//email verify ekle
 public class Question {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -21,14 +21,15 @@ public class Question {
     @JoinColumn(name = "test_id", nullable = false)
     private Test test;
 
-    @OneToMany(mappedBy = "question", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<QuestionPart> parts;
+    @Column(nullable = false)
+    private String imageUrl;
 
-    @OneToMany(mappedBy = "question", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<Option> options;
+    @Column(nullable = false)
+    private int answerNumber = 5;
 
     @Enumerated(EnumType.STRING)
     private OptionLetter correctAnswer;
 
+    @Column(nullable = false)
     private int sequenceNumber;
 }
