@@ -1,7 +1,7 @@
 package com.beratcan.app.service;
 
-import com.beratcan.app.dto.LoginRequest;
-import com.beratcan.app.dto.UserDTO;
+import com.beratcan.app.dto.request.LoginRequest;
+import com.beratcan.app.dto.request.UserRequest;
 import com.beratcan.app.entity.Question;
 import com.beratcan.app.entity.Role;
 import com.beratcan.app.entity.User;
@@ -30,7 +30,7 @@ public class UserService {
         this.questionRepository = questionRepository;
     }
 
-    public User registerUser(UserDTO dto) {
+    public User registerUser(UserRequest dto) {
         // Telefon doğrulama
         if (!PHONE_PATTERN.matcher(dto.getPhoneNumber()).matches()) {
             throw new IllegalArgumentException("Geçersiz telefon numarası.");

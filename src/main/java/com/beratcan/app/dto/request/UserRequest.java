@@ -1,9 +1,9 @@
-package com.beratcan.app.dto;
+package com.beratcan.app.dto.request;
 
 import lombok.Data;
 
 @Data
-public class UserDTO {
+public class UserRequest {
     private String firstName;
     private String lastName;
     private String email;

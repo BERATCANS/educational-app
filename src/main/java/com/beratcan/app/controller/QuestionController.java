@@ -1,6 +1,6 @@
 package com.beratcan.app.controller;
 
-import com.beratcan.app.dto.QuestionRequest;
+import com.beratcan.app.dto.request.QuestionRequest;
 import com.beratcan.app.entity.Question;
 import com.beratcan.app.service.QuestionService;
 import org.springframework.web.bind.annotation.*;

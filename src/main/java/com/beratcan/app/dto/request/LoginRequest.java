@@ -1,4 +1,4 @@
-package com.beratcan.app.dto;
+package com.beratcan.app.dto.request;
 
 import lombok.Data;
 

@@ -1,6 +1,6 @@
 package com.beratcan.app.controller;
 
-import com.beratcan.app.dto.BookRequestDTO;
+import com.beratcan.app.dto.request.BookRequest;
 import com.beratcan.app.entity.Book;
 import com.beratcan.app.service.BookService;
 import org.springframework.http.ResponseEntity;
@@ -19,7 +19,7 @@ public class BookController {
     }
 
     @PostMapping("/add")
-    public Book addBook(@RequestBody BookRequestDTO request) {
+    public Book addBook(@RequestBody BookRequest request) {
         Book book = new Book();
         book.setTitle(request.getTitle());
         book.setPublisher(request.getPublisher());
@@ -44,7 +44,7 @@ public class BookController {
     @PutMapping("/{bookId}")
     public ResponseEntity<Book> updateBook(
             @PathVariable Long bookId,
-            @RequestBody BookRequestDTO request) {
+            @RequestBody BookRequest request) {
         Book updatedBook = bookService.updateBook(bookId, request);
         return ResponseEntity.ok(updatedBook);
     }

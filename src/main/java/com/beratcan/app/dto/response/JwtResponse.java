@@ -1,4 +1,4 @@
-package com.beratcan.app.dto;
+package com.beratcan.app.dto.response;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;

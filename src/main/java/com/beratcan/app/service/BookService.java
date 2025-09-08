@@ -1,6 +1,6 @@
 package com.beratcan.app.service;
 
-import com.beratcan.app.dto.BookRequestDTO;
+import com.beratcan.app.dto.request.BookRequest;
 import com.beratcan.app.entity.Book;
 import com.beratcan.app.entity.BookCode;
 import com.beratcan.app.entity.Topic;
@@ -91,7 +91,7 @@ public class BookService {
     }
 
     // 📌 Kitap güncelleme
-    public Book updateBook(Long bookId, BookRequestDTO request) {
+    public Book updateBook(Long bookId, BookRequest request) {
         Book book = bookRepository.findById(bookId)
                 .orElseThrow(() -> new RuntimeException("Book not found"));
 

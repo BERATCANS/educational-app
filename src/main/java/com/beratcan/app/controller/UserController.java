@@ -1,8 +1,8 @@
 package com.beratcan.app.controller;
 
-import com.beratcan.app.dto.JwtResponse;
-import com.beratcan.app.dto.LoginRequest;
-import com.beratcan.app.dto.UserDTO;
+import com.beratcan.app.dto.response.JwtResponse;
+import com.beratcan.app.dto.request.LoginRequest;
+import com.beratcan.app.dto.request.UserRequest;
 import com.beratcan.app.entity.Question;
 import com.beratcan.app.entity.User;
 import com.beratcan.app.service.UserService;
@@ -23,7 +23,7 @@ public class UserController {
     private final JwtUtil jwtUtil;
 
     @PostMapping("/register")
-    public ResponseEntity<?> register(@RequestBody UserDTO userDTO) {
+    public ResponseEntity<?> register(@RequestBody UserRequest userDTO) {
         try {
             User user = userService.registerUser(userDTO);
             return ResponseEntity.ok(user);

@@ -1,11 +1,11 @@
-package com.beratcan.app.dto;
+package com.beratcan.app.dto.request;
 
 import lombok.Data;
 
 import java.util.List;
 
 @Data
-public class BookRequestDTO {
+public class BookRequest {
 
     private String title;
     private String publisher;
