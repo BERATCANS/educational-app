@@ -5,10 +5,8 @@ import lombok.Data;
 
 @Data
 public class QuestionRequest {
-    private Long testId;
     private String imageUrl;
     private OptionLetter correctAnswer;
-    private int sequenceNumber;
     private int answerNumber; // opsiyonel, default 5
 }
 

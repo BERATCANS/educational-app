@@ -1,10 +1,13 @@
 package com.beratcan.app.entity;
 
+import com.fasterxml.jackson.annotation.JsonManagedReference;
 import jakarta.persistence.*;
 import lombok.Data;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -27,12 +30,12 @@ public class Book {
     private boolean paid; // Kitap paralı mı?
 
     @OneToMany(mappedBy = "book", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<BookCode> codes;
+    private List<BookCode> codes = new ArrayList<>();
 
     @OneToMany(mappedBy = "book", cascade = CascadeType.ALL)
-    private List<Topic> topics; // Kitap konuları
+    @JsonManagedReference
+    private List<Topic> topics = new ArrayList<>(); // Kitap konuları
 
     @ManyToMany(mappedBy = "ownedBooks")
-    private Set<User> owners; // Kitabı sahiplenen kullanıcılar
+    private Set<User> owners = new HashSet<>(); // Kitabı sahiplenen kullanıcılar
 }
-

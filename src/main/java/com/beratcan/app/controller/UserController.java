@@ -23,9 +23,9 @@ public class UserController {
     private final JwtUtil jwtUtil;
 
     @PostMapping("/register")
-    public ResponseEntity<?> register(@RequestBody UserRequest userDTO) {
+    public ResponseEntity<?> register(@RequestBody UserRequest userRequest) {
         try {
-            User user = userService.registerUser(userDTO);
+            User user = userService.registerUser(userRequest);
             return ResponseEntity.ok(user);
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(e.getMessage());
@@ -42,7 +42,6 @@ public class UserController {
             return ResponseEntity.badRequest().body(e.getMessage());
         }
     }
-
 
     @PostMapping("/{userId}/flag/{questionId}")
     public ResponseEntity<String> flagQuestion(@PathVariable Long userId, @PathVariable Long questionId) {
@@ -62,5 +61,4 @@ public class UserController {
     public ResponseEntity<Set<Question>> getFlaggedQuestions(@PathVariable Long userId) {
         return ResponseEntity.ok(userService.getFlaggedQuestions(userId));
     }
-
 }

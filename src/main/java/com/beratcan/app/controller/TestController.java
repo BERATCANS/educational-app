@@ -1,5 +1,7 @@
 package com.beratcan.app.controller;
 
+import com.beratcan.app.dto.request.TestRequest;
+import com.beratcan.app.dto.response.TestResponse;
 import com.beratcan.app.entity.Test;
 import com.beratcan.app.service.TestService;
 import org.springframework.web.bind.annotation.*;
@@ -16,13 +18,32 @@ public class TestController {
         this.testService = testService;
     }
 
+    // CREATE
     @PostMapping("/add")
-    public Test addTest(@RequestParam Long topicId, @RequestParam String title) {
-        return testService.addTest(topicId, title);
+    public TestResponse addTest(@RequestParam Long topicId, @RequestBody TestRequest request) {
+        return testService.addTest(topicId, request);
     }
 
+    // READ
     @GetMapping("/by-topic/{topicId}")
-    public List<Test> getTestsByTopic(@PathVariable Long topicId) {
+    public List<TestResponse> getTestsByTopic(@PathVariable Long topicId) {
         return testService.getTestsByTopic(topicId);
+    }
+
+    @GetMapping("/{testId}")
+    public TestResponse getTestById(@PathVariable Long testId) {
+        return testService.getTestById(testId);
+    }
+
+    // UPDATE
+    @PutMapping("/update/{testId}")
+    public TestResponse updateTest(@PathVariable Long testId, @RequestBody TestRequest request) {
+        return testService.updateTest(testId, request);
+    }
+
+    // DELETE
+    @DeleteMapping("/delete/{testId}")
+    public void deleteTest(@PathVariable Long testId) {
+        testService.deleteTest(testId);
     }
 }

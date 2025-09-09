@@ -1,7 +1,7 @@
 package com.beratcan.app.controller;
 
 import com.beratcan.app.dto.request.QuestionRequest;
-import com.beratcan.app.entity.Question;
+import com.beratcan.app.dto.response.QuestionResponse;
 import com.beratcan.app.service.QuestionService;
 import org.springframework.web.bind.annotation.*;
 
@@ -17,13 +17,33 @@ public class QuestionController {
         this.questionService = questionService;
     }
 
+    // CREATE
     @PostMapping("/add")
-    public Question addQuestion(@RequestBody QuestionRequest request) {
-        return questionService.addQuestion(request);
+    public QuestionResponse addQuestion(@PathVariable Long testId, @RequestBody QuestionRequest request) {
+        return questionService.addQuestion(testId, request);
     }
 
+    // READ
     @GetMapping("/by-test/{testId}")
-    public List<Question> getQuestionsByTest(@PathVariable Long testId) {
+    public List<QuestionResponse> getQuestionsByTest(@PathVariable Long testId) {
         return questionService.getQuestionsByTest(testId);
+    }
+
+    @GetMapping("/{questionId}")
+    public QuestionResponse getQuestionById(@PathVariable Long questionId) {
+        return questionService.getQuestionById(questionId);
+    }
+
+    // UPDATE
+    @PutMapping("/{questionId}")
+    public QuestionResponse updateQuestion(@PathVariable Long questionId,
+                                           @RequestBody QuestionRequest request) {
+        return questionService.updateQuestion(questionId, request);
+    }
+
+    // DELETE
+    @DeleteMapping("/{questionId}")
+    public void deleteQuestion(@PathVariable Long questionId) {
+        questionService.deleteQuestion(questionId);
     }
 }

@@ -1,14 +1,20 @@
 package com.beratcan.app.entity;
 
+import com.fasterxml.jackson.annotation.JsonBackReference;
+import com.fasterxml.jackson.annotation.JsonManagedReference;
 import jakarta.persistence.*;
 import lombok.Data;
+import lombok.Getter;
+import lombok.Setter;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 @Entity
-@Data
+@Getter
+@Setter
 @Table(name = "tests")
 public class Test {
 
@@ -20,10 +26,12 @@ public class Test {
 
     @ManyToOne
     @JoinColumn(name = "topic_id")
+    @JsonBackReference
     private Topic topic;
 
     @OneToMany(mappedBy = "test", cascade = CascadeType.ALL)
-    private List<Question> questions;
+    @JsonManagedReference
+    private List<Question> questions = new ArrayList<>();
 
 }
 

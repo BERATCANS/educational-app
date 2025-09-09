@@ -5,6 +5,8 @@ import com.beratcan.app.entity.Book;
 import com.beratcan.app.entity.BookCode;
 import com.beratcan.app.entity.Topic;
 import com.beratcan.app.entity.User;
+import com.beratcan.app.dto.response.BookResponse;
+import com.beratcan.app.dto.response.TopicResponse;
 import com.beratcan.app.repository.BookCodeRepository;
 import com.beratcan.app.repository.BookRepository;
 import com.beratcan.app.repository.TopicRepository;
@@ -13,8 +15,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.ArrayList;
 import java.util.Optional;
-import java.util.stream.Collectors;
 
 @Service
 public class BookService {
@@ -24,7 +26,8 @@ public class BookService {
     private final UserRepository userRepository;
     private final TopicRepository topicRepository;
 
-    public BookService(BookRepository bookRepository, BookCodeRepository codeRepository, UserRepository userRepository, TopicRepository topicRepository) {
+    public BookService(BookRepository bookRepository, BookCodeRepository codeRepository, UserRepository userRepository,
+            TopicRepository topicRepository) {
         this.bookRepository = bookRepository;
         this.codeRepository = codeRepository;
         this.userRepository = userRepository;
@@ -40,6 +43,7 @@ public class BookService {
             for (String topicName : topics) {
                 Topic topic = new Topic();
                 topic.setTitle(topicName);
+                topic.setBook(savedBook);
                 topic = topicRepository.save(topic);
                 savedBook.getTopics().add(topic);
             }
@@ -53,12 +57,14 @@ public class BookService {
     @Transactional
     public String useCode(Long userId, String codeValue) {
         Optional<User> userOpt = userRepository.findById(userId);
-        if (userOpt.isEmpty()) return "Kullanıcı bulunamadı";
+        if (userOpt.isEmpty())
+            return "Kullanıcı bulunamadı";
 
         User user = userOpt.get();
 
         Optional<BookCode> codeOpt = codeRepository.findByCodeAndUsedFalse(codeValue);
-        if (codeOpt.isEmpty()) return "Kod geçersiz veya zaten kullanıldı";
+        if (codeOpt.isEmpty())
+            return "Kod geçersiz veya zaten kullanıldı";
 
         BookCode code = codeOpt.get();
         code.setUsed(true);
@@ -72,22 +78,27 @@ public class BookService {
         return "Kod başarıyla kullanıldı, kitap erişimi açıldı: " + code.getBook().getTitle();
     }
 
-    public List<Book> getBooksForUser(Long userId) {
+    public List<BookResponse> getBooksForUser(Long userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
         // Paralı kitaplar (sahip olduğu)
-        List<Book> paidBooks = user.getOwnedBooks().stream()
+        List<BookResponse> paidBooks = user.getOwnedBooks().stream()
                 .filter(Book::isPaid)
-                .collect(Collectors.toList());
+                .map(this::toBookResponse)
+                .toList();
 
         // Ücretsiz kitaplar
-        List<Book> freeBooks = bookRepository.findByPaidFalse();
+        List<BookResponse> freeBooks = bookRepository.findByPaidFalse().stream()
+                .map(this::toBookResponse)
+                .toList();
 
         // Önce paralı sonra ücretsiz kitaplar
-        paidBooks.addAll(freeBooks);
+        List<BookResponse> allBooks = new ArrayList<>();
+        allBooks.addAll(paidBooks);
+        allBooks.addAll(freeBooks);
 
-        return paidBooks;
+        return allBooks;
     }
 
     // 📌 Kitap güncelleme
@@ -111,5 +122,13 @@ public class BookService {
         }
         bookRepository.deleteById(bookId);
     }
-}
 
+    private BookResponse toBookResponse(Book book) {
+        BookResponse response = new BookResponse();
+        response.setId(book.getId());
+        response.setTitle(book.getTitle());
+        response.setPublisher(book.getPublisher());
+        response.setCoverImageUrl(book.getCoverImageUrl());
+        return response;
+    }
+}

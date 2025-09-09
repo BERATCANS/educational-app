@@ -1,12 +1,15 @@
 package com.beratcan.app.service;
 
 import com.beratcan.app.dto.request.QuestionRequest;
-import com.beratcan.app.entity.*;
+import com.beratcan.app.dto.response.QuestionResponse;
+import com.beratcan.app.entity.Question;
+import com.beratcan.app.entity.Test;
 import com.beratcan.app.repository.QuestionRepository;
 import com.beratcan.app.repository.TestRepository;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 public class QuestionService {
@@ -19,31 +22,68 @@ public class QuestionService {
         this.testRepository = testRepository;
     }
 
-    public Question addQuestion(QuestionRequest request) {
+    // CREATE
+    public QuestionResponse addQuestion(Long testId, QuestionRequest request) {
+        Test test = testRepository.findById(testId)
+                .orElseThrow(() -> new IllegalArgumentException("Test not found with ID: " + testId));
 
-        // Testi bul
-        Test test = testRepository.findById(request.getTestId())
-                .orElseThrow(() -> new IllegalArgumentException("Test not found with ID: " + request.getTestId()));
-
-        // Question oluştur
         Question question = new Question();
         question.setTest(test);
         question.setImageUrl(request.getImageUrl());
-
-        // Default answerNumber
         question.setAnswerNumber(request.getAnswerNumber() > 0 ? request.getAnswerNumber() : 5);
-
-        // Doğru cevabı set et
         question.setCorrectAnswer(request.getCorrectAnswer());
 
-        // Sıra numarası
-        question.setSequenceNumber(request.getSequenceNumber());
-
-        return questionRepository.save(question);
+        question = questionRepository.save(question);
+        return toQuestionResponse(question);
     }
 
-    public List<Question> getQuestionsByTest(Long testId) {
-        return questionRepository.findByTestId(testId);
+    // READ
+    public List<QuestionResponse> getQuestionsByTest(Long testId) {
+        return questionRepository.findByTestId(testId)
+                .stream()
+                .map(this::toQuestionResponse)
+                .collect(Collectors.toList());
+    }
+
+    public QuestionResponse getQuestionById(Long questionId) {
+        Question question = questionRepository.findById(questionId)
+                .orElseThrow(() -> new IllegalArgumentException("Question not found with ID: " + questionId));
+        return toQuestionResponse(question);
+    }
+
+    // UPDATE
+    public QuestionResponse updateQuestion(Long questionId, QuestionRequest request) {
+        Question question = questionRepository.findById(questionId)
+                .orElseThrow(() -> new IllegalArgumentException("Question not found with ID: " + questionId));
+
+        if (request.getImageUrl() != null) {
+            question.setImageUrl(request.getImageUrl());
+        }
+        if (request.getCorrectAnswer() != null) {
+            question.setCorrectAnswer(request.getCorrectAnswer());
+        }
+        if (request.getAnswerNumber() > 0) {
+            question.setAnswerNumber(request.getAnswerNumber());
+        }
+
+        question = questionRepository.save(question);
+        return toQuestionResponse(question);
+    }
+
+    // DELETE
+    public void deleteQuestion(Long questionId) {
+        Question question = questionRepository.findById(questionId)
+                .orElseThrow(() -> new IllegalArgumentException("Question not found with ID: " + questionId));
+        questionRepository.delete(question);
+    }
+
+    // HELPER
+    private QuestionResponse toQuestionResponse(Question question) {
+        QuestionResponse response = new QuestionResponse();
+        response.setId(question.getId());
+        response.setImageUrl(question.getImageUrl());
+        response.setCorrectAnswer(question.getCorrectAnswer());
+        response.setAnswerNumber(question.getAnswerNumber());
+        return response;
     }
 }
-
