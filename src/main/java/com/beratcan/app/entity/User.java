@@ -2,11 +2,15 @@ package com.beratcan.app.entity;
 
 import jakarta.persistence.*;
 import lombok.Data;
+import lombok.Getter;
+import lombok.Setter;
 
+import java.util.HashSet;
 import java.util.Set;
 
 @Entity
-@Data
+@Getter
+@Setter
 @Table(name = "users", uniqueConstraints = {
         @UniqueConstraint(columnNames = {"email"}),
         @UniqueConstraint(columnNames = {"phoneNumber"}),
@@ -46,7 +50,7 @@ public class User {
             joinColumns = @JoinColumn(name = "user_id"),
             inverseJoinColumns = @JoinColumn(name = "book_id")
     )
-    private Set<Book> ownedBooks;
+    private Set<Book> ownedBooks = new HashSet<>();
 
     @ManyToMany
     @JoinTable(
@@ -54,5 +58,5 @@ public class User {
             joinColumns = @JoinColumn(name = "user_id"),
             inverseJoinColumns = @JoinColumn(name = "question_id")
     )
-    private Set<Question> flaggedQuestions;
+    private Set<Question> flaggedQuestions = new HashSet<>();
 }

@@ -1,10 +1,11 @@
 package com.beratcan.app.entity;
 
+import com.fasterxml.jackson.annotation.JsonBackReference;
 import jakarta.persistence.*;
-import lombok.Data;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.util.ArrayList;
 import java.util.List;
 
 @Entity
@@ -19,6 +20,7 @@ public class Question {
 
     @ManyToOne
     @JoinColumn(name = "test_id", nullable = false)
+    @JsonBackReference
     private Test test;
 
     @Column(nullable = false)
@@ -30,6 +32,14 @@ public class Question {
     @Enumerated(EnumType.STRING)
     private OptionLetter correctAnswer;
 
-    @Column(nullable = false)
-    private int sequenceNumber;
+    @ElementCollection
+    @CollectionTable(name = "question_hints", joinColumns = @JoinColumn(name = "question_id"))
+    private List<Hint> hints = new ArrayList<>();
+
+    @Embedded
+    private Explanation explanation;
+
+    @Column
+    private String videoUrl;
+
 }

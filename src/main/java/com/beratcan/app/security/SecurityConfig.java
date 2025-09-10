@@ -24,9 +24,10 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable()) // CSRF kapalı (REST API için gerekli değil)
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/users/register", "/api/users/login").permitAll() // herkes erişebilir
-                        .anyRequest().authenticated() // diğer tüm endpointler login gerektirir
+                        .anyRequest().permitAll() // diğer tüm endpointler login gerektirir
                 )
-                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)); // JWT stateless
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)); // JWT
+                                                                                                               // stateless
 
         // JWT filter ekle
         http.addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
@@ -39,4 +40,3 @@ public class SecurityConfig {
         return configuration.getAuthenticationManager();
     }
 }
-

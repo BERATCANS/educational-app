@@ -1,6 +1,7 @@
 package com.beratcan.app.controller;
 
 import com.beratcan.app.dto.request.BookRequest;
+import com.beratcan.app.dto.response.BookResponse;
 import com.beratcan.app.entity.Book;
 import com.beratcan.app.service.BookService;
 import org.springframework.http.ResponseEntity;
@@ -35,8 +36,14 @@ public class BookController {
         return bookService.useCode(userId, code);
     }
 
+    @PostMapping("/add-codes")
+    public ResponseEntity<String> addCodes(@RequestParam Long bookId, @RequestBody List<String> codes) {
+        bookService.addCodes(bookId, codes);
+        return ResponseEntity.ok("Codes added successfully");
+    }
+
     @GetMapping("/for-user/{userId}")
-    public List<Book> getBooksForUser(@PathVariable Long userId) {
+    public List<BookResponse> getBooksForUser(@PathVariable Long userId) {
         return bookService.getBooksForUser(userId);
     }
 
