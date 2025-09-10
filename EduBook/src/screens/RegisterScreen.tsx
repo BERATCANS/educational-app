@@ -59,6 +59,7 @@ export const RegisterScreen: React.FC = () => {
         email: data.email,
         phoneNumber: data.phoneNumber,
         username: data.username,
+        password: 'hashed-password',
         role: 'STUDENT' as const,
         ownedBooks: [],
       };

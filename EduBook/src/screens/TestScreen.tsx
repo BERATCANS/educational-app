@@ -33,6 +33,7 @@ export const TestScreen: React.FC = () => {
   const [selectedAnswers, setSelectedAnswers] = useState<Map<number, string>>(new Map());
   const [isTestCompleted, setIsTestCompleted] = useState(false);
   const [showDrawingCanvas, setShowDrawingCanvas] = useState(false);
+  const [showDrawingToolbar, setShowDrawingToolbar] = useState(true);
   const [currentTool, setCurrentTool] = useState<'pen' | 'eraser' | 'line'>('pen');
   const [currentColor, setCurrentColor] = useState('#000000');
   const [currentThickness, setCurrentThickness] = useState(2);
@@ -45,19 +46,41 @@ export const TestScreen: React.FC = () => {
   // Current question'ın çizimlerini al
   const currentQuestionPaths = drawingsByQuestion[currentQuestion?.id] || [];
 
-  // Test yüklendiğinde çizimleri yükle
+  // Lazy loading + Memory cleanup: Sadece aktif sorunun çizimlerini yükle
   useEffect(() => {
-    loadDrawingsFromStorage();
-  }, [test.id]);
+    const loadCurrentQuestionDrawing = async () => {
+      if (!currentQuestion) return;
+      
+      // Memory cleanup: Diğer soruların çizimlerini RAM'den temizle (sadece aktif soru kalsın)
+      const currentQuestionDrawings = drawingsByQuestion[currentQuestion.id];
+      setDrawingsByQuestion(currentQuestionDrawings ? { [currentQuestion.id]: currentQuestionDrawings } : {});
+      
+      // Eğer bu sorunun çizimleri yoksa storage'dan yükle
+      if (!currentQuestionDrawings) {
+        const paths = await loadDrawingsFromStorage(currentQuestion.id);
+        if (paths.length > 0) {
+          setDrawingsByQuestion({ [currentQuestion.id]: paths });
+        }
+      }
+    };
+    
+    loadCurrentQuestionDrawing();
+  }, [currentQuestion?.id]);
 
-  // Çizimler değiştiğinde kaydet
+  // Debounced save: Çizim değişikliklerini 500ms delay ile kaydet
   useEffect(() => {
-    if (Object.keys(drawingsByQuestion).length > 0) {
-      saveDrawingsToStorage();
-    }
-  }, [drawingsByQuestion]);
+    if (!currentQuestion || !drawingsByQuestion[currentQuestion.id]) return;
+    
+    const timeoutId = setTimeout(() => {
+      saveDrawingsToStorage(currentQuestion.id, drawingsByQuestion[currentQuestion.id]);
+    }, 500);
+    
+    return () => clearTimeout(timeoutId);
+  }, [drawingsByQuestion, currentQuestion?.id]);
 
   const handleAnswerSelect = (answer: string) => {
+    if (!currentQuestion) return;
+    
     const newSelectedAnswers = new Map(selectedAnswers);
     newSelectedAnswers.set(currentQuestion.id, answer);
     setSelectedAnswers(newSelectedAnswers);
@@ -99,7 +122,7 @@ export const TestScreen: React.FC = () => {
         {
           text: 'Testi Kapat',
           onPress: async () => {
-            await saveDrawingsToStorage();
+            // Çizimler otomatik kaydediliyor, ekstra kaydetmeye gerek yok
             navigation.goBack();
           },
         },
@@ -116,8 +139,7 @@ export const TestScreen: React.FC = () => {
   };
 
   const goBack = async () => {
-    // Çıkmadan önce çizimleri kaydet
-    await saveDrawingsToStorage();
+    // Çizimler otomatik kaydediliyor
     
     if (selectedAnswers.size > 0) {
       Alert.alert(
@@ -133,16 +155,11 @@ export const TestScreen: React.FC = () => {
     }
   };
 
-  const handleStartTest = () => {
-    navigation.navigate('Test', { 
-      book, 
-      topic, 
-      test,
-      initialQuestionIndex: 0 
-    });
-  };
-
   const handleDrawingToggle = () => {
+    if (!showDrawingCanvas) {
+      // Çizim modu açılırken toolbar'ı gizli başlat
+      setShowDrawingToolbar(false);
+    }
     setShowDrawingCanvas(!showDrawingCanvas);
   };
 
@@ -190,27 +207,29 @@ export const TestScreen: React.FC = () => {
   };
 
   // Storage fonksiyonları
-  const getStorageKey = () => `drawings_book${book.id}_test${test.id}`;
+  const getStorageKey = (questionId: number) => `drawings_book${book.id}_test${test.id}_q${questionId}`;
 
-  const saveDrawingsToStorage = async () => {
+  const saveDrawingsToStorage = async (questionId: number, paths: Array<{id: string, path: string, color: string, thickness: number}>) => {
     try {
-      const key = getStorageKey();
-      await SecureStore.setItemAsync(key, JSON.stringify(drawingsByQuestion));
+      const key = getStorageKey(questionId);
+      await SecureStore.setItemAsync(key, JSON.stringify(paths));
     } catch (error) {
       console.error('Çizim kaydetme hatası:', error);
     }
   };
 
-  const loadDrawingsFromStorage = async () => {
+  const loadDrawingsFromStorage = async (questionId: number) => {
     try {
-      const key = getStorageKey();
+      const key = getStorageKey(questionId);
       const saved = await SecureStore.getItemAsync(key);
       if (saved) {
         const parsed = JSON.parse(saved);
-        setDrawingsByQuestion(parsed);
+        return parsed;
       }
+      return [];
     } catch (error) {
       console.error('Çizim yükleme hatası:', error);
+      return [];
     }
   };
 
@@ -218,19 +237,30 @@ export const TestScreen: React.FC = () => {
 
 
 
-  const renderQuestion = () => {
+  const renderQuestionContent = () => {
     if (!currentQuestion) return null;
 
-    const selectedAnswer = selectedAnswers.get(currentQuestion.id);
-    const optionLetters: ('A' | 'B' | 'C' | 'D' | 'E')[] = ['A', 'B', 'C', 'D', 'E'];
-
     return (
-      <View style={styles.questionContainer}>
-        {/* Question Header */}
+      <>
+        {/* Compact Question Header */}
         <View style={styles.questionHeader}>
-          <Text style={styles.questionNumber}>
-            Soru {currentQuestionIndex + 1} / {totalQuestions}
-          </Text>
+          <View style={styles.questionHeaderTop}>
+            <Text style={styles.questionNumber}>
+              {currentQuestionIndex + 1} / {totalQuestions}
+            </Text>
+            {showDrawingCanvas && (
+              <TouchableOpacity 
+                style={styles.toolbarToggle}
+                onPress={() => setShowDrawingToolbar(!showDrawingToolbar)}
+              >
+                <Ionicons 
+                  name={showDrawingToolbar ? "chevron-up" : "chevron-down"} 
+                  size={20} 
+                  color="#64748b" 
+                />
+              </TouchableOpacity>
+            )}
+          </View>
           <View style={styles.questionProgress}>
             <View 
               style={[
@@ -241,7 +271,7 @@ export const TestScreen: React.FC = () => {
           </View>
         </View>
 
-        {/* Question Image */}
+        {/* Full Screen Question Image */}
         <View style={styles.questionImageContainer}>
           <Image 
             source={{ uri: currentQuestion.imageUrl }} 
@@ -259,29 +289,7 @@ export const TestScreen: React.FC = () => {
             onPathsChange={handlePathsChange}
           />
         </View>
-
-        {/* Answer Options */}
-        <View style={styles.answerOptions}>
-          {optionLetters.slice(0, currentQuestion.answerNumber).map((letter) => (
-            <TouchableOpacity
-              key={letter}
-              style={[
-                styles.answerOption,
-                selectedAnswer === letter && styles.selectedAnswerOption
-              ]}
-              onPress={() => handleAnswerSelect(letter)}
-              activeOpacity={0.7}
-            >
-              <Text style={[
-                styles.answerLetterText,
-                selectedAnswer === letter && styles.selectedAnswerLetterText
-              ]}>
-                {letter}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      </View>
+      </>
     );
   };
 
@@ -307,7 +315,7 @@ export const TestScreen: React.FC = () => {
       <TouchableOpacity
         style={styles.finishButton}
         onPress={handleFinishTest}
-        activeOpacity={0.8}
+        activeOpacity={0.7}
       >
         <Text style={styles.finishButtonText}>Testi Bitir</Text>
       </TouchableOpacity>
@@ -317,196 +325,231 @@ export const TestScreen: React.FC = () => {
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
-        {/* Drawing Canvas - En üstte */}
-        
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity onPress={goBack} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color="#1e293b" />
-          </TouchableOpacity>
-          <View style={styles.headerInfo}>
-            <Text style={styles.headerTitle}>{test.title}</Text>
-            <Text style={styles.headerSubtitle}>
-              {topic.title} • {book.title}
-            </Text>
-          </View>
-          <View style={styles.placeholder} />
-        </View>
-
-        {/* Tool Buttons */}
-        <View style={[styles.toolButtons, showDrawingCanvas && styles.expandedToolButtons]}>
-          <View style={styles.mainToolButtons}>
-            <TouchableOpacity style={styles.toolButton} activeOpacity={0.7}>
-              <Ionicons name="bulb-outline" size={20} color="#f59e0b" />
-              <Text style={styles.toolButtonText}>İpucu</Text>
+        {/* Combined Header & Tools */}
+        <View style={[styles.headerToolsContainer, showDrawingCanvas && styles.expandedHeaderTools]}>
+          {/* Header Section */}
+          <View style={styles.header}>
+            <TouchableOpacity onPress={goBack} style={styles.backButton}>
+              <Ionicons name="arrow-back" size={24} color="#1e293b" />
             </TouchableOpacity>
-            
-            <TouchableOpacity style={styles.toolButton} activeOpacity={0.7}>
-              <Ionicons name="play-circle-outline" size={20} color="#3b82f6" />
-              <Text style={styles.toolButtonText}>Çözüm Videosu</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={[styles.toolButton, showDrawingCanvas && styles.activeToolButton]} 
-              activeOpacity={0.7}
-              onPress={handleDrawingToggle}
-            >
-              <Ionicons name="pencil-outline" size={20} color={showDrawingCanvas ? "#3b82f6" : "#10b981"} />
-              <Text style={[styles.toolButtonText, showDrawingCanvas && styles.activeToolButtonText]}>
-                Çizim
+            <View style={styles.headerInfo}>
+              <Text style={styles.headerTitle}>{test.title}</Text>
+              <Text style={styles.headerSubtitle}>
+                {topic.title} • {book.title}
               </Text>
-            </TouchableOpacity>
+            </View>
+            <View style={styles.placeholder} />
           </View>
 
-          {showDrawingCanvas && (
-            <View style={styles.drawingToolbar}>
-              {/* Tool Selection */}
-              <View style={styles.drawingSection}>
-                <Text style={styles.sectionTitle}>Araç</Text>
-                <View style={styles.toolRow}>
-                  <TouchableOpacity 
-                    style={[styles.drawingTool, currentTool === 'pen' && styles.activeTool]}
-                    onPress={() => handleToolSelect('pen')}
-                  >
-                    <Ionicons name="pencil" size={18} color={currentTool === 'pen' ? "#3b82f6" : "#64748b"} />
-                    <Text style={[styles.drawingToolText, currentTool === 'pen' && styles.activeToolText]}>Kalem</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity 
-                    style={[styles.drawingTool, currentTool === 'line' && styles.activeTool]}
-                    onPress={() => handleToolSelect('line')}
-                  >
-                    <Ionicons name="remove" size={18} color={currentTool === 'line' ? "#10b981" : "#64748b"} />
-                    <Text style={[styles.drawingToolText, currentTool === 'line' && styles.activeToolText]}>Çizgi</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity 
-                    style={[styles.drawingTool, currentTool === 'eraser' && styles.activeTool]}
-                    onPress={() => handleToolSelect('eraser')}
-                  >
-                    <Ionicons name="trash" size={18} color={currentTool === 'eraser' ? "#ef4444" : "#64748b"} />
-                    <Text style={[styles.drawingToolText, currentTool === 'eraser' && styles.activeToolText]}>Silgi</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              {/* Colors & Thickness */}
-              <View style={styles.colorThicknessSection}>
-                <View style={styles.colorSection}>
-                  <Text style={styles.sectionTitle}>Renk</Text>
-                  <View style={styles.colorRow}>
-                    <TouchableOpacity 
-                      style={[
-                        styles.colorButton, 
-                        { backgroundColor: '#000000' },
-                        currentColor === '#000000' && styles.activeColorButton
-                      ]}
-                      onPress={() => handleColorSelect('#000000')}
-                    />
-                    <TouchableOpacity 
-                      style={[
-                        styles.colorButton, 
-                        { backgroundColor: '#ff0000' },
-                        currentColor === '#ff0000' && styles.activeColorButton
-                      ]}
-                      onPress={() => handleColorSelect('#ff0000')}
-                    />
-                    <TouchableOpacity 
-                      style={[
-                        styles.colorButton, 
-                        { backgroundColor: '#0000ff' },
-                        currentColor === '#0000ff' && styles.activeColorButton
-                      ]}
-                      onPress={() => handleColorSelect('#0000ff')}
-                    />
-                    <TouchableOpacity 
-                      style={[
-                        styles.colorButton, 
-                        { backgroundColor: '#00ff00' },
-                        currentColor === '#00ff00' && styles.activeColorButton
-                      ]}
-                      onPress={() => handleColorSelect('#00ff00')}
-                    />
-                  </View>
-                </View>
-
-                <View style={styles.thicknessSection}>
-                  <Text style={styles.sectionTitle}>Kalınlık</Text>
-                  <View style={styles.thicknessRow}>
-                    <TouchableOpacity 
-                      style={[styles.thicknessButton, currentThickness === 2 && styles.activeThickness]}
-                      onPress={() => handleThicknessSelect(2)}
-                    >
-                      <View style={[styles.thicknessDot, { width: 2, height: 2 }]} />
-                    </TouchableOpacity>
-                    <TouchableOpacity 
-                      style={[styles.thicknessButton, currentThickness === 4 && styles.activeThickness]}
-                      onPress={() => handleThicknessSelect(4)}
-                    >
-                      <View style={[styles.thicknessDot, { width: 4, height: 4 }]} />
-                    </TouchableOpacity>
-                    <TouchableOpacity 
-                      style={[styles.thicknessButton, currentThickness === 6 && styles.activeThickness]}
-                      onPress={() => handleThicknessSelect(6)}
-                    >
-                      <View style={[styles.thicknessDot, { width: 6, height: 6 }]} />
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              </View>
-
-              {/* Actions */}
-              <View style={styles.drawingSection}>
-                <Text style={styles.sectionTitle}>İşlem</Text>
-                <View style={styles.actionRow}>
-                  <TouchableOpacity style={styles.actionButton} onPress={handleUndo}>
-                    <Ionicons name="arrow-undo" size={16} color="#64748b" />
-                    <Text style={styles.actionButtonText}>Geri</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.actionButton} onPress={handleClear}>
-                    <Ionicons name="trash-outline" size={16} color="#ef4444" />
-                    <Text style={styles.actionButtonText}>Temizle</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
+          {/* Tool Buttons Section */}
+          <View style={styles.toolButtons}>
+            <View style={styles.mainToolButtons}>
+              <TouchableOpacity style={styles.toolButton} activeOpacity={0.7}>
+                <Ionicons name="bulb-outline" size={14} color="#f59e0b" />
+                <Text style={styles.toolButtonText}>İpucu</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity style={styles.toolButton} activeOpacity={0.7}>
+                <Ionicons name="document-text-outline" size={14} color="#8b5cf6" />
+                <Text style={styles.toolButtonText}>Çözüm</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity style={styles.toolButton} activeOpacity={0.7}>
+                <Ionicons name="play-circle-outline" size={14} color="#3b82f6" />
+                <Text style={styles.toolButtonText}>Video</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={[styles.toolButton, showDrawingCanvas && styles.activeToolButton]} 
+                activeOpacity={0.7}
+                onPress={handleDrawingToggle}
+              >
+                <Ionicons name="pencil-outline" size={14} color={showDrawingCanvas ? "#3b82f6" : "#10b981"} />
+                <Text style={[styles.toolButtonText, showDrawingCanvas && styles.activeToolButtonText]}>
+                  Çizim
+                </Text>
+              </TouchableOpacity>
             </View>
-          )}
+
+            {/* Drawing Tools */}
+            {showDrawingCanvas && (
+              <View style={styles.drawingContainer}>
+                {/* Drawing Toolbar */}
+                <View style={[styles.drawingToolbar, !showDrawingToolbar && styles.hiddenToolbar]}>
+                  {/* Tool Selection */}
+                  <View style={styles.drawingSection}>
+                    <Text style={styles.sectionTitle}>Araç</Text>
+                    <View style={styles.toolRow}>
+                      <TouchableOpacity 
+                        style={[styles.drawingTool, currentTool === 'pen' && styles.activeTool]}
+                        onPress={() => handleToolSelect('pen')}
+                      >
+                        <Ionicons name="pencil" size={18} color={currentTool === 'pen' ? "#3b82f6" : "#64748b"} />
+                        <Text style={[styles.drawingToolText, currentTool === 'pen' && styles.activeToolText]}>Kalem</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity 
+                        style={[styles.drawingTool, currentTool === 'line' && styles.activeTool]}
+                        onPress={() => handleToolSelect('line')}
+                      >
+                        <Ionicons name="remove" size={18} color={currentTool === 'line' ? "#10b981" : "#64748b"} />
+                        <Text style={[styles.drawingToolText, currentTool === 'line' && styles.activeToolText]}>Çizgi</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity 
+                        style={[styles.drawingTool, currentTool === 'eraser' && styles.activeTool]}
+                        onPress={() => handleToolSelect('eraser')}
+                      >
+                        <Ionicons name="trash" size={18} color={currentTool === 'eraser' ? "#ef4444" : "#64748b"} />
+                        <Text style={[styles.drawingToolText, currentTool === 'eraser' && styles.activeToolText]}>Silgi</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+
+                  {/* Colors & Thickness */}
+                  <View style={styles.colorThicknessSection}>
+                    <View style={styles.colorSection}>
+                      <Text style={styles.sectionTitle}>Renk</Text>
+                      <View style={styles.colorRow}>
+                        <TouchableOpacity 
+                          style={[
+                            styles.colorButton, 
+                            { backgroundColor: '#000000' },
+                            currentColor === '#000000' && styles.activeColorButton
+                          ]}
+                          onPress={() => handleColorSelect('#000000')}
+                        />
+                        <TouchableOpacity 
+                          style={[
+                            styles.colorButton, 
+                            { backgroundColor: '#ff0000' },
+                            currentColor === '#ff0000' && styles.activeColorButton
+                          ]}
+                          onPress={() => handleColorSelect('#ff0000')}
+                        />
+                        <TouchableOpacity 
+                          style={[
+                            styles.colorButton, 
+                            { backgroundColor: '#0000ff' },
+                            currentColor === '#0000ff' && styles.activeColorButton
+                          ]}
+                          onPress={() => handleColorSelect('#0000ff')}
+                        />
+                        <TouchableOpacity 
+                          style={[
+                            styles.colorButton, 
+                            { backgroundColor: '#00ff00' },
+                            currentColor === '#00ff00' && styles.activeColorButton
+                          ]}
+                          onPress={() => handleColorSelect('#00ff00')}
+                        />
+                      </View>
+                    </View>
+
+                    <View style={styles.thicknessSection}>
+                      <Text style={styles.sectionTitle}>Kalınlık</Text>
+                      <View style={styles.thicknessRow}>
+                        <TouchableOpacity 
+                          style={[styles.thicknessButton, currentThickness === 2 && styles.activeThickness]}
+                          onPress={() => handleThicknessSelect(2)}
+                        >
+                          <View style={[styles.thicknessDot, { width: 2, height: 2 }]} />
+                        </TouchableOpacity>
+                        <TouchableOpacity 
+                          style={[styles.thicknessButton, currentThickness === 4 && styles.activeThickness]}
+                          onPress={() => handleThicknessSelect(4)}
+                        >
+                          <View style={[styles.thicknessDot, { width: 4, height: 4 }]} />
+                        </TouchableOpacity>
+                        <TouchableOpacity 
+                          style={[styles.thicknessButton, currentThickness === 6 && styles.activeThickness]}
+                          onPress={() => handleThicknessSelect(6)}
+                        >
+                          <View style={[styles.thicknessDot, { width: 6, height: 6 }]} />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  </View>
+
+                  {/* Actions */}
+                  <View style={styles.drawingSection}>
+                    <Text style={styles.sectionTitle}>İşlem</Text>
+                    <View style={styles.actionRow}>
+                      <TouchableOpacity style={styles.actionButton} onPress={handleUndo}>
+                        <Ionicons name="arrow-undo" size={16} color="#64748b" />
+                        <Text style={styles.actionButtonText}>Geri</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={styles.actionButton} onPress={handleClear}>
+                        <Ionicons name="trash-outline" size={16} color="#ef4444" />
+                        <Text style={styles.actionButtonText}>Temizle</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </View>
+              </View>
+            )}
+          </View>
         </View>
 
-        {/* Content */}
+        {/* Main Content */}
         <ScrollView 
-          style={styles.scrollView}
+          style={styles.mainContent}
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
-          {isTestCompleted ? renderTestCompleted() : renderQuestion()}
+          {isTestCompleted ? renderTestCompleted() : renderQuestionContent()}
         </ScrollView>
 
-        {/* Navigation Footer */}
-        {!isTestCompleted && (
-          <View style={styles.footer}>
-            {currentQuestionIndex > 0 && (
+        {/* Combined Answer Options & Navigation */}
+        {!isTestCompleted && currentQuestion && (
+          <View style={styles.combinedFooter}>
+            {/* Answer Options */}
+            <View style={styles.answerOptions}>
+              {['A', 'B', 'C', 'D', 'E'].slice(0, currentQuestion.answerNumber).map((letter) => (
+                <TouchableOpacity
+                  key={letter}
+                  style={[
+                    styles.answerOption,
+                    selectedAnswers.get(currentQuestion.id) === letter && styles.selectedAnswerOption
+                  ]}
+                  onPress={() => handleAnswerSelect(letter)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[
+                    styles.answerLetterText,
+                    selectedAnswers.get(currentQuestion.id) === letter && styles.selectedAnswerLetterText
+                  ]}>
+                    {letter}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* Navigation Buttons */}
+            <View style={styles.navigationRow}>
+              {currentQuestionIndex > 0 && (
+                <TouchableOpacity
+                  style={styles.navButton}
+                  onPress={handlePreviousQuestion}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="chevron-back" size={20} color="#ffffff" />
+                  <Text style={styles.navButtonText}>Önceki</Text>
+                </TouchableOpacity>
+              )}
+
               <TouchableOpacity
-                style={styles.navButton}
-                onPress={handlePreviousQuestion}
+                style={[
+                  styles.navButton,
+                  currentQuestionIndex === 0 && styles.singleButton
+                ]}
+                onPress={handleNextQuestion}
                 activeOpacity={0.7}
               >
-                <Ionicons name="chevron-back" size={20} color="#ffffff" />
-                <Text style={styles.navButtonText}>Önceki</Text>
+                <Text style={styles.navButtonText}>
+                  {currentQuestionIndex === totalQuestions - 1 ? 'Bitir' : 'Sonraki'}
+                </Text>
+                <Ionicons name="chevron-forward" size={20} color="#ffffff" />
               </TouchableOpacity>
-            )}
-
-            <TouchableOpacity
-              style={[
-                styles.navButton,
-                currentQuestionIndex === 0 && styles.singleButton
-              ]}
-              onPress={handleNextQuestion}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.navButtonText}>
-                {currentQuestionIndex === totalQuestions - 1 ? 'Bitir' : 'Sonraki'}
-              </Text>
-              <Ionicons name="chevron-forward" size={20} color="#ffffff" />
-            </TouchableOpacity>
+            </View>
           </View>
         )}
       </View>
@@ -523,13 +566,23 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f8fafc',
   },
+  headerToolsContainer: {
+    backgroundColor: '#ffffff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e2e8f0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  expandedHeaderTools: {
+    paddingBottom: 8,
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#ffffff',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
+    padding: 12,
   },
   backButton: {
     padding: 8,
@@ -551,34 +604,28 @@ const styles = StyleSheet.create({
   placeholder: {
     width: 40,
   },
-  scrollView: {
+  mainContent: {
     flex: 1,
   },
   scrollContent: {
-    padding: screenWidth * 0.05, // 5% of screen width
-    paddingBottom: screenWidth * 0.25, // 25% of screen width for footer
-  },
-  questionContainer: {
-    backgroundColor: '#ffffff',
-    borderRadius: screenWidth * 0.04, // 4% of screen width
-    padding: screenWidth * 0.05,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: Math.max(1, screenWidth * 0.005), // 0.5% of screen width, min 1px
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: screenWidth * 0.02, // 2% of screen width
-    elevation: 4,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    paddingBottom: 160, // Combined footer height + extra space
   },
   questionHeader: {
-    marginBottom: screenWidth * 0.05,
+    marginBottom: 8,
+  },
+  questionHeaderTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
   },
   questionNumber: {
     fontSize: Math.max(14, screenWidth * 0.04), // 4% of screen width, min 14px
     fontWeight: '600',
     color: '#374151',
-    marginBottom: screenWidth * 0.03,
+    marginBottom: 0,
   },
   questionProgress: {
     height: Math.max(3, screenWidth * 0.01), // 1% of screen width, min 3px
@@ -592,21 +639,46 @@ const styles = StyleSheet.create({
     borderRadius: Math.max(1, screenWidth * 0.005), // 0.5% of screen width, min 1px
   },
   questionImageContainer: {
+    position: 'relative',
+    width: '100%',
+    minHeight: screenWidth * 1.2, // Minimum height for large questions
     alignItems: 'center',
-    marginBottom: screenWidth * 0.06,
+    marginBottom: 12,
+    backgroundColor: '#f8fafc',
+    borderRadius: 8,
   },
   questionImage: {
     width: '100%',
-    height: screenWidth * 0.5, // 50% of screen width
-    borderRadius: screenWidth * 0.03, // 3% of screen width
+    minHeight: screenWidth * 1.2,
+    borderRadius: 8,
     backgroundColor: '#f1f5f9',
+  },
+  combinedFooter: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: '#ffffff',
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 10,
+    zIndex: 5,
+  },
+  navigationRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 16,
   },
   answerOptions: {
     flexDirection: 'row',
     justifyContent: 'space-around',
     alignItems: 'center',
-    marginTop: screenWidth * 0.05, // 5% of screen width
-    paddingHorizontal: screenWidth * 0.05,
     width: '100%',
   },
   answerOption: {
@@ -696,26 +768,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
-  footer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    backgroundColor: '#ffffff',
-    padding: 20,
-    borderTopWidth: 1,
-    borderTopColor: '#e2e8f0',
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: -2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
-  },
   navButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -725,9 +777,6 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     minWidth: 100,
     justifyContent: 'center',
-  },
-  disabledButton: {
-    backgroundColor: '#9ca3af',
   },
   singleButton: {
     flex: 1,
@@ -742,16 +791,11 @@ const styles = StyleSheet.create({
   toolButtons: {
     flexDirection: 'column',
     backgroundColor: '#ffffff',
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
-    minHeight: 60,
   },
   toolButton: {
     alignItems: 'center',
     flex: 1,
-    paddingVertical: 8,
+    paddingVertical: 4,
   },
   toolButtonText: {
     fontSize: 12,
@@ -764,16 +808,13 @@ const styles = StyleSheet.create({
   activeToolButtonText: {
     color: '#3b82f6', // Blue text for active tool
   },
-  expandedToolButtons: {
-    paddingBottom: 20,
-  },
   mainToolButtons: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    paddingHorizontal: 20,
-    paddingVertical: 15,
-    backgroundColor: '#f8fafc',
-    minHeight: 50,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    backgroundColor: '#ffffff',
+    minHeight: 32,
   },
   drawingToolbar: {
     backgroundColor: '#f8fafc',
@@ -785,6 +826,30 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     maxWidth: screenWidth - 20,
+    position: 'relative',
+    overflow: 'hidden',
+    height: 'auto',
+  },
+  hiddenToolbar: {
+    height: 0,
+    paddingVertical: 0,
+    borderTopWidth: 0,
+    opacity: 0,
+  },
+  drawingContainer: {
+    backgroundColor: '#ffffff',
+  },
+  toolbarToggle: {
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 20,
+    padding: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   drawingSection: {
     alignItems: 'center',

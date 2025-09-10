@@ -17,7 +17,7 @@ interface InputProps extends Omit<TextInputProps, 'style'> {
   rightIcon?: keyof typeof Ionicons.glyphMap;
   onRightIconPress?: () => void;
   containerStyle?: ViewStyle;
-  inputStyle?: ViewStyle;
+  inputStyle?: TextStyle;
   labelStyle?: TextStyle;
   errorStyle?: TextStyle;
 }
@@ -42,8 +42,8 @@ export const Input: React.FC<InputProps> = ({
     setIsPasswordVisible(!isPasswordVisible);
   };
 
-  const getInputStyle = (): ViewStyle => {
-    const baseStyle: ViewStyle = {
+  const getInputStyle = (): TextStyle => {
+    const baseStyle: TextStyle = {
       flex: 1,
       fontSize: 16,
       color: '#1f2937',

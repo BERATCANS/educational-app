@@ -12,7 +12,6 @@ import { AddBookScreen } from './src/screens/AddBookScreen';
 import { BookDetailScreen } from './src/screens/BookDetailScreen';
 import { LibraryScreen } from './src/screens/LibraryScreen';
 import { TestScreen } from './src/screens/TestScreen';
-import { TestPreviewScreen } from './src/screens/TestPreviewScreen';
 import { useAuthStore } from './src/store/authStore';
 
 const Stack = createNativeStackNavigator();
@@ -42,7 +41,6 @@ export default function App() {
                 <Stack.Screen name="FlaggedQuestions" component={FlaggedQuestionsScreen} />
                 <Stack.Screen name="AddBook" component={AddBookScreen} />
                 <Stack.Screen name="BookDetail" component={BookDetailScreen} />
-                <Stack.Screen name="TestPreview" component={TestPreviewScreen} />
                 <Stack.Screen name="Test" component={TestScreen} />
               </>
             )}
