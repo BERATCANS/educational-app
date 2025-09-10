@@ -38,5 +38,8 @@ public class Question {
     private List<String> hints = new ArrayList<>();
 
     @Column
-    private String solutionWay;
+    private String explanation;
+
+    @Column
+    private String videoUrl;
 }

@@ -44,6 +44,7 @@ public class TestService {
                 question.setImageUrl(qr.getImageUrl());
                 question.setCorrectAnswer(qr.getCorrectAnswer());
                 question.setAnswerNumber(qr.getAnswerNumber() == 0 ? 5 : qr.getAnswerNumber());
+                question.setVideoUrl(qr.getVideoUrl());
                 questionRepository.save(question);
                 test.getQuestions().add(question);
             }
@@ -83,6 +84,7 @@ public class TestService {
                 question.setImageUrl(qr.getImageUrl());
                 question.setCorrectAnswer(qr.getCorrectAnswer());
                 question.setAnswerNumber(qr.getAnswerNumber() == 0 ? 5 : qr.getAnswerNumber());
+                question.setVideoUrl(qr.getVideoUrl());
                 questionRepository.save(question);
                 test.getQuestions().add(question);
             }

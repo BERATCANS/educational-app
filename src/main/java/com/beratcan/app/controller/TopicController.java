@@ -18,8 +18,8 @@ public class TopicController {
     }
 
     @PostMapping("/add")
-    public TopicResponse addTopic(@RequestParam Long bookId, @RequestParam String title) {
-        return topicService.addTopic(bookId, title);
+    public TopicResponse addTopic(@RequestParam Long bookId, @RequestBody TopicRequest request) {
+        return topicService.addTopic(bookId, request);
     }
 
     @GetMapping("/by-book/{bookId}")

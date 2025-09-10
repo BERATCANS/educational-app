@@ -32,6 +32,7 @@ public class QuestionService {
         question.setImageUrl(request.getImageUrl());
         question.setAnswerNumber(request.getAnswerNumber() > 0 ? request.getAnswerNumber() : 5);
         question.setCorrectAnswer(request.getCorrectAnswer());
+        question.setVideoUrl(request.getVideoUrl());
 
         question = questionRepository.save(question);
         return toQuestionResponse(question);
@@ -65,6 +66,9 @@ public class QuestionService {
         if (request.getAnswerNumber() > 0) {
             question.setAnswerNumber(request.getAnswerNumber());
         }
+        if (request.getVideoUrl() != null) {
+            question.setVideoUrl(request.getVideoUrl());
+        }
 
         question = questionRepository.save(question);
         return toQuestionResponse(question);
@@ -84,6 +88,9 @@ public class QuestionService {
         response.setImageUrl(question.getImageUrl());
         response.setCorrectAnswer(question.getCorrectAnswer());
         response.setAnswerNumber(question.getAnswerNumber());
+        response.setVideoUrl(question.getVideoUrl());
+        response.setExplanation(question.getExplanation());
+        response.setHints(question.getHints());
         return response;
     }
 }

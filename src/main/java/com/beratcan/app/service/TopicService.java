@@ -35,13 +35,22 @@ public class TopicService {
         return response;
     }
 
-    public TopicResponse addTopic(Long bookId, String title) {
+    public TopicResponse addTopic(Long bookId, TopicRequest request) {
         Optional<Book> bookOpt = bookRepository.findById(bookId);
         if (bookOpt.isEmpty()) throw new RuntimeException("Book not found");
 
         Topic topic = new Topic();
-        topic.setTitle(title);
+        topic.setTitle(request.getTitle());
         topic.setBook(bookOpt.get());
+        if (request.getTests() != null) {
+            for (String testTitle : request.getTests()) {
+                Test test = new Test();
+                test.setTitle(testTitle);
+                test.setTopic(topic);
+                testRepository.save(test);
+                topic.getTests().add(test);
+            }
+        }
         Topic saved = topicRepository.save(topic);
 
         return toTopicResponse(saved);
@@ -51,7 +60,9 @@ public class TopicService {
         Topic topic = topicRepository.findById(topicId)
                 .orElseThrow(() -> new RuntimeException("Topic not found"));
 
-        topic.setTitle(request.getTitle());
+        if (request.getTitle() != null && !request.getTitle().isBlank()) {
+            topic.setTitle(request.getTitle());
+        }
 
         if (request.getTests() != null) {
             for (String testTitle : request.getTests()) {
