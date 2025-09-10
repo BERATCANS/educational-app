@@ -15,9 +15,10 @@ import { useNavigation } from '@react-navigation/native';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { useAuthStore } from '../store/authStore';
+import { apiService } from '../services/api';
 
 const loginSchema = z.object({
-  username: z.string().min(1, 'Kullanıcı adı gerekli'),
+  identifier: z.string().min(1, 'Kullanıcı adı, email veya telefon gerekli'),
   password: z.string().min(1, 'Şifre gerekli'),
 });
 
@@ -39,23 +40,29 @@ export const LoginScreen: React.FC = () => {
   const onSubmit = async (data: LoginFormData) => {
     setIsLoading(true);
     try {
-      // Mock login - herhangi bir kullanıcı adı/şifre ile giriş yapılabilir
-      const mockUser = {
-        id: 1,
-        firstName: 'Ahmet',
-        lastName: 'Yılmaz',
-        email: 'ahmet@example.com',
-        phoneNumber: '+905551234567',
-        username: data.username,
-        password: 'hashed-password',
-        role: 'STUDENT' as const,
+      // Gerçek API çağrısı
+      const response = await apiService.login(data);
+      
+      // Backend'den gelen response'u User objesine çevir
+      const user = {
+        id: 1, // Backend'den gelecek - şimdilik mock
+        firstName: '', // Backend'den gelecek - şimdilik boş
+        lastName: '', // Backend'den gelecek - şimdilik boş
+        email: data.identifier.includes('@') ? data.identifier : '',
+        phoneNumber: data.identifier.match(/^\d+$/) ? data.identifier : '',
+        username: response.username,
+        password: '',
+        role: response.role as 'STUDENT' | 'TEACHER' | 'ADMIN',
         ownedBooks: [],
       };
-      const mockToken = 'mock-jwt-token-' + Date.now();
-      setToken(mockToken);
-      setUser(mockUser);
-      // Navigation otomatik olarak App.tsx'teki isAuthenticated değişimi ile tetiklenecek
+
+      // Store'a kaydet
+      setUser(user);
+      setToken(response.token);
+      
+      Alert.alert('Başarılı', 'Giriş yapıldı!');
     } catch (error) {
+      console.error('Login error:', error);
       Alert.alert(
         'Giriş Hatası',
         error instanceof Error ? error.message : 'Giriş yapılırken bir hata oluştu'
@@ -69,24 +76,6 @@ export const LoginScreen: React.FC = () => {
     navigation.navigate('Register' as never);
   };
 
-  // Demo giriş butonu
-  const handleDemoLogin = () => {
-    const mockUser = {
-      id: 1,
-      firstName: 'Demo',
-      lastName: 'Kullanıcı',
-      email: 'demo@edubook.com',
-      phoneNumber: '+905551234567',
-      username: 'demo_user',
-      password: 'hashed-password',
-      role: 'STUDENT' as const,
-      ownedBooks: [],
-    };
-    const mockToken = 'demo-token-' + Date.now();
-    setToken(mockToken);
-    setUser(mockUser);
-    // Navigation otomatik olarak App.tsx'teki isAuthenticated değişimi ile tetiklenecek
-  };
 
   return (
     <KeyboardAvoidingView
@@ -105,15 +94,15 @@ export const LoginScreen: React.FC = () => {
         <View style={styles.form}>
           <Controller
             control={control}
-            name="username"
+            name="identifier"
             render={({ field: { onChange, onBlur, value } }) => (
               <Input
-                label="Kullanıcı Adı"
-                placeholder="Kullanıcı adınızı girin"
+                label="Kullanıcı Adı, Email veya Telefon"
+                placeholder="Kullanıcı adı, email veya telefon girin"
                 value={value}
                 onChangeText={onChange}
                 onBlur={onBlur}
-                error={errors.username?.message}
+                error={errors.identifier?.message}
                 leftIcon="person"
                 autoCapitalize="none"
                 autoCorrect={false}
@@ -145,15 +134,6 @@ export const LoginScreen: React.FC = () => {
             style={styles.loginButton}
           />
 
-          <View style={styles.demoSection}>
-            <Text style={styles.demoText}>veya</Text>
-            <Button
-              title="Demo ile Giriş Yap"
-              onPress={handleDemoLogin}
-              variant="secondary"
-              size="small"
-            />
-          </View>
 
           <View style={styles.registerSection}>
             <Text style={styles.registerText}>Hesabınız yok mu?</Text>

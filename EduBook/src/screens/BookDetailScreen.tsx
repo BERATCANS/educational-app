@@ -10,11 +10,14 @@ import {
   FlatList,
   Animated,
   Modal,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useQuery } from '@tanstack/react-query';
 import { Book, Topic, Test, Question } from '../types';
+import { apiService } from '../services/api';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -23,6 +26,13 @@ export const BookDetailScreen: React.FC = () => {
   const route = useRoute<any>();
   const { book } = route.params as { book: Book };
   
+  // API'den topic'leri çek
+  const { data: topicsData, isLoading: topicsLoading, error: topicsError } = useQuery({
+    queryKey: ['topics', book.id],
+    queryFn: () => apiService.getTopicsForBook(book.id),
+    enabled: !!book.id,
+  });
+
   // Tüm testleri flat bir liste halinde topla
   const [allTests, setAllTests] = useState<Array<{test: Test, topic: Topic}>>([]);
   const [displayedTests, setDisplayedTests] = useState<Array<{test: Test, topic: Topic}>>([]);
@@ -39,19 +49,38 @@ export const BookDetailScreen: React.FC = () => {
   const [itemHeights, setItemHeights] = useState<{ [key: string]: number }>({});
   const [bookCoverHeight, setBookCoverHeight] = useState(200);
 
+  // Backend'den gelen topic'ler için test'leri çek
+  const { data: allTestsData, isLoading: testsLoading } = useQuery({
+    queryKey: ['tests', topicsData],
+    queryFn: async () => {
+      if (!topicsData) return [];
+      
+      const allTests: Array<{test: Test, topic: Topic}> = [];
+      
+      // Her topic için test'leri çek
+      for (const topic of topicsData) {
+        try {
+          const tests = await apiService.getTestsForTopic(topic.id);
+          tests.forEach(test => {
+            allTests.push({ test, topic });
+          });
+        } catch (error) {
+          console.error(`Error fetching tests for topic ${topic.id}:`, error);
+        }
+      }
+      
+      return allTests;
+    },
+    enabled: !!topicsData && topicsData.length > 0,
+  });
+
   useEffect(() => {
-    // Tüm testleri topla
-    const tests: Array<{test: Test, topic: Topic}> = [];
-    book.topics?.forEach(topic => {
-      topic.tests?.forEach(test => {
-        tests.push({ test, topic });
-      });
-    });
-    setAllTests(tests);
-    
-    // İlk sayfayı yükle
-    setDisplayedTests(tests.slice(0, testsPerPage));
-  }, [book]);
+    if (allTestsData) {
+      setAllTests(allTestsData);
+      // İlk sayfayı yükle
+      setDisplayedTests(allTestsData.slice(0, testsPerPage));
+    }
+  }, [allTestsData]);
 
   const loadMoreTests = () => {
     if (loading || displayedTests.length >= allTests.length) {
@@ -200,6 +229,89 @@ export const BookDetailScreen: React.FC = () => {
       </View>
     );
   }, []);
+
+  // Loading state
+  if (topicsLoading || testsLoading) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.container}>
+          <View style={styles.header}>
+            <TouchableOpacity onPress={goBack} style={styles.backButton}>
+              <Ionicons name="arrow-back" size={24} color="#1e293b" />
+            </TouchableOpacity>
+            <View style={styles.headerInfo}>
+              <Text style={styles.headerTitle}>{book.title}</Text>
+              <Text style={styles.headerSubtitle}>Yükleniyor...</Text>
+            </View>
+          </View>
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#3b82f6" />
+            <Text style={styles.loadingText}>Testler yükleniyor...</Text>
+          </View>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // Error state
+  if (topicsError) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.container}>
+          <View style={styles.header}>
+            <TouchableOpacity onPress={goBack} style={styles.backButton}>
+              <Ionicons name="arrow-back" size={24} color="#1e293b" />
+            </TouchableOpacity>
+            <View style={styles.headerInfo}>
+              <Text style={styles.headerTitle}>{book.title}</Text>
+              <Text style={styles.headerSubtitle}>Hata</Text>
+            </View>
+          </View>
+          <View style={styles.errorContainer}>
+            <Ionicons name="alert-circle-outline" size={64} color="#ef4444" />
+            <Text style={styles.errorTitle}>Bir Hata Oluştu</Text>
+            <Text style={styles.errorSubtitle}>
+              Testler yüklenirken bir hata oluştu. Lütfen tekrar deneyin.
+            </Text>
+            <TouchableOpacity style={styles.retryButton} onPress={() => navigation.goBack()}>
+              <Ionicons name="refresh" size={20} color="#ffffff" />
+              <Text style={styles.retryButtonText}>Geri Dön</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // Empty state
+  if (allTests.length === 0) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.container}>
+          <View style={styles.header}>
+            <TouchableOpacity onPress={goBack} style={styles.backButton}>
+              <Ionicons name="arrow-back" size={24} color="#1e293b" />
+            </TouchableOpacity>
+            <View style={styles.headerInfo}>
+              <Text style={styles.headerTitle}>{book.title}</Text>
+              <Text style={styles.headerSubtitle}>Test Bulunamadı</Text>
+            </View>
+          </View>
+          <View style={styles.emptyContainer}>
+            <Ionicons name="document-outline" size={64} color="#d1d5db" />
+            <Text style={styles.emptyTitle}>Test Bulunamadı</Text>
+            <Text style={styles.emptySubtitle}>
+              Bu kitap için henüz test eklenmemiş.
+            </Text>
+            <TouchableOpacity style={styles.retryButton} onPress={() => navigation.goBack()}>
+              <Ionicons name="arrow-back" size={20} color="#ffffff" />
+              <Text style={styles.retryButtonText}>Geri Dön</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -442,25 +554,9 @@ const styles = StyleSheet.create({
     paddingVertical: 40,
     paddingHorizontal: 16,
   },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#374151',
-    marginTop: 12,
-    marginBottom: 4,
-  },
-  emptySubtitle: {
-    fontSize: 14,
-    color: '#6b7280',
-    textAlign: 'center',
-  },
   loadingFooter: {
     paddingVertical: 20,
     alignItems: 'center',
-  },
-  loadingText: {
-    fontSize: 14,
-    color: '#64748b',
   },
   // Drawer styles
   drawerOverlay: {
@@ -541,5 +637,71 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 12,
+  },
+  // Loading, Error, Empty states
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 40,
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#6b7280',
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 40,
+  },
+  errorTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1f2937',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  errorSubtitle: {
+    fontSize: 16,
+    color: '#6b7280',
+    textAlign: 'center',
+    lineHeight: 24,
+    marginBottom: 24,
+  },
+  retryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#3b82f6',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 40,
+  },
+  emptyTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1f2937',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  emptySubtitle: {
+    fontSize: 16,
+    color: '#6b7280',
+    textAlign: 'center',
+    lineHeight: 24,
+    marginBottom: 24,
   },
 });

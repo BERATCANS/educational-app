@@ -8,12 +8,15 @@ import {
   Image,
   Alert,
   Dimensions,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { SimpleDrawing } from '../components/SimpleDrawing';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { Book, Topic, Test, Question } from '../types';
+import { useQuery } from '@tanstack/react-query';
+import { apiService } from '../services/api';
 import * as SecureStore from 'expo-secure-store';
 
 
@@ -39,7 +42,14 @@ export const TestScreen: React.FC = () => {
   const [currentThickness, setCurrentThickness] = useState(2);
   const [drawingsByQuestion, setDrawingsByQuestion] = useState<{[questionId: number]: Array<{id: string, path: string, color: string, thickness: number}>}>({});
 
-  const questions = test.questions || [];
+  // API'den soruları çek
+  const { data: questionsData, isLoading, error } = useQuery({
+    queryKey: ['questions', test.id],
+    queryFn: () => apiService.getQuestionsForTest(test.id),
+    enabled: !!test.id,
+  });
+
+  const questions = questionsData || [];
   const currentQuestion = questions[currentQuestionIndex];
   const totalQuestions = questions.length;
   
@@ -321,6 +331,95 @@ export const TestScreen: React.FC = () => {
       </TouchableOpacity>
     </View>
   );
+
+  // Loading state
+  if (isLoading) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.container}>
+          <View style={styles.header}>
+            <TouchableOpacity onPress={goBack} style={styles.backButton}>
+              <Ionicons name="arrow-back" size={24} color="#1e293b" />
+            </TouchableOpacity>
+            <View style={styles.headerInfo}>
+              <Text style={styles.headerTitle}>{test.title}</Text>
+              <Text style={styles.headerSubtitle}>
+                {topic.title} • {book.title}
+              </Text>
+            </View>
+          </View>
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#3b82f6" />
+            <Text style={styles.loadingText}>Sorular yükleniyor...</Text>
+          </View>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.container}>
+          <View style={styles.header}>
+            <TouchableOpacity onPress={goBack} style={styles.backButton}>
+              <Ionicons name="arrow-back" size={24} color="#1e293b" />
+            </TouchableOpacity>
+            <View style={styles.headerInfo}>
+              <Text style={styles.headerTitle}>{test.title}</Text>
+              <Text style={styles.headerSubtitle}>
+                {topic.title} • {book.title}
+              </Text>
+            </View>
+          </View>
+          <View style={styles.errorContainer}>
+            <Ionicons name="alert-circle-outline" size={64} color="#ef4444" />
+            <Text style={styles.errorTitle}>Bir Hata Oluştu</Text>
+            <Text style={styles.errorSubtitle}>
+              Sorular yüklenirken bir hata oluştu. Lütfen tekrar deneyin.
+            </Text>
+            <TouchableOpacity style={styles.retryButton} onPress={() => navigation.goBack()}>
+              <Ionicons name="refresh" size={20} color="#ffffff" />
+              <Text style={styles.retryButtonText}>Geri Dön</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // Empty state
+  if (questions.length === 0) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.container}>
+          <View style={styles.header}>
+            <TouchableOpacity onPress={goBack} style={styles.backButton}>
+              <Ionicons name="arrow-back" size={24} color="#1e293b" />
+            </TouchableOpacity>
+            <View style={styles.headerInfo}>
+              <Text style={styles.headerTitle}>{test.title}</Text>
+              <Text style={styles.headerSubtitle}>
+                {topic.title} • {book.title}
+              </Text>
+            </View>
+          </View>
+          <View style={styles.emptyContainer}>
+            <Ionicons name="document-outline" size={64} color="#d1d5db" />
+            <Text style={styles.emptyTitle}>Soru Bulunamadı</Text>
+            <Text style={styles.emptySubtitle}>
+              Bu test için henüz soru eklenmemiş.
+            </Text>
+            <TouchableOpacity style={styles.retryButton} onPress={() => navigation.goBack()}>
+              <Ionicons name="arrow-back" size={20} color="#ffffff" />
+              <Text style={styles.retryButtonText}>Geri Dön</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -958,5 +1057,71 @@ const styles = StyleSheet.create({
     backgroundColor: '#e0f2fe',
     borderColor: '#3b82f6',
     borderWidth: 2,
+  },
+  // Loading, Error, Empty states
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 40,
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#6b7280',
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 40,
+  },
+  errorTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1f2937',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  errorSubtitle: {
+    fontSize: 16,
+    color: '#6b7280',
+    textAlign: 'center',
+    lineHeight: 24,
+    marginBottom: 24,
+  },
+  retryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#3b82f6',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 40,
+  },
+  emptyTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1f2937',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  emptySubtitle: {
+    fontSize: 16,
+    color: '#6b7280',
+    textAlign: 'center',
+    lineHeight: 24,
+    marginBottom: 24,
   },
 });

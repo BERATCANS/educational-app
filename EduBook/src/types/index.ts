@@ -1,4 +1,4 @@
-// User entity
+// User entity - Backend User entity ile uyumlu
 export interface User {
   id: number;
   firstName: string;
@@ -8,20 +8,18 @@ export interface User {
   username: string;
   password: string;
   role: 'STUDENT' | 'TEACHER' | 'ADMIN';
-  ownedBooks: Book[];
-  flaggedQuestions?: Question[];
+  ownedBooks: Book[]; // Backend'de Set<Book> ama frontend'de array olarak kullanılıyor
+  flaggedQuestions?: Question[]; // Backend'de Set<Question> ama frontend'de array olarak kullanılıyor
 }
 
-// Book entity
+// Book entity - Backend BookResponse'u ile uyumlu
 export interface Book {
   id: number;
   title: string;
   publisher: string;
   coverImageUrl: string;
-  paid: boolean;
-  codes?: BookCode[];
-  topics?: Topic[];
-  owners?: User[];
+  paid?: boolean; // Backend'de yok, frontend'de varsayılan true
+  topics?: Topic[]; // Backend'de yok, frontend'de boş array
 }
 
 // Topic entity
@@ -43,11 +41,12 @@ export interface Test {
 // Question entity - Backend'e uygun güncellendi
 export interface Question {
   id: number;
-  test?: Test;
-  imageUrl: string; // Sadece resim URL'i
-  answerNumber: number; // Sabit 5
+  imageUrl: string;
+  answerNumber: number;
   correctAnswer?: 'A' | 'B' | 'C' | 'D' | 'E';
-  sequenceNumber: number;
+  hints: string[];
+  explanation: string;
+  videoUrl?: string;
 }
 
 // OptionLetter enum - Backend'e uygun
@@ -89,7 +88,7 @@ export interface BookCode {
 
 // API Request/Response types
 export interface LoginRequest {
-  username: string;
+  identifier: string; // Backend identifier bekliyor (email, telefon veya username)
   password: string;
 }
 
@@ -100,12 +99,13 @@ export interface RegisterRequest {
   phoneNumber: string;
   username: string;
   password: string;
-  role: 'STUDENT' | 'TEACHER';
+  role: 'STUDENT' | 'TEACHER' | 'ADMIN';
 }
 
 export interface AuthResponse {
-  user: User;
   token: string;
+  username: string;
+  role: string;
 }
 
 export interface ApiResponse<T> {

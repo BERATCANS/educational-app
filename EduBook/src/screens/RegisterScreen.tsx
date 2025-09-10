@@ -15,6 +15,7 @@ import { useNavigation } from '@react-navigation/native';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { useAuthStore } from '../store/authStore';
+import { apiService } from '../services/api';
 
 const registerSchema = z.object({
   firstName: z.string().min(2, 'Ad en az 2 karakter olmalı'),
@@ -51,24 +52,48 @@ export const RegisterScreen: React.FC = () => {
   const onSubmit = async (data: RegisterFormData) => {
     setIsLoading(true);
     try {
-      // Mock registration
-      const mockUser = {
-        id: 2,
+      // Backend'e register request gönder
+      const registerData = {
         firstName: data.firstName,
         lastName: data.lastName,
         email: data.email,
         phoneNumber: data.phoneNumber,
         username: data.username,
-        password: 'hashed-password',
-        role: 'STUDENT' as const,
-        ownedBooks: [],
+        password: data.password,
+        role: data.role,
       };
-      const mockToken = 'mock-jwt-token-' + Date.now();
-      setToken(mockToken);
-      setUser(mockUser);
+
+      // Register API çağrısı
+      const user = await apiService.register(registerData);
       
-      // Navigation otomatik olarak App.tsx'teki isAuthenticated değişimi ile tetiklenecek
+      // Register başarılı olduktan sonra otomatik login yap
+      const loginData = {
+        identifier: data.username, // Username ile login yap
+        password: data.password,
+      };
+      
+      const authResponse = await apiService.login(loginData);
+      
+      // User objesini oluştur
+      const userObj = {
+        id: user.id,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        email: user.email,
+        phoneNumber: user.phoneNumber,
+        username: user.username,
+        password: '',
+        role: user.role as 'STUDENT' | 'TEACHER' | 'ADMIN',
+        ownedBooks: user.ownedBooks || [],
+      };
+
+      // Store'a kaydet
+      setUser(userObj);
+      setToken(authResponse.token);
+      
+      Alert.alert('Başarılı', 'Hesabınız oluşturuldu ve giriş yapıldı!');
     } catch (error) {
+      console.error('Register error:', error);
       Alert.alert(
         'Kayıt Hatası',
         error instanceof Error ? error.message : 'Kayıt olurken bir hata oluştu'
