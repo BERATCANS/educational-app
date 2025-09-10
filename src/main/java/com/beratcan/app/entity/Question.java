@@ -34,12 +34,12 @@ public class Question {
 
     @ElementCollection
     @CollectionTable(name = "question_hints", joinColumns = @JoinColumn(name = "question_id"))
-    @Column(name = "hint")
-    private List<String> hints = new ArrayList<>();
+    private List<Hint> hints = new ArrayList<>();
 
-    @Column
-    private String explanation;
+    @Embedded
+    private Explanation explanation;
 
     @Column
     private String videoUrl;
+
 }

@@ -6,11 +6,11 @@ import com.beratcan.app.entity.BookCode;
 import com.beratcan.app.entity.Topic;
 import com.beratcan.app.entity.User;
 import com.beratcan.app.dto.response.BookResponse;
-import com.beratcan.app.dto.response.TopicResponse;
 import com.beratcan.app.repository.BookCodeRepository;
 import com.beratcan.app.repository.BookRepository;
 import com.beratcan.app.repository.TopicRepository;
 import com.beratcan.app.repository.UserRepository;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,20 +19,14 @@ import java.util.ArrayList;
 import java.util.Optional;
 
 @Service
+@RequiredArgsConstructor
 public class BookService {
 
     private final BookRepository bookRepository;
     private final BookCodeRepository codeRepository;
     private final UserRepository userRepository;
     private final TopicRepository topicRepository;
-
-    public BookService(BookRepository bookRepository, BookCodeRepository codeRepository, UserRepository userRepository,
-            TopicRepository topicRepository) {
-        this.bookRepository = bookRepository;
-        this.codeRepository = codeRepository;
-        this.userRepository = userRepository;
-        this.topicRepository = topicRepository;
-    }
+    private final BookCodeRepository bookCodeRepository;
 
     public Book addBook(Book book, List<String> topics) {
 
@@ -130,5 +124,21 @@ public class BookService {
         response.setPublisher(book.getPublisher());
         response.setCoverImageUrl(book.getCoverImageUrl());
         return response;
+    }
+
+    @Transactional
+    public void addCodes(Long bookId, List<String> codes) {
+        Book book = bookRepository.findById(bookId)
+                .orElseThrow(() -> new RuntimeException("Book not found"));
+
+        List<BookCode> bookCodes = codes.stream().map(codeStr -> {
+            BookCode code = new BookCode();
+            code.setCode(codeStr);
+            code.setBook(book);
+            code.setUsed(false);
+            return code;
+        }).toList();
+        book.getCodes().addAll(bookCodes);
+        bookCodeRepository.saveAll(bookCodes);
     }
 }

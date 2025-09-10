@@ -2,10 +2,13 @@ package com.beratcan.app.service;
 
 import com.beratcan.app.dto.request.QuestionRequest;
 import com.beratcan.app.dto.response.QuestionResponse;
+import com.beratcan.app.entity.Explanation;
+import com.beratcan.app.entity.Hint;
 import com.beratcan.app.entity.Question;
 import com.beratcan.app.entity.Test;
 import com.beratcan.app.repository.QuestionRepository;
 import com.beratcan.app.repository.TestRepository;
+import jakarta.transaction.Transactional;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -81,6 +84,46 @@ public class QuestionService {
         questionRepository.delete(question);
     }
 
+    @Transactional
+    public void voteHint(Long questionId, int hintIndex, boolean like) {
+        Question question = questionRepository.findById(questionId)
+                .orElseThrow(() -> new RuntimeException("Question not found"));
+
+        List<Hint> hints = question.getHints();
+        if (hintIndex < 0 || hintIndex >= hints.size()) {
+            throw new RuntimeException("Invalid hint index");
+        }
+
+        Hint hint = hints.get(hintIndex);
+        if (like) {
+            hint.setLikes(hint.getLikes() + 1);
+        } else {
+            hint.setDislikes(hint.getDislikes() + 1);
+        }
+
+        // Question entity'si cascade ile update edileceği için explicit save opsiyonel
+        questionRepository.save(question);
+    }
+
+    @Transactional
+    public void voteExplanation(Long questionId, boolean like) {
+        Question question = questionRepository.findById(questionId)
+                .orElseThrow(() -> new RuntimeException("Question not found"));
+
+        Explanation explanation = question.getExplanation();
+        if (explanation == null) {
+            throw new RuntimeException("Explanation not found for this question");
+        }
+
+        if (like) {
+            explanation.setLikes(explanation.getLikes() + 1);
+        } else {
+            explanation.setDislikes(explanation.getDislikes() + 1);
+        }
+
+        questionRepository.save(question);
+    }
+
     // HELPER
     private QuestionResponse toQuestionResponse(Question question) {
         QuestionResponse response = new QuestionResponse();
@@ -89,8 +132,12 @@ public class QuestionService {
         response.setCorrectAnswer(question.getCorrectAnswer());
         response.setAnswerNumber(question.getAnswerNumber());
         response.setVideoUrl(question.getVideoUrl());
-        response.setExplanation(question.getExplanation());
-        response.setHints(question.getHints());
+        response.setExplanation(question.getExplanation().getText());
+        response.setHints(
+                question.getHints().stream()
+                        .map(Hint::getText)
+                        .toList()
+        );
         return response;
     }
 }

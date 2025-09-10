@@ -36,6 +36,12 @@ public class BookController {
         return bookService.useCode(userId, code);
     }
 
+    @PostMapping("/add-codes")
+    public ResponseEntity<String> addCodes(@RequestParam Long bookId, @RequestBody List<String> codes) {
+        bookService.addCodes(bookId, codes);
+        return ResponseEntity.ok("Codes added successfully");
+    }
+
     @GetMapping("/for-user/{userId}")
     public List<BookResponse> getBooksForUser(@PathVariable Long userId) {
         return bookService.getBooksForUser(userId);

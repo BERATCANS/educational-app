@@ -3,6 +3,7 @@ package com.beratcan.app.controller;
 import com.beratcan.app.dto.request.QuestionRequest;
 import com.beratcan.app.dto.response.QuestionResponse;
 import com.beratcan.app.service.QuestionService;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -45,5 +46,24 @@ public class QuestionController {
     @DeleteMapping("/{questionId}")
     public void deleteQuestion(@PathVariable Long questionId) {
         questionService.deleteQuestion(questionId);
+    }
+
+    // Hint için oy verme
+    @PostMapping("/{questionId}/hints/{hintIndex}/vote")
+    public ResponseEntity<String> voteHint(
+            @PathVariable Long questionId,
+            @PathVariable int hintIndex,
+            @RequestParam boolean like) {
+        questionService.voteHint(questionId, hintIndex, like);
+        return ResponseEntity.ok("Vote recorded for hint");
+    }
+
+    // Explanation için oy verme
+    @PostMapping("/{questionId}/explanation/vote")
+    public ResponseEntity<String> voteExplanation(
+            @PathVariable Long questionId,
+            @RequestParam boolean like) {
+        questionService.voteExplanation(questionId, like);
+        return ResponseEntity.ok("Vote recorded for explanation");
     }
 }
