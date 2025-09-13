@@ -99,7 +99,6 @@ export interface RegisterRequest {
   phoneNumber: string;
   username: string;
   password: string;
-  role: 'STUDENT' | 'TEACHER' | 'ADMIN';
 }
 
 export interface AuthResponse {

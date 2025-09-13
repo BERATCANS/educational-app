@@ -20,110 +20,40 @@ const mockFlaggedQuestions: Question[] = [
     imageUrl: 'https://via.placeholder.com/300x200/6b7280/ffffff?text=İşaretlenen+Soru+1',
     answerNumber: 5,
     correctAnswer: 'A',
-    sequenceNumber: 1,
-    test: {
-      id: 1,
-      title: 'Üslü Sayılar Test 1',
-      topic: {
-        id: 1,
-        title: 'Üslü Sayılar',
-        book: {
-          id: 1,
-          title: 'Matematik 9. Sınıf',
-          publisher: 'Metin Yayınları',
-          coverImageUrl: 'https://via.placeholder.com/120x150/3b82f6/ffffff?text=M9',
-          paid: true,
-        }
-      }
-    }
+    hints: [],
+    explanation: '',
   },
   {
     id: 2,
     imageUrl: 'https://via.placeholder.com/300x200/6b7280/ffffff?text=İşaretlenen+Soru+2',
     answerNumber: 5,
     correctAnswer: 'B',
-    sequenceNumber: 2,
-    test: {
-      id: 2,
-      title: 'Hareket Test 1',
-      topic: {
-        id: 4,
-        title: 'Hareket',
-        book: {
-          id: 2,
-          title: 'Fizik 10. Sınıf',
-          publisher: 'Aydın Yayınları',
-          coverImageUrl: 'https://via.placeholder.com/120x150/ef4444/ffffff?text=F10',
-          paid: true,
-        }
-      }
-    }
+    hints: [],
+    explanation: '',
   },
   {
     id: 3,
     imageUrl: 'https://via.placeholder.com/300x200/6b7280/ffffff?text=İşaretlenen+Soru+3',
     answerNumber: 5,
     correctAnswer: 'C',
-    sequenceNumber: 3,
-    test: {
-      id: 9,
-      title: 'Kimyasal Bağlar Test 1',
-      topic: {
-        id: 7,
-        title: 'Kimyasal Bağlar',
-        book: {
-          id: 3,
-          title: 'Kimya 11. Sınıf',
-          publisher: 'Palme Yayınları',
-          coverImageUrl: 'https://via.placeholder.com/120x150/10b981/ffffff?text=K11',
-          paid: true,
-        }
-      }
-    }
+    hints: [],
+    explanation: '',
   },
   {
     id: 4,
     imageUrl: 'https://via.placeholder.com/300x200/6b7280/ffffff?text=İşaretlenen+Soru+4',
     answerNumber: 5,
     correctAnswer: 'D',
-    sequenceNumber: 4,
-    test: {
-      id: 11,
-      title: 'Hücre Test 1',
-      topic: {
-        id: 9,
-        title: 'Hücre',
-        book: {
-          id: 4,
-          title: 'Biyoloji 9. Sınıf',
-          publisher: 'Aydın Yayınları',
-          coverImageUrl: 'https://via.placeholder.com/120x150/f59e0b/ffffff?text=B9',
-          paid: true,
-        }
-      }
-    }
+    hints: [],
+    explanation: '',
   },
   {
     id: 5,
     imageUrl: 'https://via.placeholder.com/300x200/6b7280/ffffff?text=İşaretlenen+Soru+5',
     answerNumber: 5,
     correctAnswer: 'E',
-    sequenceNumber: 5,
-    test: {
-      id: 14,
-      title: 'Osmanlı Test 1',
-      topic: {
-        id: 11,
-        title: 'Osmanlı Devleti',
-        book: {
-          id: 5,
-          title: 'Tarih 10. Sınıf',
-          publisher: 'Kök Yayınları',
-          coverImageUrl: 'https://via.placeholder.com/120x150/8b5cf6/ffffff?text=T10',
-          paid: true,
-        }
-      }
-    }
+    hints: [],
+    explanation: '',
   },
 ];
 
@@ -203,13 +133,13 @@ export const FlaggedQuestionsScreen: React.FC = () => {
                     <View style={styles.bookInfo}>
                       <Ionicons name="book" size={16} color="#3b82f6" />
                       <Text style={styles.bookTitle}>
-                        {item.test?.topic?.book?.title || 'Bilinmeyen Kitap'}
+                        Matematik Kitabı
                       </Text>
                     </View>
                     <View style={styles.topicInfo}>
                       <Ionicons name="bookmark" size={14} color="#10b981" />
                       <Text style={styles.topicTitle}>
-                        {item.test?.topic?.title || 'Bilinmeyen Konu'}
+                        Matematik
                       </Text>
                     </View>
                   </View>
@@ -223,7 +153,7 @@ export const FlaggedQuestionsScreen: React.FC = () => {
                   <View style={styles.questionFooter}>
                     <View style={styles.questionMeta}>
                       <Text style={styles.testTitle}>
-                        {item.test?.title || 'Bilinmeyen Test'}
+                        Matematik Test 1
                       </Text>
                       <Text style={styles.answerInfo}>
                         {item.answerNumber} seçenek • Doğru: {item.correctAnswer}

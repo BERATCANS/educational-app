@@ -2,12 +2,9 @@ package com.beratcan.app.entity;
 
 import jakarta.persistence.*;
 import lombok.Data;
-import lombok.Getter;
-import lombok.Setter;
 
 @Entity
-@Getter
-@Setter
+@Data
 @Table(name = "book_codes")
 public class BookCode {
 

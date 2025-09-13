@@ -63,9 +63,22 @@ export const LoginScreen: React.FC = () => {
       Alert.alert('Başarılı', 'Giriş yapıldı!');
     } catch (error) {
       console.error('Login error:', error);
+      
+      let errorMessage = 'Giriş yapılırken bir hata oluştu';
+      
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      }
+      
       Alert.alert(
-        'Giriş Hatası',
-        error instanceof Error ? error.message : 'Giriş yapılırken bir hata oluştu'
+        '⚠️ Giriş Yapılamadı',
+        errorMessage,
+        [
+          {
+            text: 'Tamam',
+            style: 'default'
+          }
+        ]
       );
     } finally {
       setIsLoading(false);

@@ -132,12 +132,24 @@ public class QuestionService {
         response.setCorrectAnswer(question.getCorrectAnswer());
         response.setAnswerNumber(question.getAnswerNumber());
         response.setVideoUrl(question.getVideoUrl());
-        response.setExplanation(question.getExplanation().getText());
-        response.setHints(
-                question.getHints().stream()
-                        .map(Hint::getText)
-                        .toList()
-        );
+
+        // Handle null explanation safely
+        if (question.getExplanation() != null) {
+            response.setExplanation(question.getExplanation().getText());
+        } else {
+            response.setExplanation("");
+        }
+
+        // Handle hints safely
+        if (question.getHints() != null && !question.getHints().isEmpty()) {
+            response.setHints(
+                    question.getHints().stream()
+                            .map(Hint::getText)
+                            .toList());
+        } else {
+            response.setHints(List.of());
+        }
+
         return response;
     }
 }

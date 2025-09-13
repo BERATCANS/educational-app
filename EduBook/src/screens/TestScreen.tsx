@@ -8,7 +8,7 @@ import {
   Image,
   Alert,
   Dimensions,
-  ActivityIndicator,
+  ActivityIndicator, ViewStyle,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -23,6 +23,7 @@ import * as SecureStore from 'expo-secure-store';
 const { width: screenWidth } = Dimensions.get('window');
 
 export const TestScreen: React.FC = () => {
+  console.log('🚀🚀🚀 TEST SCREEN MOUNTED! 🚀🚀🚀');
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
   const { book, topic, test, initialQuestionIndex = 0 } = route.params as { 
@@ -31,6 +32,7 @@ export const TestScreen: React.FC = () => {
     test: Test; 
     initialQuestionIndex?: number;
   };
+  console.log('📋 TestScreen params:', { book: book?.title, topic: topic?.title, test: test?.title });
   
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(initialQuestionIndex);
   const [selectedAnswers, setSelectedAnswers] = useState<Map<number, string>>(new Map());
@@ -42,16 +44,40 @@ export const TestScreen: React.FC = () => {
   const [currentThickness, setCurrentThickness] = useState(2);
   const [drawingsByQuestion, setDrawingsByQuestion] = useState<{[questionId: number]: Array<{id: string, path: string, color: string, thickness: number}>}>({});
 
-  // API'den soruları çek
+  // API'den soruları çek - GEÇİCİ: Her zaman test ID 1 kullan (backend'de sadece bu test'te sorular var)
+  const actualTestId = 1; // GEÇİCİ FİX: Backend'de sadece test ID 1'de sorular var
+  console.log('🔍 Setting up useQuery for test.id:', test.id, '(using actualTestId:', actualTestId, ')');
   const { data: questionsData, isLoading, error } = useQuery({
-    queryKey: ['questions', test.id],
-    queryFn: () => apiService.getQuestionsForTest(test.id),
-    enabled: !!test.id,
+    queryKey: ['questions', actualTestId],
+    queryFn: () => {
+      console.log('⚡ React Query queryFn called for actualTestId:', actualTestId);
+      return apiService.getQuestionsForTest(actualTestId);
+    },
+    enabled: !!actualTestId,
+  });
+  console.log('📊 useQuery result:', { 
+    questionsData: questionsData?.length, 
+    isLoading, 
+    error: error?.message,
+    enabled: !!test.id 
   });
 
   const questions = questionsData || [];
   const currentQuestion = questions[currentQuestionIndex];
   const totalQuestions = questions.length;
+
+  // Debug logging
+  useEffect(() => {
+    console.log('TestScreen Debug:', {
+      originalTestId: test.id,
+      actualTestId: actualTestId,
+      isLoading,
+      error: error?.message,
+      questionsCount: questions.length,
+      currentQuestionIndex,
+      currentQuestion: currentQuestion ? { id: currentQuestion.id, imageUrl: currentQuestion.imageUrl } : null
+    });
+  }, [test.id, actualTestId, isLoading, error, questions.length, currentQuestionIndex, currentQuestion]);
   
   // Current question'ın çizimlerini al
   const currentQuestionPaths = drawingsByQuestion[currentQuestion?.id] || [];
@@ -272,11 +298,11 @@ export const TestScreen: React.FC = () => {
             )}
           </View>
           <View style={styles.questionProgress}>
-            <View 
-              style={[
-                styles.progressBar, 
-                { width: `${((currentQuestionIndex + 1) / totalQuestions) * 100}%` }
-              ]} 
+            <View
+                style={[
+                  styles.progressBar,
+                  { width: `${((currentQuestionIndex + 1) / totalQuestions) * 100}%` } as ViewStyle,
+                ]}
             />
           </View>
         </View>
@@ -357,6 +383,63 @@ export const TestScreen: React.FC = () => {
     );
   }
 
+  // Loading state
+  if (isLoading) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.container}>
+          <View style={styles.header}>
+            <TouchableOpacity onPress={goBack} style={styles.backButton}>
+              <Ionicons name="arrow-back" size={24} color="#1e293b" />
+            </TouchableOpacity>
+            <View style={styles.headerInfo}>
+              <Text style={styles.headerTitle}>{test.title}</Text>
+              <Text style={styles.headerSubtitle}>
+                {topic.title} • {book.title}
+              </Text>
+            </View>
+          </View>
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#3b82f6" />
+            <Text style={styles.loadingText}>Sorular yükleniyor...</Text>
+          </View>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // Empty questions state
+  if (!isLoading && questions.length === 0) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.container}>
+          <View style={styles.header}>
+            <TouchableOpacity onPress={goBack} style={styles.backButton}>
+              <Ionicons name="arrow-back" size={24} color="#1e293b" />
+            </TouchableOpacity>
+            <View style={styles.headerInfo}>
+              <Text style={styles.headerTitle}>{test.title}</Text>
+              <Text style={styles.headerSubtitle}>
+                {topic.title} • {book.title}
+              </Text>
+            </View>
+          </View>
+          <View style={styles.emptyContainer}>
+            <Ionicons name="document-outline" size={64} color="#9ca3af" />
+            <Text style={styles.emptyTitle}>Soru Bulunamadı</Text>
+            <Text style={styles.emptySubtitle}>
+              Bu testte henüz soru eklenmemiş.
+            </Text>
+            <TouchableOpacity style={styles.retryButton} onPress={() => navigation.goBack()}>
+              <Ionicons name="arrow-back" size={20} color="#ffffff" />
+              <Text style={styles.retryButtonText}>Geri Dön</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   // Error state
   if (error) {
     return (
@@ -389,8 +472,9 @@ export const TestScreen: React.FC = () => {
     );
   }
 
-  // Empty state
-  if (questions.length === 0) {
+  // Ensure currentQuestion exists before rendering
+  if (!currentQuestion) {
+    console.log('⚠️ No current question available, showing loading...');
     return (
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.container}>
@@ -405,21 +489,16 @@ export const TestScreen: React.FC = () => {
               </Text>
             </View>
           </View>
-          <View style={styles.emptyContainer}>
-            <Ionicons name="document-outline" size={64} color="#d1d5db" />
-            <Text style={styles.emptyTitle}>Soru Bulunamadı</Text>
-            <Text style={styles.emptySubtitle}>
-              Bu test için henüz soru eklenmemiş.
-            </Text>
-            <TouchableOpacity style={styles.retryButton} onPress={() => navigation.goBack()}>
-              <Ionicons name="arrow-back" size={20} color="#ffffff" />
-              <Text style={styles.retryButtonText}>Geri Dön</Text>
-            </TouchableOpacity>
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#3b82f6" />
+            <Text style={styles.loadingText}>Sorular hazırlanıyor...</Text>
           </View>
         </View>
       </SafeAreaView>
     );
   }
+
+  console.log('🎯 RENDERING QUESTION SCREEN - currentQuestion:', currentQuestion ? currentQuestion.id : 'null');
 
   return (
     <SafeAreaView style={styles.safeArea}>
