@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,58 +7,35 @@ import {
   ScrollView,
   Alert,
   Image,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Question, Book } from '../types';
+import { apiService as api } from '../services/api';
 
-// Mock data - backend'deki flaggedQuestions ile uyumlu
-const mockFlaggedQuestions: Question[] = [
-  {
-    id: 1,
-    imageUrl: 'https://via.placeholder.com/300x200/6b7280/ffffff?text=İşaretlenen+Soru+1',
-    answerNumber: 5,
-    correctAnswer: 'A',
-    hints: [],
-    explanation: '',
-  },
-  {
-    id: 2,
-    imageUrl: 'https://via.placeholder.com/300x200/6b7280/ffffff?text=İşaretlenen+Soru+2',
-    answerNumber: 5,
-    correctAnswer: 'B',
-    hints: [],
-    explanation: '',
-  },
-  {
-    id: 3,
-    imageUrl: 'https://via.placeholder.com/300x200/6b7280/ffffff?text=İşaretlenen+Soru+3',
-    answerNumber: 5,
-    correctAnswer: 'C',
-    hints: [],
-    explanation: '',
-  },
-  {
-    id: 4,
-    imageUrl: 'https://via.placeholder.com/300x200/6b7280/ffffff?text=İşaretlenen+Soru+4',
-    answerNumber: 5,
-    correctAnswer: 'D',
-    hints: [],
-    explanation: '',
-  },
-  {
-    id: 5,
-    imageUrl: 'https://via.placeholder.com/300x200/6b7280/ffffff?text=İşaretlenen+Soru+5',
-    answerNumber: 5,
-    correctAnswer: 'E',
-    hints: [],
-    explanation: '',
-  },
-];
 
 export const FlaggedQuestionsScreen: React.FC = () => {
-  const [questions, setQuestions] = useState<Question[]>(mockFlaggedQuestions);
+  const [questions, setQuestions] = useState<Question[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchFlaggedQuestions = async () => {
+      try {
+        const data = await api.getFlaggedQuestions();
+        setQuestions(data);
+        setError(null);
+      } catch (err) {
+        setError('İşaretlenen soruları yüklerken bir hata oluştu.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchFlaggedQuestions();
+  }, []);
   const navigation = useNavigation();
 
   const handleRetryQuestion = (question: Question) => {
@@ -70,14 +47,39 @@ export const FlaggedQuestionsScreen: React.FC = () => {
         { 
           text: 'Tekrar Dene', 
           onPress: () => {
-            Alert.alert('Başarılı', 'Soru tekrar listesine eklendi!');
+            // Test bilgisini al (şimdilik mock data)
+            const mockBook = {
+              id: 1,
+              title: 'Matematik 9. Sınıf',
+              publisher: 'EduBook Yayınları',
+              coverImageUrl: 'https://via.placeholder.com/300x400/2563eb/ffffff?text=Matematik+9.+Sinif&v=2',
+              paid: true,
+            };
+            
+            const mockTopic = {
+              id: 1,
+              title: 'Sayılar ve İşlemler',
+            };
+            
+            const mockTest = {
+              id: question.test?.id || 1,
+              title: question.test?.title || 'Sayılar Test 1',
+            };
+            
+            // TestScreen'e navigate et
+            (navigation as any).navigate('Test', {
+              book: mockBook,
+              topic: mockTopic,
+              test: mockTest,
+              initialQuestionIndex: 0, // İlk sorudan başla
+            });
           }
         },
       ]
     );
   };
 
-  const handleClearQuestion = (questionId: number) => {
+  const handleClearQuestion = async (questionId: number) => {
     Alert.alert(
       'Soru Temizle',
       'Bu soruyu işaretlenen sorular listesinden kaldırmak istediğinizden emin misiniz?',
@@ -86,9 +88,18 @@ export const FlaggedQuestionsScreen: React.FC = () => {
         { 
           text: 'Temizle', 
           style: 'destructive',
-          onPress: () => {
-            setQuestions(prev => prev.filter(q => q.id !== questionId));
-            Alert.alert('Başarılı', 'Soru listeden kaldırıldı!');
+          onPress: async () => {
+            try {
+              // Backend'de unflag yap
+              await api.unflagQuestion(1, questionId); // userId=1 şimdilik
+              
+              // Frontend'den kaldır
+              setQuestions(prev => prev.filter(q => q.id !== questionId));
+              Alert.alert('Başarılı', 'Soru listeden kaldırıldı!');
+            } catch (error) {
+              console.error('Unflag error:', error);
+              Alert.alert('Hata', 'Soru kaldırılırken bir hata oluştu.');
+            }
           }
         },
       ]
@@ -111,12 +122,24 @@ export const FlaggedQuestionsScreen: React.FC = () => {
           <View style={styles.placeholder} />
         </View>
 
-        {/* Content */}
-        <ScrollView 
-          style={styles.scrollView}
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-        >
+        {loading ? (
+          <View style={styles.centerContainer}>
+            <ActivityIndicator size="large" color="#0284c7" />
+          </View>
+        ) : error ? (
+          <View style={styles.centerContainer}>
+            <Text style={styles.errorText}>{error}</Text>
+          </View>
+        ) : questions.length === 0 ? (
+          <View style={styles.centerContainer}>
+            <Text style={styles.emptyText}>Henüz işaretlenen soru bulunmuyor.</Text>
+          </View>
+        ) : (
+          <ScrollView 
+            style={styles.scrollView}
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={false}
+          >
           {questions.length === 0 ? (
             <View style={styles.emptyState}>
               <Ionicons name="checkmark-circle" size={80} color="#10b981" />
@@ -200,13 +223,29 @@ export const FlaggedQuestionsScreen: React.FC = () => {
               </Text>
             </View>
           </View>
-        </ScrollView>
+          </ScrollView>
+        )}
       </View>
     </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
+  centerContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  errorText: {
+    color: '#ef4444',
+    fontSize: 16,
+    textAlign: 'center',
+  },
+  emptyText: {
+    color: '#6b7280',
+    fontSize: 16,
+    textAlign: 'center',
+  },
   safeArea: {
     flex: 1,
     backgroundColor: '#f8fafc',

@@ -47,6 +47,7 @@ export interface Question {
   hints: string[];
   explanation: string;
   videoUrl?: string;
+  test?: Test; // Test bilgisini ekle
 }
 
 // OptionLetter enum - Backend'e uygun

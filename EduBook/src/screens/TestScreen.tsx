@@ -43,6 +43,7 @@ export const TestScreen: React.FC = () => {
   const [currentColor, setCurrentColor] = useState('#000000');
   const [currentThickness, setCurrentThickness] = useState(2);
   const [drawingsByQuestion, setDrawingsByQuestion] = useState<{[questionId: number]: Array<{id: string, path: string, color: string, thickness: number}>}>({});
+  const [flaggedQuestions, setFlaggedQuestions] = useState<Set<number>>(new Set());
 
   // API'den soruları çek - GEÇİCİ: Her zaman test ID 1 kullan (backend'de sadece bu test'te sorular var)
   const actualTestId = 1; // GEÇİCİ FİX: Backend'de sadece test ID 1'de sorular var
@@ -55,6 +56,13 @@ export const TestScreen: React.FC = () => {
     },
     enabled: !!actualTestId,
   });
+
+  // İşaretlenen soruları çek
+  const { data: flaggedQuestionsData } = useQuery({
+    queryKey: ['flaggedQuestions'],
+    queryFn: () => apiService.getFlaggedQuestions(),
+    enabled: true,
+  });
   console.log('📊 useQuery result:', { 
     questionsData: questionsData?.length, 
     isLoading, 
@@ -65,6 +73,15 @@ export const TestScreen: React.FC = () => {
   const questions = questionsData || [];
   const currentQuestion = questions[currentQuestionIndex];
   const totalQuestions = questions.length;
+
+  // İşaretlenen soruları state'e yükle
+  useEffect(() => {
+    if (flaggedQuestionsData) {
+      const flaggedIds = new Set(flaggedQuestionsData.map(q => q.id));
+      setFlaggedQuestions(flaggedIds);
+      console.log('🏁 Loaded flagged questions:', Array.from(flaggedIds));
+    }
+  }, [flaggedQuestionsData]);
 
   // Debug logging
   useEffect(() => {
@@ -266,6 +283,47 @@ export const TestScreen: React.FC = () => {
     } catch (error) {
       console.error('Çizim yükleme hatası:', error);
       return [];
+    }
+  };
+
+  // Flagleme fonksiyonları
+  const handleFlagQuestion = async (questionId: number) => {
+    try {
+      // Backend'den userId'yi al
+      const token = await SecureStore.getItemAsync('auth-storage');
+      let userId = 1; // Default fallback
+      
+      if (token) {
+        try {
+          const authData = JSON.parse(token);
+          if (authData.state?.user?.id) {
+            userId = authData.state.user.id;
+          }
+        } catch (error) {
+          console.error('Error parsing auth data:', error);
+        }
+      }
+
+      const isFlagged = flaggedQuestions.has(questionId);
+      
+      if (isFlagged) {
+        // Flag'i kaldır
+        await apiService.unflagQuestion(userId, questionId);
+        setFlaggedQuestions(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(questionId);
+          return newSet;
+        });
+        Alert.alert('Başarılı', 'Soru işareti kaldırıldı');
+      } else {
+        // Flag'i ekle
+        await apiService.flagQuestion(userId, questionId);
+        setFlaggedQuestions(prev => new Set(prev).add(questionId));
+        Alert.alert('Başarılı', 'Soru işaretlendi');
+      }
+    } catch (error) {
+      console.error('Flagleme hatası:', error);
+      Alert.alert('Hata', 'İşlem sırasında bir hata oluştu');
     }
   };
 
@@ -516,7 +574,17 @@ export const TestScreen: React.FC = () => {
                 {topic.title} • {book.title}
               </Text>
             </View>
-            <View style={styles.placeholder} />
+            <TouchableOpacity 
+              style={[styles.flagButton, flaggedQuestions.has(currentQuestion?.id) && styles.activeFlagButton]} 
+              activeOpacity={0.7}
+              onPress={() => currentQuestion && handleFlagQuestion(currentQuestion.id)}
+            >
+              <Ionicons 
+                name={flaggedQuestions.has(currentQuestion?.id) ? "flag" : "flag-outline"} 
+                size={20} 
+                color={flaggedQuestions.has(currentQuestion?.id) ? "#ef4444" : "#64748b"} 
+              />
+            </TouchableOpacity>
           </View>
 
           {/* Tool Buttons Section */}
@@ -781,6 +849,17 @@ const styles = StyleSheet.create({
   },
   placeholder: {
     width: 40,
+  },
+  flagButton: {
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  activeFlagButton: {
+    backgroundColor: '#fef2f2',
+    borderColor: '#ef4444',
   },
   mainContent: {
     flex: 1,

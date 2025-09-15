@@ -64,6 +64,7 @@ export const RegisterScreen: React.FC = () => {
         phoneNumber: data.phoneNumber,
         username: data.username,
         password: data.password,
+        role: 'STUDENT', // Varsayılan olarak STUDENT rolü veriyoruz
       };
 
       const user = await apiService.register(registerData);

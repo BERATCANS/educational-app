@@ -11,8 +11,8 @@ import {
   User
 } from '../types';
 
-const API_BASE_URL = 'http://10.32.26.89:8080/api'; // Backend URL - IP address for mobile access
-const BASE_URL = 'http://10.32.26.89:8080'; // Base URL for file access
+const API_BASE_URL = 'http://192.168.182.220:8080/api'; // Backend URL - local development
+const BASE_URL = 'http://192.168.182.220:8080'; // Base URL for file access
 
 class ApiService {
   private async getAuthHeaders(): Promise<Record<string, string>> {
@@ -249,6 +249,88 @@ class ApiService {
       id: topic.id,
       title: topic.title,
     }));
+  }
+
+  // Flagged Questions endpoint - İşaretlenen soruları getir
+  async getFlaggedQuestions(): Promise<Question[]> {
+    // userId'yi auth store'dan al
+    const token = await SecureStore.getItemAsync('auth-storage');
+    let userId = 1; // Default fallback
+    
+    if (token) {
+      try {
+        const authData = JSON.parse(token);
+        if (authData.state?.user?.id) {
+          userId = authData.state.user.id;
+        }
+      } catch (error) {
+        console.error('Error parsing auth data:', error);
+      }
+    }
+    
+    const response = await this.request<any[]>(`/users/${userId}/flagged`);
+    console.log('🏁 Raw flagged questions response:', response);
+    console.log('🏁 Flagged questions count:', response?.length || 0);
+    
+    return response.map(question => ({
+      id: question.id,
+      imageUrl: question.imageUrl ? `${BASE_URL}/${question.imageUrl}` : '',
+      answerNumber: question.answerNumber || 5,
+      correctAnswer: question.correctAnswer || 'A',
+      hints: question.hints || [],
+      explanation: question.explanation || '',
+      videoUrl: question.videoUrl || '',
+    }));
+  }
+
+  // Redeem Code endpoint - Kitap kodunu kullan
+  async redeemCode(code: string): Promise<any> {
+    // Backend'deki doğru endpoint: /books/use-code
+    // userId'yi auth store'dan al
+    const token = await SecureStore.getItemAsync('auth-storage');
+    let userId = 1; // Default fallback
+    
+    if (token) {
+      try {
+        const authData = JSON.parse(token);
+        if (authData.state?.user?.id) {
+          userId = authData.state.user.id;
+        }
+      } catch (error) {
+        console.error('Error parsing auth data:', error);
+      }
+    }
+    
+    const response = await this.request<any>(`/books/use-code?userId=${userId}&code=${code}`, {
+      method: 'POST',
+    });
+    
+    // Backend'den gelen response'u kontrol et
+    if (response.message) {
+      return response; // Başarılı mesaj
+    } else if (response.error) {
+      throw new Error(response.error); // Hata mesajı
+    }
+    
+    return response;
+  }
+
+  // Kullanıcı profile bilgileri
+  async getUserProfile(userId: number): Promise<User> {
+    return await this.request<User>(`/users/${userId}/profile`);
+  }
+
+  // Flagleme fonksiyonları
+  async flagQuestion(userId: number, questionId: number): Promise<any> {
+    return await this.request<any>(`/users/${userId}/flag/${questionId}`, {
+      method: 'POST',
+    });
+  }
+
+  async unflagQuestion(userId: number, questionId: number): Promise<any> {
+    return await this.request<any>(`/users/${userId}/flag/${questionId}`, {
+      method: 'DELETE',
+    });
   }
 }
 

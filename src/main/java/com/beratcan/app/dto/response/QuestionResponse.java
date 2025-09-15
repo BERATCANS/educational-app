@@ -14,5 +14,6 @@ public class QuestionResponse {
     private List<String> hints;
     private String explanation;
     private String videoUrl;
+    private TestResponse test; // Test bilgisini ekle
 
 }

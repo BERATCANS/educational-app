@@ -35,6 +35,11 @@ public class QuestionController {
         return questionService.getQuestionById(questionId);
     }
 
+    @GetMapping("/flagged")
+    public List<QuestionResponse> getFlaggedQuestions() {
+        return questionService.getFlaggedQuestions();
+    }
+
     // UPDATE
     @PutMapping("/{questionId}")
     public QuestionResponse updateQuestion(@PathVariable Long questionId,

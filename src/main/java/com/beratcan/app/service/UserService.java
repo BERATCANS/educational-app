@@ -78,7 +78,7 @@ public class UserService {
         }
 
         // JWT token üret
-        String token = jwtUtil.generateToken(user.getUsername());
+        String token = jwtUtil.generateToken(user.getUsername(), user.getId());
 
         // Login başarılı → JWT döndür
         return user;
@@ -114,6 +114,12 @@ public class UserService {
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
         return user.getFlaggedQuestions();
+    }
+
+    // Kullanıcı bilgilerini getir
+    public User getUserById(Long userId) {
+        return userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
     }
 
 }

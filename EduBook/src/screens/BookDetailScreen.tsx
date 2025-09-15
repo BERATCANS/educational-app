@@ -58,16 +58,14 @@ export const BookDetailScreen: React.FC = () => {
   const [itemHeights, setItemHeights] = useState<{ [key: string]: number }>({});
   const [bookCoverHeight, setBookCoverHeight] = useState(200);
 
-  // İlk 2 test için otomatik question loading
+  // İlk test için otomatik question loading
   useEffect(() => {
     console.log('📊 displayedTests changed:', displayedTests.length, 'tests displayed');
-    if (displayedTests.length >= 2) {
-      // İlk 2 test'in sorularını otomatik yükle
-      const firstTwoTests = displayedTests.slice(0, 2);
-      console.log('🎯 Auto-loading questions for first 2 tests:', firstTwoTests.map(t => t.test.id));
-      firstTwoTests.forEach(({ test }) => {
-        loadQuestionsForTest(test.id, 20);
-      });
+    if (displayedTests.length > 0) {
+      // İlk test'in sorularını otomatik yükle
+      const firstTest = displayedTests[0];
+      console.log('🎯 Auto-loading questions for first test:', firstTest.test.id);
+      loadQuestionsForTest(firstTest.test.id, 20);
     }
   }, [displayedTests]);
 
@@ -80,6 +78,7 @@ export const BookDetailScreen: React.FC = () => {
   const { data: allTestsData, isLoading: testsLoading } = useQuery({
     queryKey: ['tests', topicsData],
     queryFn: async () => {
+      console.log('🔍 useQuery queryFn called with topicsData:', topicsData);
       if (!topicsData) return [];
       
       const allTests: Array<{test: Test, topic: Topic}> = [];
@@ -87,7 +86,9 @@ export const BookDetailScreen: React.FC = () => {
       // Her topic için test'leri çek
       for (const topic of topicsData) {
         try {
+          console.log('📚 Fetching tests for topic:', topic.id, topic.title);
           const tests = await apiService.getTestsForTopic(topic.id);
+          console.log('✅ Tests fetched for topic', topic.id, ':', tests.length, 'tests');
           tests.forEach(test => {
             allTests.push({ test, topic });
           });
@@ -96,13 +97,16 @@ export const BookDetailScreen: React.FC = () => {
         }
       }
       
+      console.log('🎯 Final allTests array:', allTests.length, 'total tests');
       return allTests;
     },
     enabled: !!topicsData && topicsData.length > 0,
   });
 
   useEffect(() => {
+    console.log('🔄 allTestsData changed:', allTestsData);
     if (allTestsData) {
+      console.log('✅ Setting allTests with data:', allTestsData.length, 'items');
       setAllTests(allTestsData);
       // İlk sayfayı yükle
       setDisplayedTests(allTestsData.slice(0, testsPerPage));
@@ -603,7 +607,7 @@ export const BookDetailScreen: React.FC = () => {
                             <Text style={styles.testItemText}>{test.title}</Text>
                           </View>
                           <Text style={styles.testQuestionCount}>
-                            {test.questions?.length || 0} soru
+                            {testQuestions[test.id]?.length || 0} soru
                           </Text>
                         </TouchableOpacity>
                       ))}

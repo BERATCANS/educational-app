@@ -28,12 +28,54 @@ export const LibraryScreen: React.FC = () => {
     enabled: !!user?.id,
   });
 
-  // Backend'den gelen data'yı frontend'e uygun hale getir
-  const books = booksData?.map(book => ({
-    ...book,
-    paid: true, // Backend'de yok, varsayılan true
-    topics: [], // Backend'de yok, boş array
-  })) || [];
+  // Her kitap için konu ve test sayılarını çek
+  const { data: booksWithStats } = useQuery({
+    queryKey: ['booksWithStats', booksData],
+    queryFn: async () => {
+      if (!booksData) return [];
+      
+      const booksWithStats = await Promise.all(
+        booksData.map(async (book) => {
+          try {
+            // Konuları çek
+            const topics = await apiService.getTopicsForBook(book.id);
+            
+            // Her konu için test sayısını hesapla
+            let totalTests = 0;
+            for (const topic of topics) {
+              const tests = await apiService.getTestsForTopic(topic.id);
+              totalTests += tests.length;
+            }
+            
+            return {
+              ...book,
+              paid: true,
+              topics: topics.map(topic => ({
+                ...topic,
+                tests: [] // Test detaylarına gerek yok, sadece sayı
+              })),
+              totalTopics: topics.length,
+              totalTests: totalTests
+            };
+          } catch (error) {
+            console.error(`Error fetching stats for book ${book.id}:`, error);
+            return {
+              ...book,
+              paid: true,
+              topics: [],
+              totalTopics: 0,
+              totalTests: 0
+            };
+          }
+        })
+      );
+      
+      return booksWithStats;
+    },
+    enabled: !!booksData && booksData.length > 0,
+  });
+
+  const books = booksWithStats || [];
 
   const handleBookPress = (book: Book) => {
     navigation.navigate('BookDetail', { book });
@@ -44,8 +86,8 @@ export const LibraryScreen: React.FC = () => {
   };
 
   const renderBookItem = ({ item: book }: { item: Book }) => (
-    <TouchableOpacity
-      style={styles.bookCard}
+      <TouchableOpacity
+        style={styles.bookCard}
       onPress={() => handleBookPress(book)}
       activeOpacity={0.7}
     >
@@ -62,31 +104,31 @@ export const LibraryScreen: React.FC = () => {
           </View>
         )}
       </View>
-      <View style={styles.bookInfo}>
-        <Text style={styles.bookTitle} numberOfLines={2}>
+        <View style={styles.bookInfo}>
+          <Text style={styles.bookTitle} numberOfLines={2}>
           {book.title}
-        </Text>
-        <Text style={styles.bookPublisher} numberOfLines={1}>
+          </Text>
+          <Text style={styles.bookPublisher} numberOfLines={1}>
           {book.publisher}
-        </Text>
-        <View style={styles.bookStats}>
+          </Text>
+          <View style={styles.bookStats}>
           <View style={styles.statItem}>
             <Ionicons name="library" size={14} color="#6b7280" />
             <Text style={styles.statText}>
-              {book.topics?.length || 0} Konu
+              {(book as any).totalTopics || 0} Konu
             </Text>
           </View>
           <View style={styles.statItem}>
             <Ionicons name="document-text" size={14} color="#6b7280" />
             <Text style={styles.statText}>
-              {book.topics?.reduce((total, topic) => total + (topic.tests?.length || 0), 0) || 0} Test
+              {(book as any).totalTests || 0} Test
             </Text>
           </View>
         </View>
       </View>
       <View style={styles.bookActions}>
-        <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
-      </View>
+          <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
+        </View>
     </TouchableOpacity>
   );
 
@@ -118,7 +160,7 @@ export const LibraryScreen: React.FC = () => {
     </View>
   );
 
-  if (isLoading) {
+  if (isLoading || !booksWithStats) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
@@ -136,7 +178,7 @@ export const LibraryScreen: React.FC = () => {
   }
 
   if (error) {
-    return (
+  return (
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Kütüphanem</Text>
@@ -154,9 +196,9 @@ export const LibraryScreen: React.FC = () => {
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Kütüphanem</Text>
         <TouchableOpacity style={styles.addButton} onPress={handleAddBook}>
-          <Ionicons name="add" size={24} color="#ffffff" />
-        </TouchableOpacity>
-      </View>
+            <Ionicons name="add" size={24} color="#ffffff" />
+          </TouchableOpacity>
+        </View>
 
       {books && books.length > 0 ? (
         <FlatList

@@ -12,6 +12,8 @@ import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useNavigation } from '@react-navigation/native';
+import * as SecureStore from 'expo-secure-store';
+import { jwtDecode } from 'jwt-decode';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { useAuthStore } from '../store/authStore';
@@ -43,21 +45,18 @@ export const LoginScreen: React.FC = () => {
       // Gerçek API çağrısı
       const response = await apiService.login(data);
       
-      // Backend'den gelen response'u User objesine çevir
-      const user = {
-        id: 1, // Backend'den gelecek - şimdilik mock
-        firstName: '', // Backend'den gelecek - şimdilik boş
-        lastName: '', // Backend'den gelecek - şimdilik boş
-        email: data.identifier.includes('@') ? data.identifier : '',
-        phoneNumber: data.identifier.match(/^\d+$/) ? data.identifier : '',
-        username: response.username,
-        password: '',
-        role: response.role as 'STUDENT' | 'TEACHER' | 'ADMIN',
-        ownedBooks: [],
-      };
-
+      // Token'ı kaydet
+      await SecureStore.setItemAsync('token', response.token);
+      
+      // JWT token'dan userId'yi çıkar
+      const decodedToken = jwtDecode<{ userId: number }>(response.token);
+      const userId = decodedToken.userId;
+      
+      // Profile bilgilerini çek
+      const userProfile = await apiService.getUserProfile(userId);
+      
       // Store'a kaydet
-      setUser(user);
+      setUser(userProfile);
       setToken(response.token);
       
       Alert.alert('Başarılı', 'Giriş yapıldı!');
