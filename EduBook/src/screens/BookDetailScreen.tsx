@@ -191,7 +191,7 @@ export const BookDetailScreen: React.FC = () => {
       if (measuredHeight) {
         // onLayout already includes margins, so just use measured height
         totalOffset += measuredHeight + 8;
-      } else {
+    } else {
         // Fallback to estimated height + margin if not measured yet  
         totalOffset += 280 + 8; // +16 for marginBottom (only for fallback)
       }
@@ -287,7 +287,7 @@ export const BookDetailScreen: React.FC = () => {
           height: 200, // Fallback height
           borderRadius: 8,
         };
-
+    
     return (
       <View
         key={question.id}
@@ -339,7 +339,7 @@ export const BookDetailScreen: React.FC = () => {
             <View style={[styles.questionImagePlaceholder, { width: targetWidth, height: 200 }]}>
               <Ionicons name="image-outline" size={32} color="#9ca3af" />
               <Text style={{fontSize: 14, color: 'gray', marginTop: 8}}>Soru {index + 1}</Text>
-            </View>
+          </View>
           )}
         </TouchableOpacity>
       </View>
@@ -587,7 +587,7 @@ export const BookDetailScreen: React.FC = () => {
                   <View style={styles.drawerLoadingContainer}>
                     <ActivityIndicator size="small" color="#3b82f6" />
                     <Text style={styles.loadingText}>Topics yükleniyor...</Text>
-                  </View>
+              </View>
                 ) : topicsData?.map((topic) => {
                   // Bu topic için testleri bul
                   const topicTests = allTests.filter(testItem => testItem.topic.id === topic.id);
@@ -596,7 +596,7 @@ export const BookDetailScreen: React.FC = () => {
                     <View key={topic.id} style={styles.topicSection}>
                       <Text style={styles.topicTitle}>{topic.title}</Text>
                       {topicTests.map(({ test }) => (
-                        <TouchableOpacity
+            <TouchableOpacity
                           key={`${topic.id}-${test.id}`}
                           style={styles.testItem}
                           onPress={() => navigateToTest(test, topic)}
@@ -609,7 +609,7 @@ export const BookDetailScreen: React.FC = () => {
                           <Text style={styles.testQuestionCount}>
                             {testQuestions[test.id]?.length || 0} soru
                           </Text>
-                        </TouchableOpacity>
+            </TouchableOpacity>
                       ))}
                       {topicTests.length === 0 && (
                         <Text style={styles.noTestText}>Bu konu için henüz test yok</Text>

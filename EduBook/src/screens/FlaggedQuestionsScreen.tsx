@@ -38,7 +38,7 @@ export const FlaggedQuestionsScreen: React.FC = () => {
   }, []);
   const navigation = useNavigation();
 
-  const handleRetryQuestion = (question: Question) => {
+  const handleRetryQuestion = async (question: Question) => {
     Alert.alert(
       'Soru Tekrarı',
       `Bu soruyu tekrar çözmek istiyor musunuz?`,
@@ -46,33 +46,44 @@ export const FlaggedQuestionsScreen: React.FC = () => {
         { text: 'İptal', style: 'cancel' },
         { 
           text: 'Tekrar Dene', 
-          onPress: () => {
-            // Test bilgisini al (şimdilik mock data)
-            const mockBook = {
-              id: 1,
-              title: 'Matematik 9. Sınıf',
-              publisher: 'EduBook Yayınları',
-              coverImageUrl: 'https://via.placeholder.com/300x400/2563eb/ffffff?text=Matematik+9.+Sinif&v=2',
-              paid: true,
-            };
-            
-            const mockTopic = {
-              id: 1,
-              title: 'Sayılar ve İşlemler',
-            };
-            
-            const mockTest = {
-              id: question.test?.id || 1,
-              title: question.test?.title || 'Sayılar Test 1',
-            };
-            
-            // TestScreen'e navigate et
-            (navigation as any).navigate('Test', {
-              book: mockBook,
-              topic: mockTopic,
-              test: mockTest,
-              initialQuestionIndex: 0, // İlk sorudan başla
-            });
+          onPress: async () => {
+            try {
+              // Test'teki tüm soruları al
+              const testQuestions = await api.getQuestionsForTest(question.test?.id || 1);
+              
+              // İşaretlenen sorunun test'teki sırasını bul
+              const questionIndex = testQuestions.findIndex(q => q.id === question.id);
+              
+              // Test bilgisini al (şimdilik mock data)
+              const mockBook = {
+                id: 1,
+                title: 'Matematik 9. Sınıf',
+                publisher: 'EduBook Yayınları',
+                coverImageUrl: 'https://via.placeholder.com/300x400/2563eb/ffffff?text=Matematik+9.+Sinif&v=2',
+                paid: true,
+              };
+              
+              const mockTopic = {
+                id: 1,
+                title: 'Sayılar ve İşlemler',
+              };
+              
+              const mockTest = {
+                id: question.test?.id || 1,
+                title: question.test?.title || 'Sayılar Test 1',
+              };
+              
+              // TestScreen'e navigate et - doğru soruya git
+              (navigation as any).navigate('Test', {
+                book: mockBook,
+                topic: mockTopic,
+                test: mockTest,
+                initialQuestionIndex: questionIndex >= 0 ? questionIndex : 0,
+              });
+            } catch (error) {
+              console.error('Error getting test questions:', error);
+              Alert.alert('Hata', 'Soru bilgileri alınırken bir hata oluştu.');
+            }
           }
         },
       ]
@@ -151,7 +162,12 @@ export const FlaggedQuestionsScreen: React.FC = () => {
           ) : (
             <View style={styles.questionsList}>
               {questions.map((item) => (
-                <View key={item.id} style={styles.questionCard}>
+                <TouchableOpacity 
+                  key={item.id} 
+                  style={styles.questionCard}
+                  onPress={() => handleRetryQuestion(item)}
+                  activeOpacity={0.7}
+                >
                   <View style={styles.questionHeader}>
                     <View style={styles.bookInfo}>
                       <Ionicons name="book" size={16} color="#3b82f6" />
@@ -186,7 +202,10 @@ export const FlaggedQuestionsScreen: React.FC = () => {
                     <View style={styles.actionButtons}>
                       <TouchableOpacity
                         style={styles.actionButton}
-                        onPress={() => handleRetryQuestion(item)}
+                        onPress={(e) => {
+                          e.stopPropagation(); // Parent TouchableOpacity'yi tetikleme
+                          handleRetryQuestion(item);
+                        }}
                       >
                         <Ionicons name="refresh" size={16} color="#3b82f6" />
                         <Text style={styles.actionButtonText}>Tekrar Dene</Text>
@@ -194,7 +213,10 @@ export const FlaggedQuestionsScreen: React.FC = () => {
 
                       <TouchableOpacity
                         style={[styles.actionButton, styles.clearButton]}
-                        onPress={() => handleClearQuestion(item.id)}
+                        onPress={(e) => {
+                          e.stopPropagation(); // Parent TouchableOpacity'yi tetikleme
+                          handleClearQuestion(item.id);
+                        }}
                       >
                         <Ionicons name="close-circle" size={16} color="#ef4444" />
                         <Text style={[styles.actionButtonText, styles.clearButtonText]}>
@@ -203,7 +225,7 @@ export const FlaggedQuestionsScreen: React.FC = () => {
                       </TouchableOpacity>
                     </View>
                   </View>
-                </View>
+                </TouchableOpacity>
               ))}
             </View>
           )}
