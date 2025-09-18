@@ -84,7 +84,7 @@ export const TestScreen: React.FC = () => {
   // İşaretlenen soruları state'e yükle
   useEffect(() => {
     if (flaggedQuestionsData) {
-      const flaggedIds = new Set(flaggedQuestionsData.map(q => q.id));
+      const flaggedIds = new Set(flaggedQuestionsData.map(q => q.questionId));
       setFlaggedQuestions(flaggedIds);
       console.log('🏁 Loaded flagged questions:', Array.from(flaggedIds));
     }

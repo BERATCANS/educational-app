@@ -295,19 +295,19 @@ class ApiService {
     console.log('🏁 Flagged questions count:', response?.length || 0);
     
     return response.map(item => ({
-      questionId: item.id,
+      questionId: item.questionId,
       imageUrl: item.imageUrl ? `${BASE_URL}/${item.imageUrl}` : '',
       answerNumber: item.answerNumber || 5,
       correctAnswer: item.correctAnswer || 'A',
       hints: item.hints || [],
       explanation: item.explanation || '',
       videoUrl: item.videoUrl || '',
-      bookId: 0, // Eski endpoint bu bilgileri vermiyor
-      topicId: 0,
-      testId: item.test?.id || 0,
-      bookTitle: '',
-      topicTitle: '',
-      testTitle: item.test?.title || '',
+      bookId: item.bookId || 0,
+      topicId: item.topicId || 0,
+      testId: item.testId || 0,
+      bookTitle: item.bookTitle || '',
+      topicTitle: item.topicTitle || '',
+      testTitle: item.testTitle || '',
     }));
   }
 
