@@ -12,19 +12,20 @@ import { useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
+import { apiService } from '../services/api';
 
 export const AddBookScreen: React.FC = () => {
   const [redeemCode, setRedeemCode] = useState('');
   const navigation = useNavigation();
 
-  const submitRedeemCode = () => {
+  const submitRedeemCode = async () => {
     if (redeemCode.trim().length === 0) {
       Alert.alert('Hata', 'Lütfen bir kod girin');
       return;
     }
 
-    // Mock kod doğrulama
-    if (redeemCode === 'DEMO123') {
+    try {
+      await apiService.redeemCode(redeemCode);
       Alert.alert(
         'Başarılı!',
         'Kitap kodunuz doğrulandı ve kütüphanenize eklendi.',
@@ -37,10 +38,10 @@ export const AddBookScreen: React.FC = () => {
           },
         ]
       );
-    } else {
+    } catch (error) {
       Alert.alert(
         'Hata',
-        'Geçersiz kod. Lütfen tekrar deneyin.\n\nDemo kod: DEMO123'
+        (error as Error).message || 'Geçersiz kod. Lütfen tekrar deneyin.'
       );
     }
   };
@@ -96,12 +97,6 @@ export const AddBookScreen: React.FC = () => {
               />
             </View>
 
-            <View style={styles.demoInfo}>
-              <Text style={styles.demoInfoTitle}>💡 Demo Kod</Text>
-              <Text style={styles.demoInfoText}>
-                Test etmek için <Text style={styles.demoCode}>DEMO123</Text> kodunu kullanabilirsiniz
-              </Text>
-            </View>
 
             <View style={styles.helpSection}>
               <Text style={styles.helpTitle}>Nasıl Kitap Eklersiniz?</Text>
@@ -201,28 +196,6 @@ const styles = StyleSheet.create({
   },
   submitButton: {
     marginTop: 16,
-  },
-  demoInfo: {
-    backgroundColor: '#f0f9ff',
-    padding: 20,
-    borderRadius: 12,
-    marginBottom: 32,
-    borderLeftWidth: 4,
-    borderLeftColor: '#0ea5e9',
-  },
-  demoInfoTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#0369a1',
-    marginBottom: 8,
-  },
-  demoInfoText: {
-    fontSize: 14,
-    color: '#0369a1',
-    lineHeight: 20,
-  },
-  demoCode: {
-    fontWeight: 'bold',
   },
   helpSection: {
     backgroundColor: '#ffffff',

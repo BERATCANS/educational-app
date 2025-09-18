@@ -8,6 +8,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/books")
@@ -32,8 +33,13 @@ public class BookController {
     }
 
     @PostMapping("/use-code")
-    public String useCode(@RequestParam Long userId, @RequestParam String code) {
-        return bookService.useCode(userId, code);
+    public ResponseEntity<?> useCode(@RequestParam Long userId, @RequestParam String code) {
+        try {
+            String result = bookService.useCode(userId, code);
+            return ResponseEntity.ok().body(Map.of("message", result));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
     }
 
     @PostMapping("/add-codes")

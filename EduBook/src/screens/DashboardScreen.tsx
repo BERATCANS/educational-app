@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,19 +9,50 @@ import {
   FlatList,
   Animated,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Book, Topic, Test } from '../types';
+import { apiService as api } from '../services/api';
 
-// Mock data - istatistikler
-const mockFlaggedCount = 5; // 5 işaretlenen soru
-const mockBookCount = 6; // 6 kitap
-const mockTestCount = 16; // 16 test
 
 export const DashboardScreen: React.FC = () => {
   const navigation = useNavigation<any>();
+  const [stats, setStats] = useState({
+    flaggedCount: 0,
+    bookCount: 0,
+    testCount: 0,
+  });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchStats = async () => {
+    try {
+      const [flaggedQuestions, books] = await Promise.all([
+        api.getFlaggedQuestions(),
+        api.getBooksForUser(1), // User ID'yi auth store'dan alabilirsiniz
+      ]);
+      
+      setStats({
+        flaggedCount: flaggedQuestions.length,
+        bookCount: books.length,
+        testCount: 0, // Test sayısını ayrı bir endpoint'den alabilirsiniz
+      });
+      setError(null);
+    } catch (err) {
+      setError('İstatistikleri yüklerken bir hata oluştu.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useFocusEffect(
+    React.useCallback(() => {
+      fetchStats();
+    }, [])
+  );
 
   const handleFlaggedQuestions = () => {
     navigation.navigate('FlaggedQuestions' as never);
@@ -57,7 +88,7 @@ export const DashboardScreen: React.FC = () => {
               <Ionicons name="help-circle" size={24} color="#ef4444" />
               <Text style={styles.cardTitle}>İşaretlenen</Text>
             </View>
-            <Text style={styles.cardValue}>{mockFlaggedCount}</Text>
+            <Text style={styles.cardValue}>{stats.flaggedCount}</Text>
             <Text style={styles.cardSubtitle}>Soru</Text>
             <View style={styles.cardFooter}>
               <Text style={styles.cardActionText}>Görüntüle →</Text>
@@ -115,7 +146,7 @@ export const DashboardScreen: React.FC = () => {
           <View style={styles.statsGrid}>
             <View style={styles.statItem}>
               <Ionicons name="book" size={20} color="#3b82f6" />
-              <Text style={styles.statValue}>{mockBookCount}</Text>
+              <Text style={styles.statValue}>{stats.bookCount}</Text>
               <Text style={styles.statLabel}>Toplam Kitap</Text>
             </View>
             <View style={styles.statItem}>

@@ -8,18 +8,22 @@ import {
   Image,
   Alert,
   Dimensions,
+  ActivityIndicator, ViewStyle,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { SimpleDrawing } from '../components/SimpleDrawing';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { Book, Topic, Test, Question } from '../types';
+import { useQuery } from '@tanstack/react-query';
+import { apiService } from '../services/api';
 import * as SecureStore from 'expo-secure-store';
 
 
 const { width: screenWidth } = Dimensions.get('window');
 
 export const TestScreen: React.FC = () => {
+  console.log('🚀🚀🚀 TEST SCREEN MOUNTED! 🚀🚀🚀');
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
   const { book, topic, test, initialQuestionIndex = 0 } = route.params as { 
@@ -28,6 +32,7 @@ export const TestScreen: React.FC = () => {
     test: Test; 
     initialQuestionIndex?: number;
   };
+  console.log('📋 TestScreen params:', { book: book?.title, topic: topic?.title, test: test?.title });
   
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(initialQuestionIndex);
   const [selectedAnswers, setSelectedAnswers] = useState<Map<number, string>>(new Map());
@@ -38,10 +43,58 @@ export const TestScreen: React.FC = () => {
   const [currentColor, setCurrentColor] = useState('#000000');
   const [currentThickness, setCurrentThickness] = useState(2);
   const [drawingsByQuestion, setDrawingsByQuestion] = useState<{[questionId: number]: Array<{id: string, path: string, color: string, thickness: number}>}>({});
+  const [flaggedQuestions, setFlaggedQuestions] = useState<Set<number>>(new Set());
 
-  const questions = test.questions || [];
+  // API'den soruları çek - GEÇİCİ: Her zaman test ID 1 kullan (backend'de sadece bu test'te sorular var)
+  const actualTestId = 1; // GEÇİCİ FİX: Backend'de sadece test ID 1'de sorular var
+  console.log('🔍 Setting up useQuery for test.id:', test.id, '(using actualTestId:', actualTestId, ')');
+  const { data: questionsData, isLoading, error } = useQuery({
+    queryKey: ['questions', actualTestId],
+    queryFn: () => {
+      console.log('⚡ React Query queryFn called for actualTestId:', actualTestId);
+      return apiService.getQuestionsForTest(actualTestId);
+    },
+    enabled: !!actualTestId,
+  });
+
+  // İşaretlenen soruları çek
+  const { data: flaggedQuestionsData } = useQuery({
+    queryKey: ['flaggedQuestions'],
+    queryFn: () => apiService.getFlaggedQuestions(),
+    enabled: true,
+  });
+  console.log('📊 useQuery result:', { 
+    questionsData: questionsData?.length, 
+    isLoading, 
+    error: error?.message,
+    enabled: !!test.id 
+  });
+
+  const questions = questionsData || [];
   const currentQuestion = questions[currentQuestionIndex];
   const totalQuestions = questions.length;
+
+  // İşaretlenen soruları state'e yükle
+  useEffect(() => {
+    if (flaggedQuestionsData) {
+      const flaggedIds = new Set(flaggedQuestionsData.map(q => q.id));
+      setFlaggedQuestions(flaggedIds);
+      console.log('🏁 Loaded flagged questions:', Array.from(flaggedIds));
+    }
+  }, [flaggedQuestionsData]);
+
+  // Debug logging
+  useEffect(() => {
+    console.log('TestScreen Debug:', {
+      originalTestId: test.id,
+      actualTestId: actualTestId,
+      isLoading,
+      error: error?.message,
+      questionsCount: questions.length,
+      currentQuestionIndex,
+      currentQuestion: currentQuestion ? { id: currentQuestion.id, imageUrl: currentQuestion.imageUrl } : null
+    });
+  }, [test.id, actualTestId, isLoading, error, questions.length, currentQuestionIndex, currentQuestion]);
   
   // Current question'ın çizimlerini al
   const currentQuestionPaths = drawingsByQuestion[currentQuestion?.id] || [];
@@ -233,6 +286,47 @@ export const TestScreen: React.FC = () => {
     }
   };
 
+  // Flagleme fonksiyonları
+  const handleFlagQuestion = async (questionId: number) => {
+    try {
+      // Backend'den userId'yi al
+      const token = await SecureStore.getItemAsync('auth-storage');
+      let userId = 1; // Default fallback
+      
+      if (token) {
+        try {
+          const authData = JSON.parse(token);
+          if (authData.state?.user?.id) {
+            userId = authData.state.user.id;
+          }
+        } catch (error) {
+          console.error('Error parsing auth data:', error);
+        }
+      }
+
+      const isFlagged = flaggedQuestions.has(questionId);
+      
+      if (isFlagged) {
+        // Flag'i kaldır
+        await apiService.unflagQuestion(userId, questionId);
+        setFlaggedQuestions(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(questionId);
+          return newSet;
+        });
+        Alert.alert('Başarılı', 'Soru işareti kaldırıldı');
+      } else {
+        // Flag'i ekle
+        await apiService.flagQuestion(userId, questionId);
+        setFlaggedQuestions(prev => new Set(prev).add(questionId));
+        Alert.alert('Başarılı', 'Soru işaretlendi');
+      }
+    } catch (error) {
+      console.error('Flagleme hatası:', error);
+      Alert.alert('Hata', 'İşlem sırasında bir hata oluştu');
+    }
+  };
+
 
 
 
@@ -262,11 +356,11 @@ export const TestScreen: React.FC = () => {
             )}
           </View>
           <View style={styles.questionProgress}>
-            <View 
-              style={[
-                styles.progressBar, 
-                { width: `${((currentQuestionIndex + 1) / totalQuestions) * 100}%` }
-              ]} 
+            <View
+                style={[
+                  styles.progressBar,
+                  { width: `${((currentQuestionIndex + 1) / totalQuestions) * 100}%` } as ViewStyle,
+                ]}
             />
           </View>
         </View>
@@ -322,6 +416,148 @@ export const TestScreen: React.FC = () => {
     </View>
   );
 
+  // Loading state
+  if (isLoading) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.container}>
+          <View style={styles.header}>
+            <TouchableOpacity onPress={goBack} style={styles.backButton}>
+              <Ionicons name="arrow-back" size={24} color="#1e293b" />
+            </TouchableOpacity>
+            <View style={styles.headerInfo}>
+              <Text style={styles.headerTitle}>{test.title}</Text>
+              <Text style={styles.headerSubtitle}>
+                {topic.title} • {book.title}
+              </Text>
+            </View>
+          </View>
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#3b82f6" />
+            <Text style={styles.loadingText}>Sorular yükleniyor...</Text>
+          </View>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // Loading state
+  if (isLoading) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.container}>
+          <View style={styles.header}>
+            <TouchableOpacity onPress={goBack} style={styles.backButton}>
+              <Ionicons name="arrow-back" size={24} color="#1e293b" />
+            </TouchableOpacity>
+            <View style={styles.headerInfo}>
+              <Text style={styles.headerTitle}>{test.title}</Text>
+              <Text style={styles.headerSubtitle}>
+                {topic.title} • {book.title}
+              </Text>
+            </View>
+          </View>
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#3b82f6" />
+            <Text style={styles.loadingText}>Sorular yükleniyor...</Text>
+          </View>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // Empty questions state
+  if (!isLoading && questions.length === 0) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.container}>
+          <View style={styles.header}>
+            <TouchableOpacity onPress={goBack} style={styles.backButton}>
+              <Ionicons name="arrow-back" size={24} color="#1e293b" />
+            </TouchableOpacity>
+            <View style={styles.headerInfo}>
+              <Text style={styles.headerTitle}>{test.title}</Text>
+              <Text style={styles.headerSubtitle}>
+                {topic.title} • {book.title}
+              </Text>
+            </View>
+          </View>
+          <View style={styles.emptyContainer}>
+            <Ionicons name="document-outline" size={64} color="#9ca3af" />
+            <Text style={styles.emptyTitle}>Soru Bulunamadı</Text>
+            <Text style={styles.emptySubtitle}>
+              Bu testte henüz soru eklenmemiş.
+            </Text>
+            <TouchableOpacity style={styles.retryButton} onPress={() => navigation.goBack()}>
+              <Ionicons name="arrow-back" size={20} color="#ffffff" />
+              <Text style={styles.retryButtonText}>Geri Dön</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.container}>
+          <View style={styles.header}>
+            <TouchableOpacity onPress={goBack} style={styles.backButton}>
+              <Ionicons name="arrow-back" size={24} color="#1e293b" />
+            </TouchableOpacity>
+            <View style={styles.headerInfo}>
+              <Text style={styles.headerTitle}>{test.title}</Text>
+              <Text style={styles.headerSubtitle}>
+                {topic.title} • {book.title}
+              </Text>
+            </View>
+          </View>
+          <View style={styles.errorContainer}>
+            <Ionicons name="alert-circle-outline" size={64} color="#ef4444" />
+            <Text style={styles.errorTitle}>Bir Hata Oluştu</Text>
+            <Text style={styles.errorSubtitle}>
+              Sorular yüklenirken bir hata oluştu. Lütfen tekrar deneyin.
+            </Text>
+            <TouchableOpacity style={styles.retryButton} onPress={() => navigation.goBack()}>
+              <Ionicons name="refresh" size={20} color="#ffffff" />
+              <Text style={styles.retryButtonText}>Geri Dön</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // Ensure currentQuestion exists before rendering
+  if (!currentQuestion) {
+    console.log('⚠️ No current question available, showing loading...');
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.container}>
+          <View style={styles.header}>
+            <TouchableOpacity onPress={goBack} style={styles.backButton}>
+              <Ionicons name="arrow-back" size={24} color="#1e293b" />
+            </TouchableOpacity>
+            <View style={styles.headerInfo}>
+              <Text style={styles.headerTitle}>{test.title}</Text>
+              <Text style={styles.headerSubtitle}>
+                {topic.title} • {book.title}
+              </Text>
+            </View>
+          </View>
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#3b82f6" />
+            <Text style={styles.loadingText}>Sorular hazırlanıyor...</Text>
+          </View>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  console.log('🎯 RENDERING QUESTION SCREEN - currentQuestion:', currentQuestion ? currentQuestion.id : 'null');
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
@@ -338,7 +574,17 @@ export const TestScreen: React.FC = () => {
                 {topic.title} • {book.title}
               </Text>
             </View>
-            <View style={styles.placeholder} />
+            <TouchableOpacity 
+              style={[styles.flagButton, flaggedQuestions.has(currentQuestion?.id) && styles.activeFlagButton]} 
+              activeOpacity={0.7}
+              onPress={() => currentQuestion && handleFlagQuestion(currentQuestion.id)}
+            >
+              <Ionicons 
+                name={flaggedQuestions.has(currentQuestion?.id) ? "flag" : "flag-outline"} 
+                size={20} 
+                color={flaggedQuestions.has(currentQuestion?.id) ? "#ef4444" : "#64748b"} 
+              />
+            </TouchableOpacity>
           </View>
 
           {/* Tool Buttons Section */}
@@ -603,6 +849,17 @@ const styles = StyleSheet.create({
   },
   placeholder: {
     width: 40,
+  },
+  flagButton: {
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  activeFlagButton: {
+    backgroundColor: '#fef2f2',
+    borderColor: '#ef4444',
   },
   mainContent: {
     flex: 1,
@@ -958,5 +1215,71 @@ const styles = StyleSheet.create({
     backgroundColor: '#e0f2fe',
     borderColor: '#3b82f6',
     borderWidth: 2,
+  },
+  // Loading, Error, Empty states
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 40,
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#6b7280',
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 40,
+  },
+  errorTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1f2937',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  errorSubtitle: {
+    fontSize: 16,
+    color: '#6b7280',
+    textAlign: 'center',
+    lineHeight: 24,
+    marginBottom: 24,
+  },
+  retryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#3b82f6',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 40,
+  },
+  emptyTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1f2937',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  emptySubtitle: {
+    fontSize: 16,
+    color: '#6b7280',
+    textAlign: 'center',
+    lineHeight: 24,
+    marginBottom: 24,
   },
 });

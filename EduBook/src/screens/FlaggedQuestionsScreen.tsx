@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,131 +7,38 @@ import {
   ScrollView,
   Alert,
   Image,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Question, Book } from '../types';
+import { apiService as api } from '../services/api';
 
-// Mock data - backend'deki flaggedQuestions ile uyumlu
-const mockFlaggedQuestions: Question[] = [
-  {
-    id: 1,
-    imageUrl: 'https://via.placeholder.com/300x200/6b7280/ffffff?text=İşaretlenen+Soru+1',
-    answerNumber: 5,
-    correctAnswer: 'A',
-    sequenceNumber: 1,
-    test: {
-      id: 1,
-      title: 'Üslü Sayılar Test 1',
-      topic: {
-        id: 1,
-        title: 'Üslü Sayılar',
-        book: {
-          id: 1,
-          title: 'Matematik 9. Sınıf',
-          publisher: 'Metin Yayınları',
-          coverImageUrl: 'https://via.placeholder.com/120x150/3b82f6/ffffff?text=M9',
-          paid: true,
-        }
-      }
-    }
-  },
-  {
-    id: 2,
-    imageUrl: 'https://via.placeholder.com/300x200/6b7280/ffffff?text=İşaretlenen+Soru+2',
-    answerNumber: 5,
-    correctAnswer: 'B',
-    sequenceNumber: 2,
-    test: {
-      id: 2,
-      title: 'Hareket Test 1',
-      topic: {
-        id: 4,
-        title: 'Hareket',
-        book: {
-          id: 2,
-          title: 'Fizik 10. Sınıf',
-          publisher: 'Aydın Yayınları',
-          coverImageUrl: 'https://via.placeholder.com/120x150/ef4444/ffffff?text=F10',
-          paid: true,
-        }
-      }
-    }
-  },
-  {
-    id: 3,
-    imageUrl: 'https://via.placeholder.com/300x200/6b7280/ffffff?text=İşaretlenen+Soru+3',
-    answerNumber: 5,
-    correctAnswer: 'C',
-    sequenceNumber: 3,
-    test: {
-      id: 9,
-      title: 'Kimyasal Bağlar Test 1',
-      topic: {
-        id: 7,
-        title: 'Kimyasal Bağlar',
-        book: {
-          id: 3,
-          title: 'Kimya 11. Sınıf',
-          publisher: 'Palme Yayınları',
-          coverImageUrl: 'https://via.placeholder.com/120x150/10b981/ffffff?text=K11',
-          paid: true,
-        }
-      }
-    }
-  },
-  {
-    id: 4,
-    imageUrl: 'https://via.placeholder.com/300x200/6b7280/ffffff?text=İşaretlenen+Soru+4',
-    answerNumber: 5,
-    correctAnswer: 'D',
-    sequenceNumber: 4,
-    test: {
-      id: 11,
-      title: 'Hücre Test 1',
-      topic: {
-        id: 9,
-        title: 'Hücre',
-        book: {
-          id: 4,
-          title: 'Biyoloji 9. Sınıf',
-          publisher: 'Aydın Yayınları',
-          coverImageUrl: 'https://via.placeholder.com/120x150/f59e0b/ffffff?text=B9',
-          paid: true,
-        }
-      }
-    }
-  },
-  {
-    id: 5,
-    imageUrl: 'https://via.placeholder.com/300x200/6b7280/ffffff?text=İşaretlenen+Soru+5',
-    answerNumber: 5,
-    correctAnswer: 'E',
-    sequenceNumber: 5,
-    test: {
-      id: 14,
-      title: 'Osmanlı Test 1',
-      topic: {
-        id: 11,
-        title: 'Osmanlı Devleti',
-        book: {
-          id: 5,
-          title: 'Tarih 10. Sınıf',
-          publisher: 'Kök Yayınları',
-          coverImageUrl: 'https://via.placeholder.com/120x150/8b5cf6/ffffff?text=T10',
-          paid: true,
-        }
-      }
-    }
-  },
-];
 
 export const FlaggedQuestionsScreen: React.FC = () => {
-  const [questions, setQuestions] = useState<Question[]>(mockFlaggedQuestions);
+  const [questions, setQuestions] = useState<Question[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchFlaggedQuestions = async () => {
+      try {
+        const data = await api.getFlaggedQuestions();
+        setQuestions(data);
+        setError(null);
+      } catch (err) {
+        setError('İşaretlenen soruları yüklerken bir hata oluştu.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchFlaggedQuestions();
+  }, []);
   const navigation = useNavigation();
 
-  const handleRetryQuestion = (question: Question) => {
+  const handleRetryQuestion = async (question: Question) => {
     Alert.alert(
       'Soru Tekrarı',
       `Bu soruyu tekrar çözmek istiyor musunuz?`,
@@ -139,15 +46,51 @@ export const FlaggedQuestionsScreen: React.FC = () => {
         { text: 'İptal', style: 'cancel' },
         { 
           text: 'Tekrar Dene', 
-          onPress: () => {
-            Alert.alert('Başarılı', 'Soru tekrar listesine eklendi!');
+          onPress: async () => {
+            try {
+              // Test'teki tüm soruları al
+              const testQuestions = await api.getQuestionsForTest(question.test?.id || 1);
+              
+              // İşaretlenen sorunun test'teki sırasını bul
+              const questionIndex = testQuestions.findIndex(q => q.id === question.id);
+              
+              // Test bilgisini al (şimdilik mock data)
+              const mockBook = {
+                id: 1,
+                title: 'Matematik 9. Sınıf',
+                publisher: 'EduBook Yayınları',
+                coverImageUrl: 'https://via.placeholder.com/300x400/2563eb/ffffff?text=Matematik+9.+Sinif&v=2',
+                paid: true,
+              };
+              
+              const mockTopic = {
+                id: 1,
+                title: 'Sayılar ve İşlemler',
+              };
+              
+              const mockTest = {
+                id: question.test?.id || 1,
+                title: question.test?.title || 'Sayılar Test 1',
+              };
+              
+              // TestScreen'e navigate et - doğru soruya git
+              (navigation as any).navigate('Test', {
+                book: mockBook,
+                topic: mockTopic,
+                test: mockTest,
+                initialQuestionIndex: questionIndex >= 0 ? questionIndex : 0,
+              });
+            } catch (error) {
+              console.error('Error getting test questions:', error);
+              Alert.alert('Hata', 'Soru bilgileri alınırken bir hata oluştu.');
+            }
           }
         },
       ]
     );
   };
 
-  const handleClearQuestion = (questionId: number) => {
+  const handleClearQuestion = async (questionId: number) => {
     Alert.alert(
       'Soru Temizle',
       'Bu soruyu işaretlenen sorular listesinden kaldırmak istediğinizden emin misiniz?',
@@ -156,9 +99,18 @@ export const FlaggedQuestionsScreen: React.FC = () => {
         { 
           text: 'Temizle', 
           style: 'destructive',
-          onPress: () => {
-            setQuestions(prev => prev.filter(q => q.id !== questionId));
-            Alert.alert('Başarılı', 'Soru listeden kaldırıldı!');
+          onPress: async () => {
+            try {
+              // Backend'de unflag yap
+              await api.unflagQuestion(1, questionId); // userId=1 şimdilik
+              
+              // Frontend'den kaldır
+              setQuestions(prev => prev.filter(q => q.id !== questionId));
+              Alert.alert('Başarılı', 'Soru listeden kaldırıldı!');
+            } catch (error) {
+              console.error('Unflag error:', error);
+              Alert.alert('Hata', 'Soru kaldırılırken bir hata oluştu.');
+            }
           }
         },
       ]
@@ -181,12 +133,24 @@ export const FlaggedQuestionsScreen: React.FC = () => {
           <View style={styles.placeholder} />
         </View>
 
-        {/* Content */}
-        <ScrollView 
-          style={styles.scrollView}
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-        >
+        {loading ? (
+          <View style={styles.centerContainer}>
+            <ActivityIndicator size="large" color="#0284c7" />
+          </View>
+        ) : error ? (
+          <View style={styles.centerContainer}>
+            <Text style={styles.errorText}>{error}</Text>
+          </View>
+        ) : questions.length === 0 ? (
+          <View style={styles.centerContainer}>
+            <Text style={styles.emptyText}>Henüz işaretlenen soru bulunmuyor.</Text>
+          </View>
+        ) : (
+          <ScrollView 
+            style={styles.scrollView}
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={false}
+          >
           {questions.length === 0 ? (
             <View style={styles.emptyState}>
               <Ionicons name="checkmark-circle" size={80} color="#10b981" />
@@ -198,18 +162,23 @@ export const FlaggedQuestionsScreen: React.FC = () => {
           ) : (
             <View style={styles.questionsList}>
               {questions.map((item) => (
-                <View key={item.id} style={styles.questionCard}>
+                <TouchableOpacity 
+                  key={item.id} 
+                  style={styles.questionCard}
+                  onPress={() => handleRetryQuestion(item)}
+                  activeOpacity={0.7}
+                >
                   <View style={styles.questionHeader}>
                     <View style={styles.bookInfo}>
                       <Ionicons name="book" size={16} color="#3b82f6" />
                       <Text style={styles.bookTitle}>
-                        {item.test?.topic?.book?.title || 'Bilinmeyen Kitap'}
+                        Matematik Kitabı
                       </Text>
                     </View>
                     <View style={styles.topicInfo}>
                       <Ionicons name="bookmark" size={14} color="#10b981" />
                       <Text style={styles.topicTitle}>
-                        {item.test?.topic?.title || 'Bilinmeyen Konu'}
+                        Matematik
                       </Text>
                     </View>
                   </View>
@@ -223,7 +192,7 @@ export const FlaggedQuestionsScreen: React.FC = () => {
                   <View style={styles.questionFooter}>
                     <View style={styles.questionMeta}>
                       <Text style={styles.testTitle}>
-                        {item.test?.title || 'Bilinmeyen Test'}
+                        Matematik Test 1
                       </Text>
                       <Text style={styles.answerInfo}>
                         {item.answerNumber} seçenek • Doğru: {item.correctAnswer}
@@ -233,7 +202,10 @@ export const FlaggedQuestionsScreen: React.FC = () => {
                     <View style={styles.actionButtons}>
                       <TouchableOpacity
                         style={styles.actionButton}
-                        onPress={() => handleRetryQuestion(item)}
+                        onPress={(e) => {
+                          e.stopPropagation(); // Parent TouchableOpacity'yi tetikleme
+                          handleRetryQuestion(item);
+                        }}
                       >
                         <Ionicons name="refresh" size={16} color="#3b82f6" />
                         <Text style={styles.actionButtonText}>Tekrar Dene</Text>
@@ -241,7 +213,10 @@ export const FlaggedQuestionsScreen: React.FC = () => {
 
                       <TouchableOpacity
                         style={[styles.actionButton, styles.clearButton]}
-                        onPress={() => handleClearQuestion(item.id)}
+                        onPress={(e) => {
+                          e.stopPropagation(); // Parent TouchableOpacity'yi tetikleme
+                          handleClearQuestion(item.id);
+                        }}
                       >
                         <Ionicons name="close-circle" size={16} color="#ef4444" />
                         <Text style={[styles.actionButtonText, styles.clearButtonText]}>
@@ -250,7 +225,7 @@ export const FlaggedQuestionsScreen: React.FC = () => {
                       </TouchableOpacity>
                     </View>
                   </View>
-                </View>
+                </TouchableOpacity>
               ))}
             </View>
           )}
@@ -270,13 +245,29 @@ export const FlaggedQuestionsScreen: React.FC = () => {
               </Text>
             </View>
           </View>
-        </ScrollView>
+          </ScrollView>
+        )}
       </View>
     </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
+  centerContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  errorText: {
+    color: '#ef4444',
+    fontSize: 16,
+    textAlign: 'center',
+  },
+  emptyText: {
+    color: '#6b7280',
+    fontSize: 16,
+    textAlign: 'center',
+  },
   safeArea: {
     flex: 1,
     backgroundColor: '#f8fafc',

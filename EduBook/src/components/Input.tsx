@@ -91,38 +91,44 @@ export const Input: React.FC<InputProps> = ({
   return (
     <View style={{ marginBottom: 16 }}>
       {label && (
-        <Text style={[
-          {
-            fontSize: 14,
-            fontWeight: '500',
-            color: '#374151',
-            marginBottom: 8,
-          },
-          labelStyle
-        ]}>
-          {label}
-        </Text>
+          <Text style={[
+            {
+              fontSize: 14,
+              fontWeight: '500',
+              color: '#374151',
+              marginBottom: 8,
+            },
+            labelStyle
+          ]}>
+            {label}
+          </Text>
       )}
       
       <View style={getContainerStyle()}>
         {leftIcon && (
-          <View style={{
-            position: 'absolute',
-            left: 16,
-            zIndex: 1,
-          }}>
-            <Ionicons name={leftIcon} size={20} color="#6b7280" />
-          </View>
+            <View style={{
+              position: 'absolute',
+              left: 16,
+              zIndex: 1,
+            } as ViewStyle}>
+              <Ionicons name={leftIcon} size={20} color="#6b7280" />
+            </View>
         )}
 
         <TextInput
+          {...props}
           style={getInputStyle()}
           secureTextEntry={secureTextEntry && !isPasswordVisible}
-          onFocus={() => setIsFocused(true)}
-          onBlur={() => setIsFocused(false)}
+          onFocus={(e) => {
+            setIsFocused(true);
+            props.onFocus?.(e);
+          }}
+          onBlur={(e) => {
+            setIsFocused(false);
+            props.onBlur?.(e);
+          }}
           placeholderTextColor="#9ca3af"
           testID="input"
-          {...props}
         />
 
         {secureTextEntry && (
@@ -131,7 +137,7 @@ export const Input: React.FC<InputProps> = ({
               position: 'absolute',
               right: 16,
               zIndex: 1,
-            }}
+            } as ViewStyle}
             onPress={togglePasswordVisibility}
             testID="password-toggle"
           >
@@ -149,7 +155,7 @@ export const Input: React.FC<InputProps> = ({
               position: 'absolute',
               right: 16,
               zIndex: 1,
-            }}
+            } as ViewStyle}
             onPress={onRightIconPress}
             testID="right-icon"
           >

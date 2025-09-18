@@ -2,6 +2,7 @@ package com.beratcan.app.service;
 
 import com.beratcan.app.dto.request.QuestionRequest;
 import com.beratcan.app.dto.response.QuestionResponse;
+import com.beratcan.app.dto.response.TestResponse;
 import com.beratcan.app.entity.Explanation;
 import com.beratcan.app.entity.Hint;
 import com.beratcan.app.entity.Question;
@@ -132,12 +133,37 @@ public class QuestionService {
         response.setCorrectAnswer(question.getCorrectAnswer());
         response.setAnswerNumber(question.getAnswerNumber());
         response.setVideoUrl(question.getVideoUrl());
-        response.setExplanation(question.getExplanation().getText());
-        response.setHints(
-                question.getHints().stream()
-                        .map(Hint::getText)
-                        .toList()
-        );
+
+        // Test bilgisini ekle
+        if (question.getTest() != null) {
+            TestResponse testResponse = new TestResponse();
+            testResponse.setId(question.getTest().getId());
+            testResponse.setTitle(question.getTest().getTitle());
+            response.setTest(testResponse);
+        }
+
+        // Handle null explanation safely
+        if (question.getExplanation() != null) {
+            response.setExplanation(question.getExplanation().getText());
+        } else {
+            response.setExplanation("");
+        }
+
+        // Handle hints safely
+        if (question.getHints() != null && !question.getHints().isEmpty()) {
+            response.setHints(
+                    question.getHints().stream()
+                            .map(Hint::getText)
+                            .toList());
+        } else {
+            response.setHints(List.of());
+        }
+
         return response;
+    }
+
+    public List<QuestionResponse> getFlaggedQuestions() {
+        // Şimdilik boş liste döndür, daha sonra implement edilecek
+        return List.of();
     }
 }

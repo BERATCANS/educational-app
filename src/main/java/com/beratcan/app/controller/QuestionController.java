@@ -20,7 +20,7 @@ public class QuestionController {
 
     // CREATE
     @PostMapping("/add")
-    public QuestionResponse addQuestion(@PathVariable Long testId, @RequestBody QuestionRequest request) {
+    public QuestionResponse addQuestion(@RequestParam Long testId, @RequestBody QuestionRequest request) {
         return questionService.addQuestion(testId, request);
     }
 
@@ -35,10 +35,15 @@ public class QuestionController {
         return questionService.getQuestionById(questionId);
     }
 
+    @GetMapping("/flagged")
+    public List<QuestionResponse> getFlaggedQuestions() {
+        return questionService.getFlaggedQuestions();
+    }
+
     // UPDATE
     @PutMapping("/{questionId}")
     public QuestionResponse updateQuestion(@PathVariable Long questionId,
-                                           @RequestBody QuestionRequest request) {
+            @RequestBody QuestionRequest request) {
         return questionService.updateQuestion(questionId, request);
     }
 
