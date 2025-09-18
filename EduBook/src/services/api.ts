@@ -8,11 +8,12 @@ import {
   Test,
   Question, 
   ApiResponse,
-  User
+  User,
+  FlaggedQuestion
 } from '../types';
 
-const API_BASE_URL = 'http://192.168.182.220:8080/api'; // Backend URL - local development
-const BASE_URL = 'http://192.168.182.220:8080'; // Base URL for file access
+const API_BASE_URL = 'http://192.168.1.36:8080/api'; // Backend URL - local development
+const BASE_URL = 'http://192.168.1.36:8080'; // Base URL for file access
 
 class ApiService {
   private async getAuthHeaders(): Promise<Record<string, string>> {
@@ -23,14 +24,23 @@ class ApiService {
     // Token'ı SecureStore'dan al
     try {
       const token = await SecureStore.getItemAsync('auth-storage');
+      console.log('🔑 Auth storage token:', token ? 'exists' : 'missing');
+      
       if (token) {
         const authData = JSON.parse(token);
+        console.log('🔑 Auth data:', { hasState: !!authData.state, hasToken: !!authData.state?.token });
+        
         if (authData.state?.token) {
           headers['Authorization'] = `Bearer ${authData.state.token}`;
+          console.log('✅ Authorization header added');
+        } else {
+          console.warn('⚠️ Token not found in auth data');
         }
+      } else {
+        console.warn('⚠️ No auth storage found');
       }
     } catch (error) {
-      console.error('Error getting auth token:', error);
+      console.error('❌ Error getting auth token:', error);
     }
     
     return headers;
@@ -161,15 +171,27 @@ class ApiService {
 
   // Book endpoints
   async getBooksForUser(userId: number): Promise<Book[]> {
-    const response = await this.request<any[]>(`/books/for-user/${userId}`);
-    // Backend BookResponse'u frontend Book interface'ine çevir
-    return response.map(book => ({
-      id: book.id,
-      title: book.title,
-      publisher: book.publisher,
-      coverImageUrl: book.coverImageUrl,
-      paid: true, // Frontend varsayılanı
-    }));
+    console.log('📚 Fetching books for userId:', userId);
+    try {
+      const response = await this.request<any[]>(`/books/for-user/${userId}`);
+      console.log('✅ Raw books response:', response);
+      console.log('📊 Books count:', response?.length || 0);
+      
+      // Backend BookResponse'u frontend Book interface'ine çevir
+      const books = response.map(book => ({
+        id: book.id,
+        title: book.title,
+        publisher: book.publisher,
+        coverImageUrl: book.coverImageUrl,
+        paid: book.paid, // Backend'den gelen paid değeri
+      }));
+      
+      console.log('🔄 Mapped books:', books);
+      return books;
+    } catch (error) {
+      console.error('❌ Error fetching books for user:', error);
+      throw error;
+    }
   }
 
   async useBookCode(userId: number, code: string): Promise<string> {
@@ -251,8 +273,8 @@ class ApiService {
     }));
   }
 
-  // Flagged Questions endpoint - İşaretlenen soruları getir
-  async getFlaggedQuestions(): Promise<Question[]> {
+  // Flagged Questions endpoint - İşaretlenen soruları getir (FlaggedQuestion format'ında)
+  async getFlaggedQuestions(): Promise<FlaggedQuestion[]> {
     // userId'yi auth store'dan al
     const token = await SecureStore.getItemAsync('auth-storage');
     let userId = 1; // Default fallback
@@ -272,15 +294,49 @@ class ApiService {
     console.log('🏁 Raw flagged questions response:', response);
     console.log('🏁 Flagged questions count:', response?.length || 0);
     
-    return response.map(question => ({
-      id: question.id,
-      imageUrl: question.imageUrl ? `${BASE_URL}/${question.imageUrl}` : '',
-      answerNumber: question.answerNumber || 5,
-      correctAnswer: question.correctAnswer || 'A',
-      hints: question.hints || [],
-      explanation: question.explanation || '',
-      videoUrl: question.videoUrl || '',
+    return response.map(item => ({
+      questionId: item.id,
+      imageUrl: item.imageUrl ? `${BASE_URL}/${item.imageUrl}` : '',
+      answerNumber: item.answerNumber || 5,
+      correctAnswer: item.correctAnswer || 'A',
+      hints: item.hints || [],
+      explanation: item.explanation || '',
+      videoUrl: item.videoUrl || '',
+      bookId: 0, // Eski endpoint bu bilgileri vermiyor
+      topicId: 0,
+      testId: item.test?.id || 0,
+      bookTitle: '',
+      topicTitle: '',
+      testTitle: item.test?.title || '',
     }));
+  }
+
+  // Tek bir flagged question için detaylı bilgi alma - navigation için
+  async getFlaggedQuestionById(questionId: number): Promise<FlaggedQuestion> {
+    console.log('🎯 Fetching flagged question by ID:', questionId);
+    try {
+      const response = await this.request<any>(`/users/flagged/${questionId}`);
+      console.log('✅ Raw flagged question response:', response);
+      
+      return {
+        questionId: response.questionId,
+        imageUrl: response.imageUrl ? `${BASE_URL}/${response.imageUrl}` : '',
+        answerNumber: response.answerNumber || 5,
+        correctAnswer: response.correctAnswer || 'A',
+        hints: response.hints || [],
+        explanation: response.explanation || '',
+        videoUrl: response.videoUrl || '',
+        bookId: response.bookId,
+        topicId: response.topicId,
+        testId: response.testId,
+        bookTitle: response.bookTitle || '',
+        topicTitle: response.topicTitle || '',
+        testTitle: response.testTitle || '',
+      };
+    } catch (error) {
+      console.error('❌ Error fetching flagged question by ID:', error);
+      throw error;
+    }
   }
 
   // Redeem Code endpoint - Kitap kodunu kullan
@@ -307,6 +363,17 @@ class ApiService {
     
     // Backend'den gelen response'u kontrol et
     if (response.message) {
+      // Mesajın içeriğine göre başarı/hata durumunu ayırt et
+      const message = response.message.toLowerCase();
+      
+      if (message.includes('geçersiz') || 
+          message.includes('kullanıldı') || 
+          message.includes('bulunamadı') ||
+          message.includes('sahipsiniz') ||
+          message.includes('hata')) {
+        throw new Error(response.message); // Hata mesajı
+      }
+      
       return response; // Başarılı mesaj
     } else if (response.error) {
       throw new Error(response.error); // Hata mesajı

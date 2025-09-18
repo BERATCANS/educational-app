@@ -7,5 +7,6 @@ import java.util.Optional;
 
 public interface BookCodeRepository extends JpaRepository<BookCode, Long> {
     Optional<BookCode> findByCodeAndUsedFalse(String code);
-}
 
+    boolean existsByCode(String code);
+}

@@ -12,6 +12,7 @@ public class BookCode {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Column(unique = true)
     private String code; // Kod değeri
 
     private boolean used = false; // Kullanıldı mı?
@@ -24,4 +25,3 @@ public class BookCode {
     @JoinColumn(name = "user_id")
     private User usedBy; // Kod kullanıldıysa hangi kullanıcı
 }
-

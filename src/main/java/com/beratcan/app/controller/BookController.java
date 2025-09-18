@@ -43,9 +43,13 @@ public class BookController {
     }
 
     @PostMapping("/add-codes")
-    public ResponseEntity<String> addCodes(@RequestParam Long bookId, @RequestBody List<String> codes) {
-        bookService.addCodes(bookId, codes);
-        return ResponseEntity.ok("Codes added successfully");
+    public ResponseEntity<?> addCodes(@RequestParam Long bookId, @RequestBody List<String> codes) {
+        try {
+            String result = bookService.addCodes(bookId, codes);
+            return ResponseEntity.ok(Map.of("message", result));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
     }
 
     @GetMapping("/for-user/{userId}")

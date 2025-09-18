@@ -114,3 +114,21 @@ export interface ApiResponse<T> {
   message?: string;
   error?: string;
 }
+
+export interface FlaggedQuestion {
+  questionId: number;
+  imageUrl: string;
+  answerNumber: number;
+  correctAnswer: string;
+  videoUrl: string;
+  explanation: string;
+  hints: string[];
+
+  bookId: number;
+  topicId: number;
+  testId: number;
+
+  bookTitle: string;
+  topicTitle: string;
+  testTitle: string;
+}

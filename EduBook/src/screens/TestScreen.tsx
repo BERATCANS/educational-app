@@ -26,13 +26,20 @@ export const TestScreen: React.FC = () => {
   console.log('🚀🚀🚀 TEST SCREEN MOUNTED! 🚀🚀🚀');
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
-  const { book, topic, test, initialQuestionIndex = 0 } = route.params as { 
+  const { book, topic, test, initialQuestionIndex = 0, targetQuestionId } = route.params as { 
     book: Book; 
     topic: Topic; 
     test: Test; 
     initialQuestionIndex?: number;
+    targetQuestionId?: number;
   };
-  console.log('📋 TestScreen params:', { book: book?.title, topic: topic?.title, test: test?.title });
+  console.log('📋 TestScreen params:', { 
+    book: book?.title, 
+    topic: topic?.title, 
+    test: test?.title, 
+    initialQuestionIndex,
+    targetQuestionId 
+  });
   
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(initialQuestionIndex);
   const [selectedAnswers, setSelectedAnswers] = useState<Map<number, string>>(new Map());
@@ -82,6 +89,23 @@ export const TestScreen: React.FC = () => {
       console.log('🏁 Loaded flagged questions:', Array.from(flaggedIds));
     }
   }, [flaggedQuestionsData]);
+
+  // targetQuestionId geldiğinde doğru soruya git
+  useEffect(() => {
+    if (targetQuestionId && questions.length > 0) {
+      console.log('🎯 Looking for targetQuestionId:', targetQuestionId, 'in', questions.length, 'questions');
+      
+      const targetIndex = questions.findIndex(q => q.id === targetQuestionId);
+      console.log('🔍 Found targetQuestionId at index:', targetIndex);
+      
+      if (targetIndex !== -1) {
+        console.log('✅ Navigating to target question at index:', targetIndex);
+        setCurrentQuestionIndex(targetIndex);
+      } else {
+        console.warn('⚠️ targetQuestionId not found in questions, staying at index 0');
+      }
+    }
+  }, [targetQuestionId, questions]);
 
   // Debug logging
   useEffect(() => {

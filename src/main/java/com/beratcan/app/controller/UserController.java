@@ -4,11 +4,13 @@ import com.beratcan.app.dto.response.JwtResponse;
 import com.beratcan.app.dto.response.UserResponse;
 import com.beratcan.app.dto.response.QuestionResponse;
 import com.beratcan.app.dto.response.TestResponse;
+import com.beratcan.app.dto.response.FlaggedResponse;
 import com.beratcan.app.dto.request.LoginRequest;
 import com.beratcan.app.dto.request.UserRequest;
 import com.beratcan.app.entity.Question;
 import com.beratcan.app.entity.User;
 import com.beratcan.app.service.UserService;
+import com.beratcan.app.service.QuestionService;
 import com.beratcan.app.security.JwtUtil;
 
 import lombok.RequiredArgsConstructor;
@@ -25,6 +27,7 @@ import java.util.Set;
 public class UserController {
 
     private final UserService userService;
+    private final QuestionService questionService;
     private final JwtUtil jwtUtil;
 
     @PostMapping("/register")
@@ -81,7 +84,7 @@ public class UserController {
                     qr.setAnswerNumber(question.getAnswerNumber());
                     qr.setCorrectAnswer(question.getCorrectAnswer());
                     qr.setVideoUrl(question.getVideoUrl());
-                    
+
                     // Test bilgisini ekle
                     if (question.getTest() != null) {
                         TestResponse testResponse = new TestResponse();
@@ -89,18 +92,61 @@ public class UserController {
                         testResponse.setTitle(question.getTest().getTitle());
                         qr.setTest(testResponse);
                     }
-                    
+
                     // Hints ve explanation
-                    qr.setHints(question.getHints() != null ? 
-                        question.getHints().stream().map(hint -> hint.getText()).toList() : 
-                        List.of());
-                    qr.setExplanation(question.getExplanation() != null ? 
-                        question.getExplanation().getText() : "");
-                    
+                    qr.setHints(question.getHints() != null
+                            ? question.getHints().stream().map(hint -> hint.getText()).toList()
+                            : List.of());
+                    qr.setExplanation(question.getExplanation() != null ? question.getExplanation().getText() : "");
+
                     return qr;
                 })
                 .toList();
         return ResponseEntity.ok(response);
+    }
+
+    // Tek soru için flagged bilgileri - navigation için book, topic, test ID'leri
+    // dahil
+    @GetMapping("/flagged/{questionId}")
+    public ResponseEntity<FlaggedResponse> getFlaggedQuestionById(@PathVariable Long questionId) {
+        try {
+            // Question'ı direkt repository'den al
+            Question question = userService.getQuestionById(questionId);
+
+            if (question == null) {
+                return ResponseEntity.notFound().build();
+            }
+
+            FlaggedResponse fr = new FlaggedResponse();
+            fr.setQuestionId(question.getId());
+            fr.setImageUrl(question.getImageUrl());
+            fr.setAnswerNumber(question.getAnswerNumber());
+            fr.setCorrectAnswer(question.getCorrectAnswer().name());
+            fr.setVideoUrl(question.getVideoUrl());
+
+            fr.setHints(question.getHints() != null ? question.getHints().stream().map(hint -> hint.getText()).toList()
+                    : List.of());
+            fr.setExplanation(question.getExplanation() != null ? question.getExplanation().getText() : "");
+
+            if (question.getTest() != null) {
+                fr.setTestId(question.getTest().getId());
+                fr.setTestTitle(question.getTest().getTitle());
+
+                if (question.getTest().getTopic() != null) {
+                    fr.setTopicId(question.getTest().getTopic().getId());
+                    fr.setTopicTitle(question.getTest().getTopic().getTitle());
+
+                    if (question.getTest().getTopic().getBook() != null) {
+                        fr.setBookId(question.getTest().getTopic().getBook().getId());
+                        fr.setBookTitle(question.getTest().getTopic().getBook().getTitle());
+                    }
+                }
+            }
+
+            return ResponseEntity.ok(fr);
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body(null);
+        }
     }
 
     // Kullanıcı profile bilgileri
