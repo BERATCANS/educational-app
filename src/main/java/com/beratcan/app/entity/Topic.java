@@ -31,4 +31,3 @@ public class Topic {
     @JsonManagedReference
     private List<Test> tests = new ArrayList<>();
 }
-

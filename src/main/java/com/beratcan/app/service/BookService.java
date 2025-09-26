@@ -61,15 +61,25 @@ public class BookService {
             return "Kod geçersiz veya zaten kullanıldı";
 
         BookCode code = codeOpt.get();
+        Book book = code.getBook();
+
+        // Kullanıcının bu kitabı zaten sahip olup olmadığını kontrol et
+        boolean alreadyOwns = user.getOwnedBooks().stream()
+                .anyMatch(ownedBook -> ownedBook.getId().equals(book.getId()));
+
+        if (alreadyOwns) {
+            return "Bu kitabı zaten sahipsiniz";
+        }
+
         code.setUsed(true);
         code.setUsedBy(user);
         codeRepository.save(code);
 
         // Kullanıcıya kitabı ekle
-        user.getOwnedBooks().add(code.getBook());
+        user.getOwnedBooks().add(book);
         userRepository.save(user);
 
-        return "Kod başarıyla kullanıldı, kitap erişimi açıldı: " + code.getBook().getTitle();
+        return "Kod başarıyla kullanıldı, kitap erişimi açıldı: " + book.getTitle();
     }
 
     public List<BookResponse> getBooksForUser(Long userId) {
@@ -123,22 +133,58 @@ public class BookService {
         response.setTitle(book.getTitle());
         response.setPublisher(book.getPublisher());
         response.setCoverImageUrl(book.getCoverImageUrl());
+        response.setPaid(book.isPaid());
         return response;
     }
 
-    @Transactional
-    public void addCodes(Long bookId, List<String> codes) {
+    public String addCodes(Long bookId, List<String> codes) {
         Book book = bookRepository.findById(bookId)
                 .orElseThrow(() -> new RuntimeException("Book not found"));
 
-        List<BookCode> bookCodes = codes.stream().map(codeStr -> {
-            BookCode code = new BookCode();
-            code.setCode(codeStr);
-            code.setBook(book);
-            code.setUsed(false);
-            return code;
-        }).toList();
-        book.getCodes().addAll(bookCodes);
-        bookCodeRepository.saveAll(bookCodes);
+        // Duplicate ve yeni kodları ayır
+        List<String> duplicateCodes = codes.stream()
+                .filter(codeStr -> bookCodeRepository.existsByCode(codeStr))
+                .toList();
+
+        List<String> newCodes = codes.stream()
+                .filter(codeStr -> !bookCodeRepository.existsByCode(codeStr))
+                .toList();
+
+        // Yeni kodları ekle
+        if (!newCodes.isEmpty()) {
+            List<BookCode> bookCodes = newCodes.stream().map(codeStr -> {
+                BookCode code = new BookCode();
+                code.setCode(codeStr);
+                code.setBook(book);
+                code.setUsed(false);
+                return code;
+            }).toList();
+
+            book.getCodes().addAll(bookCodes);
+            bookCodeRepository.saveAll(bookCodes);
+        }
+
+        // Sonuç mesajı oluştur
+        StringBuilder result = new StringBuilder();
+
+        if (!newCodes.isEmpty()) {
+            result.append(newCodes.size()).append(" kod başarıyla eklendi");
+            if (!duplicateCodes.isEmpty()) {
+                result.append(". ");
+            }
+        }
+
+        if (!duplicateCodes.isEmpty()) {
+            if (newCodes.isEmpty()) {
+                result.append("Hiçbir kod eklenemedi. ");
+            }
+            result.append("Bu kodlar zaten mevcut: ").append(String.join(", ", duplicateCodes));
+        }
+
+        if (newCodes.isEmpty() && duplicateCodes.isEmpty()) {
+            result.append("Hiçbir kod belirtilmedi");
+        }
+
+        return result.toString();
     }
 }

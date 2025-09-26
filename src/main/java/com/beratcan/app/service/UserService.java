@@ -65,8 +65,6 @@ public class UserService {
 
         if (request.getIdentifier().contains("@")) {
             userOpt = userRepository.findByEmail(request.getIdentifier());
-        } else if (request.getIdentifier().matches("^\\+?[0-9]{10,13}$")) {
-            userOpt = userRepository.findByPhoneNumber(request.getIdentifier());
         } else {
             userOpt = userRepository.findByUsername(request.getIdentifier());
         }
@@ -120,6 +118,12 @@ public class UserService {
     public User getUserById(Long userId) {
         return userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
+    }
+
+    // Question bilgisini getir (FlaggedResponse için)
+    public Question getQuestionById(Long questionId) {
+        return questionRepository.findById(questionId)
+                .orElseThrow(() -> new RuntimeException("Question not found"));
     }
 
 }

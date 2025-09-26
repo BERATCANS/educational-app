@@ -49,7 +49,6 @@ export const LibraryScreen: React.FC = () => {
             
             return {
               ...book,
-              paid: true,
               topics: topics.map(topic => ({
                 ...topic,
                 tests: [] // Test detaylarına gerek yok, sadece sayı
@@ -61,7 +60,6 @@ export const LibraryScreen: React.FC = () => {
             console.error(`Error fetching stats for book ${book.id}:`, error);
             return {
               ...book,
-              paid: true,
               topics: [],
               totalTopics: 0,
               totalTests: 0
@@ -97,12 +95,16 @@ export const LibraryScreen: React.FC = () => {
           style={styles.bookImage}
           resizeMode="cover"
         />
-        {book.paid && (
-          <View style={styles.paidBadge}>
-            <Ionicons name="checkmark-circle" size={16} color="#10b981" />
-            <Text style={styles.paidText}>Satın Alındı</Text>
-          </View>
-        )}
+        <View style={styles.paidBadge}>
+          <Ionicons 
+            name={book.paid ? "checkmark-circle" : "gift"} 
+            size={16} 
+            color={book.paid ? "#10b981" : "#3b82f6"} 
+          />
+          <Text style={[styles.paidText, { color: book.paid ? "#10b981" : "#3b82f6" }]}>
+            {book.paid ? "Satın Alındı" : "Ücretsiz kitap"}
+          </Text>
+        </View>
       </View>
         <View style={styles.bookInfo}>
           <Text style={styles.bookTitle} numberOfLines={2}>

@@ -21,7 +21,8 @@ public class TestService {
     private final TopicRepository topicRepository;
     private final QuestionRepository questionRepository;
 
-    public TestService(TestRepository testRepository, TopicRepository topicRepository, QuestionRepository questionRepository) {
+    public TestService(TestRepository testRepository, TopicRepository topicRepository,
+            QuestionRepository questionRepository) {
         this.testRepository = testRepository;
         this.topicRepository = topicRepository;
         this.questionRepository = questionRepository;

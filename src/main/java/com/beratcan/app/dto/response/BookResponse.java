@@ -10,4 +10,5 @@ public class BookResponse {
     private String title;
     private String publisher;
     private String coverImageUrl;
+    private boolean paid;
 }

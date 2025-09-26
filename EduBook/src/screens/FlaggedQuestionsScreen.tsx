@@ -8,25 +8,46 @@ import {
   Alert,
   Image,
   ActivityIndicator,
+  Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Question, Book } from '../types';
-import { apiService as api } from '../services/api';
+import { FlaggedQuestion } from '../types';
+import { apiService } from '../services/api';
 
+const { width: screenWidth } = Dimensions.get('window');
 
 export const FlaggedQuestionsScreen: React.FC = () => {
-  const [questions, setQuestions] = useState<Question[]>([]);
+  const [questions, setQuestions] = useState<FlaggedQuestion[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [imageDimensions, setImageDimensions] = useState<{[key: number]: {width: number, height: number}}>({});
 
   useEffect(() => {
     const fetchFlaggedQuestions = async () => {
       try {
-        const data = await api.getFlaggedQuestions();
+        const data = await apiService.getFlaggedQuestions();
         setQuestions(data);
         setError(null);
+
+        // Her soru için image dimensions'ını yükle
+        data.forEach((question) => {
+          if (question.imageUrl) {
+            Image.getSize(
+              question.imageUrl,
+              (width, height) => {
+                setImageDimensions(prev => ({
+                  ...prev,
+                  [question.questionId]: { width, height }
+                }));
+              },
+              (error) => {
+                console.log('Error getting image size:', error);
+              }
+            );
+          }
+        });
       } catch (err) {
         setError('İşaretlenen soruları yüklerken bir hata oluştu.');
       } finally {
@@ -38,52 +59,66 @@ export const FlaggedQuestionsScreen: React.FC = () => {
   }, []);
   const navigation = useNavigation();
 
-  const handleRetryQuestion = async (question: Question) => {
+  const getImageDimensions = (questionId: number) => {
+    const maxWidth = screenWidth - 80; // Container padding
+    const dimensions = imageDimensions[questionId];
+    
+    if (!dimensions) {
+      return { width: maxWidth, height: 200 }; // Default while loading
+    }
+    
+    const aspectRatio = dimensions.height / dimensions.width;
+    const calculatedHeight = maxWidth * aspectRatio;
+    
+    const maxHeight = Math.min(calculatedHeight, 400); // Max height 400px
+    const finalWidth = maxHeight < calculatedHeight ? maxHeight / aspectRatio : maxWidth;
+    
+    return { width: finalWidth, height: maxHeight };
+  };
+
+  const handleImageLoad = (questionId: number, event: any) => {
+    const { width, height } = event.nativeEvent.source;
+    setImageDimensions(prev => ({
+      ...prev,
+      [questionId]: { width, height }
+    }));
+  };
+
+  const handleRetryQuestion = async (question: FlaggedQuestion) => {
     Alert.alert(
       'Soru Tekrarı',
-      `Bu soruyu tekrar çözmek istiyor musunuz?`,
+      `${question.bookTitle} > ${question.topicTitle} > ${question.testTitle}\n\nBu soruyu tekrar çözmek istiyor musunuz?`,
       [
         { text: 'İptal', style: 'cancel' },
-        { 
-          text: 'Tekrar Dene', 
-          onPress: async () => {
-            try {
-              // Test'teki tüm soruları al
-              const testQuestions = await api.getQuestionsForTest(question.test?.id || 1);
-              
-              // İşaretlenen sorunun test'teki sırasını bul
-              const questionIndex = testQuestions.findIndex(q => q.id === question.id);
-              
-              // Test bilgisini al (şimdilik mock data)
-              const mockBook = {
-                id: 1,
-                title: 'Matematik 9. Sınıf',
-                publisher: 'EduBook Yayınları',
-                coverImageUrl: 'https://via.placeholder.com/300x400/2563eb/ffffff?text=Matematik+9.+Sinif&v=2',
-                paid: true,
-              };
-              
-              const mockTopic = {
-                id: 1,
-                title: 'Sayılar ve İşlemler',
-              };
-              
-              const mockTest = {
-                id: question.test?.id || 1,
-                title: question.test?.title || 'Sayılar Test 1',
-              };
-              
-              // TestScreen'e navigate et - doğru soruya git
-              (navigation as any).navigate('Test', {
-                book: mockBook,
-                topic: mockTopic,
-                test: mockTest,
-                initialQuestionIndex: questionIndex >= 0 ? questionIndex : 0,
-              });
-            } catch (error) {
-              console.error('Error getting test questions:', error);
-              Alert.alert('Hata', 'Soru bilgileri alınırken bir hata oluştu.');
-            }
+        {
+          text: 'Tekrar Dene',
+          onPress: () => {
+            const book = {
+              id: question.bookId,
+              title: question.bookTitle,
+              publisher: 'EduBook Yayınları',
+              coverImageUrl: '',
+              paid: true,
+            };
+
+            const topic = {
+              id: question.topicId,
+              title: question.topicTitle,
+            };
+
+            const test = {
+              id: question.testId,
+              title: question.testTitle,
+            };
+
+            console.log('🚀 Navigating to Test with:', { book, topic, test, targetQuestionId: question.questionId });
+
+            (navigation as any).navigate('Test', {
+              book: book,
+              topic: topic,
+              test: test,
+              targetQuestionId: question.questionId,
+            });
           }
         },
       ]
@@ -102,10 +137,10 @@ export const FlaggedQuestionsScreen: React.FC = () => {
           onPress: async () => {
             try {
               // Backend'de unflag yap
-              await api.unflagQuestion(1, questionId); // userId=1 şimdilik
+              await apiService.unflagQuestion(1, questionId); // userId=1 şimdilik
               
               // Frontend'den kaldır
-              setQuestions(prev => prev.filter(q => q.id !== questionId));
+              setQuestions(prev => prev.filter(q => q.questionId !== questionId));
               Alert.alert('Başarılı', 'Soru listeden kaldırıldı!');
             } catch (error) {
               console.error('Unflag error:', error);
@@ -163,39 +198,43 @@ export const FlaggedQuestionsScreen: React.FC = () => {
             <View style={styles.questionsList}>
               {questions.map((item) => (
                 <TouchableOpacity 
-                  key={item.id} 
+                  key={item.questionId} 
                   style={styles.questionCard}
                   onPress={() => handleRetryQuestion(item)}
                   activeOpacity={0.7}
                 >
                   <View style={styles.questionHeader}>
                     <View style={styles.bookInfo}>
-                      <Ionicons name="book" size={16} color="#3b82f6" />
+                      <Ionicons name="book" size={14} color="#3b82f6" />
                       <Text style={styles.bookTitle}>
-                        Matematik Kitabı
+                        {item.bookTitle}
                       </Text>
                     </View>
                     <View style={styles.topicInfo}>
-                      <Ionicons name="bookmark" size={14} color="#10b981" />
+                      <Ionicons name="bookmark" size={12} color="#10b981" />
                       <Text style={styles.topicTitle}>
-                        Matematik
+                        {item.topicTitle}
                       </Text>
                     </View>
                   </View>
 
                   <Image 
                     source={{ uri: item.imageUrl }} 
-                    style={styles.questionImage}
-                    resizeMode="cover"
+                    style={[
+                      styles.questionImage,
+                      getImageDimensions(item.questionId)
+                    ]}
+                    resizeMode="contain"
+                    onLoad={(event) => handleImageLoad(item.questionId, event)}
                   />
 
                   <View style={styles.questionFooter}>
                     <View style={styles.questionMeta}>
                       <Text style={styles.testTitle}>
-                        Matematik Test 1
+                        {item.testTitle}
                       </Text>
                       <Text style={styles.answerInfo}>
-                        {item.answerNumber} seçenek • Doğru: {item.correctAnswer}
+                        Doğru: {item.correctAnswer}
                       </Text>
                     </View>
 
@@ -215,7 +254,7 @@ export const FlaggedQuestionsScreen: React.FC = () => {
                         style={[styles.actionButton, styles.clearButton]}
                         onPress={(e) => {
                           e.stopPropagation(); // Parent TouchableOpacity'yi tetikleme
-                          handleClearQuestion(item.id);
+                          handleClearQuestion(item.questionId);
                         }}
                       >
                         <Ionicons name="close-circle" size={16} color="#ef4444" />
@@ -337,36 +376,35 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   questionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: 'column',
+    alignItems: 'flex-start',
     marginBottom: 16,
+    gap: 4,
   },
   bookInfo: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   bookTitle: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 12,
+    fontWeight: '500',
     color: '#3b82f6',
-    marginLeft: 8,
+    marginLeft: 6,
   },
   topicInfo: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   topicTitle: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 11,
+    fontWeight: '500',
     color: '#10b981',
-    marginLeft: 8,
+    marginLeft: 6,
   },
   questionImage: {
-    width: '100%',
-    height: 200,
     borderRadius: 12,
     marginBottom: 16,
+    alignSelf: 'center',
   },
   questionFooter: {
     flexDirection: 'row',
