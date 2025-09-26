@@ -3,7 +3,7 @@ package com.beratcan.app.service;
 import com.beratcan.app.dto.request.LoginRequest;
 import com.beratcan.app.dto.request.UserRequest;
 import com.beratcan.app.entity.Question;
-import com.beratcan.app.entity.Role;
+import com.beratcan.app.entity.enums.*;
 import com.beratcan.app.entity.User;
 import com.beratcan.app.repository.QuestionRepository;
 import com.beratcan.app.repository.UserRepository;
@@ -47,6 +47,7 @@ public class UserService {
             throw new IllegalArgumentException("Bu kullanıcı adı zaten kayıtlı.");
         }
 
+
         // User oluştur
         User user = new User();
         user.setFirstName(dto.getFirstName());
@@ -56,7 +57,39 @@ public class UserService {
         user.setUsername(dto.getUsername());
         user.setPassword(passwordEncoder.encode(dto.getPassword())); // şifreyi hashle
         user.setRole(Role.valueOf(dto.getRole().toUpperCase()));
+        // ExamType (zorunlu değil ama eğer gelmişse işleme al)
+        if (dto.getExamType() != null) {
+            try {
+                user.setExamType(ExamType.valueOf(dto.getExamType().toUpperCase()));
+            } catch (Exception e) {
+                throw new IllegalArgumentException("Geçersiz sınav türü.");
+            }
 
+            // GradeLevel (sınav seçildiyse ekle)
+            if (dto.getGradeLevel() != null) {
+                try {
+                    user.setGradeLevel(GradeLevel.valueOf(dto.getGradeLevel().toUpperCase()));
+                } catch (Exception e) {
+                    throw new IllegalArgumentException("Geçersiz sınıf seviyesi.");
+                }
+            }
+
+            // YKS ise fieldType ve highSchoolType zorunlu
+            if ("YKS".equalsIgnoreCase(dto.getExamType())) {
+                if (dto.getFieldType() == null || dto.getSchoolType() == null) {
+                    throw new IllegalArgumentException("YKS için alan ve lise türü zorunludur.");
+                }
+                try {
+                    user.setFieldType(FieldType.valueOf(dto.getFieldType().toUpperCase()));
+                } catch (Exception e) {
+                    throw new IllegalArgumentException("Geçersiz alan türü.");
+                }
+                user.setSchoolType(SchoolType.valueOf(dto.getSchoolType()));
+            }
+        }
+
+        user.setGender(dto.getGender() != null ? Gender.valueOf(dto.getGender()) : Gender.DIGER);
+        user.setCity(dto.getCity() != null ? City.valueOf(dto.getCity()) : City.Diğer);
         return userRepository.save(user);
     }
 

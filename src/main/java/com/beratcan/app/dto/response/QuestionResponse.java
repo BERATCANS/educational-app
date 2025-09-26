@@ -1,6 +1,6 @@
 package com.beratcan.app.dto.response;
 
-import com.beratcan.app.entity.OptionLetter;
+import com.beratcan.app.entity.enums.OptionLetter;
 import lombok.Data;
 
 import java.util.List;
