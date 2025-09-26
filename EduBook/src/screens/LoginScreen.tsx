@@ -20,7 +20,7 @@ import { useAuthStore } from '../store/authStore';
 import { apiService } from '../services/api';
 
 const loginSchema = z.object({
-  identifier: z.string().min(1, 'Kullanıcı adı, email veya telefon gerekli'),
+  identifier: z.string().min(1, 'Kullanıcı adı veya email gerekli'),
   password: z.string().min(1, 'Şifre gerekli'),
 });
 
@@ -109,8 +109,8 @@ export const LoginScreen: React.FC = () => {
             name="identifier"
             render={({ field: { onChange, onBlur, value } }) => (
               <Input
-                label="Kullanıcı Adı, Email veya Telefon"
-                placeholder="Kullanıcı adı, email veya telefon girin"
+                label="Kullanıcı Adı veya Email"
+                placeholder="Kullanıcı adı veya email girin"
                 value={value}
                 onChangeText={onChange}
                 onBlur={onBlur}

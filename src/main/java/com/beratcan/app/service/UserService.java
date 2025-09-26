@@ -65,8 +65,6 @@ public class UserService {
 
         if (request.getIdentifier().contains("@")) {
             userOpt = userRepository.findByEmail(request.getIdentifier());
-        } else if (request.getIdentifier().matches("^\\+?[0-9]{10,13}$")) {
-            userOpt = userRepository.findByPhoneNumber(request.getIdentifier());
         } else {
             userOpt = userRepository.findByUsername(request.getIdentifier());
         }
