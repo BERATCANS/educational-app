@@ -1,5 +1,6 @@
 package com.beratcan.app.entity;
 
+import com.beratcan.app.entity.enums.OptionLetter;
 import com.fasterxml.jackson.annotation.JsonBackReference;
 import jakarta.persistence.*;
 import lombok.Getter;

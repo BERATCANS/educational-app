@@ -1,7 +1,7 @@
 package com.beratcan.app.entity;
 
+import com.beratcan.app.entity.enums.*;
 import jakarta.persistence.*;
-import lombok.Data;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -43,6 +43,23 @@ public class User {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private Role role; // STUDENT / TEACHER / ADMIN
+
+    @Enumerated(EnumType.STRING)
+    private GradeLevel gradeLevel; // 1-12 veya MEZUN
+
+    @Enumerated(EnumType.STRING)
+    private ExamType examType; // LGS / YKS / KPSS / DİĞER
+
+    @Enumerated(EnumType.STRING)
+    private FieldType fieldType; // sadece YKS için zorunlu olabilir (nullable bırakabilirsin)
+
+    @Enumerated(EnumType.STRING)
+    private Gender gender; // KADIN / ERKEK / DİĞER
+
+    @Enumerated(EnumType.STRING)
+    private City city; // 81 il + DİĞER
+
+    private SchoolType schoolType; // sadece YKS için zorunlu olabilir (nullable bırakabilirsin)
 
     @ManyToMany
     @JoinTable(

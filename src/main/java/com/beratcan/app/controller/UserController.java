@@ -2,13 +2,12 @@ package com.beratcan.app.controller;
 
 import com.beratcan.app.dto.response.JwtResponse;
 import com.beratcan.app.dto.response.UserResponse;
-import com.beratcan.app.dto.response.QuestionResponse;
-import com.beratcan.app.dto.response.TestResponse;
 import com.beratcan.app.dto.response.FlaggedResponse;
 import com.beratcan.app.dto.request.LoginRequest;
 import com.beratcan.app.dto.request.UserRequest;
 import com.beratcan.app.entity.Question;
 import com.beratcan.app.entity.User;
+import com.beratcan.app.entity.enums.City;
 import com.beratcan.app.service.UserService;
 import com.beratcan.app.service.QuestionService;
 import com.beratcan.app.security.JwtUtil;
@@ -162,5 +161,9 @@ public class UserController {
     public ResponseEntity<UserResponse> getUserProfile(@PathVariable Long userId) {
         User user = userService.getUserById(userId);
         return ResponseEntity.ok(new UserResponse(user));
+    }
+    @GetMapping("/cities")
+    public City[] getCities() {
+        return City.values();
     }
 }
