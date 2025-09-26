@@ -70,7 +70,7 @@ export const LibraryScreen: React.FC = () => {
       
       return booksWithStats;
     },
-    enabled: !!booksData && booksData.length > 0,
+    enabled: !!booksData,
   });
 
   const books = booksWithStats || [];
@@ -162,7 +162,7 @@ export const LibraryScreen: React.FC = () => {
     </View>
   );
 
-  if (isLoading || !booksWithStats) {
+  if (isLoading) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>

@@ -8,6 +8,7 @@ interface AuthState {
   token: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  hasCompletedOnboarding: boolean;
 }
 
 interface AuthActions {
@@ -15,6 +16,7 @@ interface AuthActions {
   setToken: (token: string) => void;
   logout: () => void;
   setLoading: (loading: boolean) => void;
+  setOnboardingCompleted: (completed: boolean) => void;
 }
 
 type AuthStore = AuthState & AuthActions;
@@ -38,11 +40,13 @@ export const useAuthStore = create<AuthStore>()(
       token: null,
       isAuthenticated: false,
       isLoading: false,
+      hasCompletedOnboarding: false,
 
       setUser: (user: User) => set({ user, isAuthenticated: true }),
       setToken: (token: string) => set({ token }),
       logout: () => set({ user: null, token: null, isAuthenticated: false }),
       setLoading: (isLoading: boolean) => set({ isLoading }),
+      setOnboardingCompleted: (hasCompletedOnboarding: boolean) => set({ hasCompletedOnboarding }),
     }),
     {
       name: 'auth-storage',
@@ -50,7 +54,8 @@ export const useAuthStore = create<AuthStore>()(
       partialize: (state) => ({ 
         user: state.user, 
         token: state.token, 
-        isAuthenticated: state.isAuthenticated 
+        isAuthenticated: state.isAuthenticated,
+        hasCompletedOnboarding: state.hasCompletedOnboarding
       }),
     }
   )

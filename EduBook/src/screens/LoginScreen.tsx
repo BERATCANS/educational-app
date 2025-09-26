@@ -85,7 +85,13 @@ export const LoginScreen: React.FC = () => {
   };
 
   const goToRegister = () => {
-    navigation.navigate('Register' as never);
+    const { hasCompletedOnboarding } = useAuthStore.getState();
+    
+    if (hasCompletedOnboarding) {
+      navigation.navigate('Register' as never);
+    } else {
+      navigation.navigate('Onboarding' as never);
+    }
   };
 
 

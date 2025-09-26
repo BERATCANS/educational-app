@@ -4,6 +4,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { OnboardingScreen } from './src/screens/OnboardingScreen';
 import { LoginScreen } from './src/screens/LoginScreen';
 import { RegisterScreen } from './src/screens/RegisterScreen';
 import { MainTabsScreen } from './src/screens/MainTabsScreen';
@@ -18,13 +19,13 @@ const Stack = createNativeStackNavigator();
 const queryClient = new QueryClient();
 
 export default function App() {
-  const { isAuthenticated } = useAuthStore();
+  const { isAuthenticated, hasCompletedOnboarding } = useAuthStore();
 
   return (
     <QueryClientProvider client={queryClient}>
       <GestureHandlerRootView style={{ flex: 1 }}>
         <NavigationContainer>
-          <StatusBar style="auto" />
+          <StatusBar style="dark" backgroundColor="#ffffff" />
           <Stack.Navigator
             screenOptions={{
               headerShown: false,
@@ -32,6 +33,7 @@ export default function App() {
           >
             {!isAuthenticated ? (
               <>
+                <Stack.Screen name="Onboarding" component={OnboardingScreen} />
                 <Stack.Screen name="Login" component={LoginScreen} />
                 <Stack.Screen name="Register" component={RegisterScreen} />
               </>
