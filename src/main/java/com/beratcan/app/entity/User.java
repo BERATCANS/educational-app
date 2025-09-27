@@ -59,6 +59,7 @@ public class User {
     @Enumerated(EnumType.STRING)
     private City city; // 81 il + DİĞER
 
+    @Enumerated(EnumType.STRING)
     private SchoolType schoolType; // sadece YKS için zorunlu olabilir (nullable bırakabilirsin)
 
     @ManyToMany
