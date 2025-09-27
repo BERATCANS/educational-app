@@ -24,7 +24,7 @@ enum Role {
   ADMIN = 'ADMIN',
 }
 
-// Zod şeması
+// Zod şeması - Sadece temel bilgiler
 const registerSchema = z
     .object({
       firstName: z.string().min(2, 'Ad en az 2 karakter olmalı'),
@@ -45,7 +45,7 @@ type RegisterFormData = z.infer<typeof registerSchema>;
 export const RegisterScreen: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const navigation = useNavigation();
-  const { setUser, setToken } = useAuthStore();
+  const { setUser, setToken, onboardingData } = useAuthStore();
 
   const {
     control,
@@ -57,6 +57,7 @@ export const RegisterScreen: React.FC = () => {
   const onSubmit = async (data: RegisterFormData) => {
     setIsLoading(true);
     try {
+      // Onboarding'den gelen verileri kullan
       const registerData = {
         firstName: data.firstName,
         lastName: data.lastName,
@@ -64,7 +65,13 @@ export const RegisterScreen: React.FC = () => {
         phoneNumber: data.phoneNumber,
         username: data.username,
         password: data.password,
-        role: 'STUDENT', // Varsayılan olarak STUDENT rolü veriyoruz
+        role: 'STUDENT', // Varsayılan olarak STUDENT
+        gradeLevel: onboardingData?.gradeLevel || 'G9',
+        examType: onboardingData?.examType || 'DIGER',
+        fieldType: onboardingData?.fieldType,
+        gender: onboardingData?.gender || 'DIGER',
+        city: onboardingData?.city || 'Diğer',
+        schoolType: onboardingData?.schoolType,
       };
 
       const user = await apiService.register(registerData);
@@ -261,6 +268,7 @@ export const RegisterScreen: React.FC = () => {
                 )}
             />
 
+
             <Button
                 title="Hesap Oluştur"
                 onPress={handleSubmit(onSubmit)}
@@ -279,6 +287,7 @@ export const RegisterScreen: React.FC = () => {
             </View>
           </View>
         </ScrollView>
+
       </KeyboardAvoidingView>
   );
 };

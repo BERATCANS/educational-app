@@ -52,14 +52,39 @@ const examFields = [
   { id: 4, name: 'Dil', icon: 'language-outline', color: '#f59e0b', description: 'İngilizce, Almanca, Fransızca' },
 ];
 
+const genders = [
+  { id: 1, name: 'Kadın', icon: 'woman-outline', color: '#ec4899' },
+  { id: 2, name: 'Erkek', icon: 'man-outline', color: '#3b82f6' },
+  { id: 3, name: 'Diğer', icon: 'person-outline', color: '#6b7280' },
+];
+
+// Şehir listesi (backend'deki City enum'ından)
+const cities = [
+  'Adana', 'Adıyaman', 'Afyon', 'Ağrı', 'Aksaray', 'Amasya', 'Ankara', 'Antalya',
+  'Ardahan', 'Artvin', 'Aydın', 'Balıkesir', 'Bartın', 'Batman', 'Bayburt',
+  'Bilecik', 'Bingöl', 'Bitlis', 'Bolu', 'Burdur', 'Bursa', 'Çanakkale',
+  'Çankırı', 'Çorum', 'Denizli', 'Diyarbakır', 'Düzce', 'Edirne', 'Elazığ',
+  'Erzincan', 'Erzurum', 'Eskişehir', 'Gaziantep', 'Giresun', 'Gümüşhane',
+  'Hakkari', 'Hatay', 'Iğdır', 'Isparta', 'İstanbul', 'İzmir', 'Kahramanmaraş',
+  'Karabük', 'Karaman', 'Kars', 'Kastamonu', 'Kayseri', 'Kırıkkale',
+  'Kırklareli', 'Kırşehir', 'Kilis', 'Kocaeli', 'Konya', 'Kütahya', 'Malatya',
+  'Manisa', 'Mardin', 'Mersin', 'Muğla', 'Muş', 'Nevşehir', 'Niğde', 'Ordu',
+  'Osmaniye', 'Rize', 'Sakarya', 'Samsun', 'Siirt', 'Sinop', 'Sivas',
+  'Şanlıurfa', 'Şırnak', 'Tekirdağ', 'Tokat', 'Trabzon', 'Tunceli', 'Uşak',
+  'Van', 'Yalova', 'Yozgat', 'Zonguldak', 'Diğer'
+];
+
 export const OnboardingScreen: React.FC = () => {
   const navigation = useNavigation();
-  const { setOnboardingCompleted } = useAuthStore();
+  const { setOnboardingCompleted, setOnboardingData } = useAuthStore();
   const [currentStep, setCurrentStep] = useState(0);
   const [selectedExamType, setSelectedExamType] = useState<number | null>(null);
   const [selectedGrade, setSelectedGrade] = useState<number | null>(null);
   const [selectedSchoolType, setSelectedSchoolType] = useState<number | null>(null);
   const [selectedExamField, setSelectedExamField] = useState<number | null>(null);
+  const [selectedGender, setSelectedGender] = useState<number | null>(null);
+  const [selectedCity, setSelectedCity] = useState<string | null>(null);
+  const [showCityPicker, setShowCityPicker] = useState(false);
   
   // Animasyon değerleri
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -99,6 +124,18 @@ export const OnboardingScreen: React.FC = () => {
         component: 'examField',
       });
     }
+
+    baseSteps.push({
+      title: 'Cinsiyetin nedir?',
+      subtitle: 'Kişiselleştirme için cinsiyetini seç',
+      component: 'gender',
+    });
+
+    baseSteps.push({
+      title: 'Hangi şehirdesin?',
+      subtitle: 'Şehrini seç ki sana yakın içerikler gösterelim',
+      component: 'city',
+    });
 
     baseSteps.push({
       title: 'Hemen başlayalım!',
@@ -181,9 +218,73 @@ export const OnboardingScreen: React.FC = () => {
         setCurrentStep(currentStep + 1);
       }, 300);
     } else {
-      // Onboarding tamamlandı, store'u güncelle ve register ekranına git
+      // Onboarding tamamlandı, verileri store'a kaydet ve register ekranına git
+      const onboardingData = {
+        examType: getExamTypeString(selectedExamType),
+        gradeLevel: getGradeLevelString(selectedGrade),
+        schoolType: selectedSchoolType ? getSchoolTypeString(selectedSchoolType) : undefined,
+        fieldType: selectedExamField ? getFieldTypeString(selectedExamField) : undefined,
+        gender: getGenderString(selectedGender),
+        city: selectedCity || '',
+      };
+      
+      setOnboardingData(onboardingData);
       setOnboardingCompleted(true);
       navigation.navigate('Register' as never);
+    }
+  };
+
+  // Helper functions to convert IDs to backend strings
+  const getExamTypeString = (id: number | null): string => {
+    switch (id) {
+      case 1: return 'LGS';
+      case 2: return 'YKS';
+      case 3: return 'KPSS';
+      case 4: return 'DIGER';
+      default: return 'DIGER';
+    }
+  };
+
+  const getGradeLevelString = (id: number | null): string => {
+    switch (id) {
+      case 5: return 'G5';
+      case 6: return 'G6';
+      case 7: return 'G7';
+      case 8: return 'G8';
+      case 9: return 'G9';
+      case 10: return 'G10';
+      case 11: return 'G11';
+      case 12: return 'G12';
+      case 13: return 'MEZUN';
+      default: return 'G9';
+    }
+  };
+
+  const getSchoolTypeString = (id: number): string => {
+    switch (id) {
+      case 1: return 'Fen';
+      case 2: return 'Anadolu';
+      case 3: return 'Diğer';
+      default: return 'Diğer';
+    }
+  };
+
+  const getFieldTypeString = (id: number): string => {
+    switch (id) {
+      case 1: return 'SAYISAL';
+      case 2: return 'SOZEL';
+      case 3: return 'ESIT_AGIRLIK';
+      case 4: return 'DIL';
+      default: return 'SAYISAL';
+    }
+  };
+
+  const getGenderString = (id: number | null): string => {
+    switch (id) {
+      case 1: return 'KADIN';
+      case 2: return 'ERKEK';
+      case 3: return 'DIGER';
+      default: return 'DIGER';
     }
   };
 
@@ -625,6 +726,132 @@ export const OnboardingScreen: React.FC = () => {
     </Animated.View>
   );
 
+  const renderGenderSelection = () => (
+    <Animated.View 
+      style={[
+        styles.selectionContainer,
+        {
+          opacity: fadeAnim,
+          transform: [
+            { translateY: slideAnim },
+            { scale: scaleAnim }
+          ]
+        }
+      ]}
+    >
+      <ScrollView 
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+      >
+        {genders.map((gender, index) => (
+          <Animated.View
+            key={gender.id}
+            style={{
+              opacity: fadeAnim,
+              transform: [
+                { 
+                  translateY: slideAnim.interpolate({
+                    inputRange: [0, 50],
+                    outputRange: [0, 50 + (index * 20)],
+                    extrapolate: 'clamp',
+                  })
+                },
+                { 
+                  scale: scaleAnim.interpolate({
+                    inputRange: [0.9, 1],
+                    outputRange: [0.9, 1],
+                    extrapolate: 'clamp',
+                  })
+                }
+              ]
+            }}
+          >
+            <TouchableOpacity
+              style={[
+                styles.optionCard,
+                selectedGender === gender.id && styles.selectedCard,
+              ]}
+              onPress={() => {
+                setSelectedGender(gender.id);
+                // Seçim animasyonu
+                Animated.sequence([
+                  Animated.timing(scaleAnim, {
+                    toValue: 1.05,
+                    duration: 150,
+                    useNativeDriver: true,
+                  }),
+                  Animated.timing(scaleAnim, {
+                    toValue: 1,
+                    duration: 150,
+                    useNativeDriver: true,
+                  }),
+                ]).start();
+              }}
+              activeOpacity={0.8}
+            >
+              <View style={[styles.optionIcon, { backgroundColor: gender.color }]}>
+                <Ionicons name={gender.icon as any} size={24} color="#ffffff" />
+              </View>
+              <Text style={styles.optionText}>{gender.name}</Text>
+              {selectedGender === gender.id && (
+                <Animated.View
+                  style={{
+                    transform: [
+                      {
+                        scale: selectedGender === gender.id ? 1 : 0,
+                      }
+                    ]
+                  }}
+                >
+                  <Ionicons name="checkmark-circle" size={24} color={gender.color} />
+                </Animated.View>
+              )}
+            </TouchableOpacity>
+          </Animated.View>
+        ))}
+      </ScrollView>
+    </Animated.View>
+  );
+
+  const renderCitySelection = () => (
+    <Animated.View 
+      style={[
+        styles.selectionContainer,
+        {
+          opacity: fadeAnim,
+          transform: [
+            { translateY: slideAnim },
+            { scale: scaleAnim }
+          ]
+        }
+      ]}
+    >
+      <TouchableOpacity
+        style={styles.cityPickerButton}
+        onPress={() => setShowCityPicker(true)}
+      >
+        <Text style={[styles.cityPickerText, !selectedCity && styles.placeholderText]}>
+          {selectedCity || 'Şehir seçiniz'}
+        </Text>
+        <Ionicons name="chevron-down" size={20} color="#94a3b8" />
+      </TouchableOpacity>
+      
+      {selectedCity && (
+        <Animated.View
+          style={[
+            styles.selectedCityContainer,
+            {
+              opacity: fadeAnim,
+              transform: [{ translateY: slideAnim }]
+            }
+          ]}
+        >
+          <Text style={styles.selectedCityText}>Seçilen: {selectedCity}</Text>
+        </Animated.View>
+      )}
+    </Animated.View>
+  );
+
   const renderFinish = () => (
     <Animated.View 
       style={[
@@ -693,6 +920,10 @@ export const OnboardingScreen: React.FC = () => {
         return selectedSchoolType !== null;
       case 'examField':
         return selectedExamField !== null;
+      case 'gender':
+        return selectedGender !== null;
+      case 'city':
+        return selectedCity !== null;
       case 'finish':
         return true;
       default:
@@ -748,6 +979,8 @@ export const OnboardingScreen: React.FC = () => {
           {steps[currentStep].component === 'grade' && renderGradeSelection()}
           {steps[currentStep].component === 'schoolType' && renderSchoolTypeSelection()}
           {steps[currentStep].component === 'examField' && renderExamFieldSelection()}
+          {steps[currentStep].component === 'gender' && renderGenderSelection()}
+          {steps[currentStep].component === 'city' && renderCitySelection()}
           {steps[currentStep].component === 'finish' && renderFinish()}
         </View>
 
@@ -783,6 +1016,37 @@ export const OnboardingScreen: React.FC = () => {
             <Text style={styles.resetButtonText}>Reset Onboarding</Text>
           </TouchableOpacity>
         </View>
+
+        {/* Şehir Seçici Modal */}
+        {showCityPicker && (
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Şehir Seçiniz</Text>
+                <TouchableOpacity
+                  onPress={() => setShowCityPicker(false)}
+                  style={styles.closeButton}
+                >
+                  <Ionicons name="close" size={24} color="#64748b" />
+                </TouchableOpacity>
+              </View>
+              <ScrollView style={styles.cityList}>
+                {cities.map((city) => (
+                  <TouchableOpacity
+                    key={city}
+                    style={styles.cityItem}
+                    onPress={() => {
+                      setSelectedCity(city);
+                      setShowCityPicker(false);
+                    }}
+                  >
+                    <Text style={styles.cityText}>{city}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          </View>
+        )}
       </LinearGradient>
     </SafeAreaView>
   );
@@ -964,5 +1228,88 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#ffffff',
     textAlign: 'center',
+  },
+  // Yeni alanlar için stiller
+  cityPickerButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: '#64748b',
+    borderRadius: 8,
+    backgroundColor: '#475569',
+  },
+  cityPickerText: {
+    fontSize: 16,
+    color: '#ffffff',
+  },
+  placeholderText: {
+    color: '#94a3b8',
+  },
+  selectedCityContainer: {
+    marginTop: 12,
+    padding: 12,
+    backgroundColor: '#1e40af',
+    borderRadius: 8,
+  },
+  selectedCityText: {
+    fontSize: 14,
+    color: '#ffffff',
+    textAlign: 'center',
+  },
+  // Modal stilleri
+  modalOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    width: '90%',
+    maxHeight: '70%',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1e293b',
+  },
+  closeButton: {
+    padding: 4,
+  },
+  cityList: {
+    maxHeight: 300,
+  },
+  cityItem: {
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f3f4f6',
+  },
+  cityText: {
+    fontSize: 16,
+    color: '#1e293b',
   },
 });
