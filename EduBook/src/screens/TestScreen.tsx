@@ -52,8 +52,8 @@ export const TestScreen: React.FC = () => {
   const [drawingsByQuestion, setDrawingsByQuestion] = useState<{[questionId: number]: Array<{id: string, path: string, color: string, thickness: number}>}>({});
   const [flaggedQuestions, setFlaggedQuestions] = useState<Set<number>>(new Set());
 
-  // API'den soruları çek - GEÇİCİ: Her zaman test ID 1 kullan (backend'de sadece bu test'te sorular var)
-  const actualTestId = 1; // GEÇİCİ FİX: Backend'de sadece test ID 1'de sorular var
+  // API'den soruları çek - gerçek test ID'sini kullan
+  const actualTestId = test.id;
   console.log('🔍 Setting up useQuery for test.id:', test.id, '(using actualTestId:', actualTestId, ')');
   const { data: questionsData, isLoading, error } = useQuery({
     queryKey: ['questions', actualTestId],
