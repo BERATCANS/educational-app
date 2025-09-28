@@ -6,4 +6,6 @@ import lombok.Data;
 public class TopicResponse {
     private Long id;
     private String title;
+    private Integer numberOfTests;
+    private Integer numberOfQuestions;
 }

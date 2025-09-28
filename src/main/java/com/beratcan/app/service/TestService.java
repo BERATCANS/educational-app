@@ -10,23 +10,18 @@ import com.beratcan.app.repository.QuestionRepository;
 import com.beratcan.app.repository.TestRepository;
 import com.beratcan.app.repository.TopicRepository;
 import org.springframework.stereotype.Service;
-
+import lombok.RequiredArgsConstructor;
 import java.util.List;
 import java.util.stream.Collectors;
 
 @Service
+@RequiredArgsConstructor
 public class TestService {
 
     private final TestRepository testRepository;
     private final TopicRepository topicRepository;
     private final QuestionRepository questionRepository;
-
-    public TestService(TestRepository testRepository, TopicRepository topicRepository,
-            QuestionRepository questionRepository) {
-        this.testRepository = testRepository;
-        this.topicRepository = topicRepository;
-        this.questionRepository = questionRepository;
-    }
+    private final BookService bookService;
 
     // CREATE
     public TestResponse addTest(Long topicId, TestRequest request) {
@@ -51,7 +46,7 @@ public class TestService {
             }
             test = testRepository.save(test);
         }
-
+        bookService.countBookData(test.getTopic().getBook().getId());
         return toTestResponse(test);
     }
 
@@ -92,6 +87,7 @@ public class TestService {
         }
 
         test = testRepository.save(test);
+        bookService.countBookData(test.getTopic().getBook().getId());
         return toTestResponse(test);
     }
 
@@ -100,6 +96,7 @@ public class TestService {
         Test test = testRepository.findById(testId)
                 .orElseThrow(() -> new RuntimeException("Test not found"));
         testRepository.delete(test);
+        bookService.countBookData(test.getTopic().getBook().getId());
     }
 
     // --- HELPER METHOD ---
@@ -107,6 +104,7 @@ public class TestService {
         TestResponse response = new TestResponse();
         response.setId(test.getId());
         response.setTitle(test.getTitle());
+        response.setNumberOfQuestions(test.getNumberOfQuestions());
         return response;
     }
 }

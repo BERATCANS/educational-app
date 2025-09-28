@@ -2,6 +2,7 @@ package com.beratcan.app.service;
 
 import com.beratcan.app.dto.request.QuestionRequest;
 import com.beratcan.app.dto.response.QuestionResponse;
+import com.beratcan.app.dto.response.QuestionUrlResponse;
 import com.beratcan.app.dto.response.TestResponse;
 import com.beratcan.app.entity.Explanation;
 import com.beratcan.app.entity.Hint;
@@ -11,20 +12,17 @@ import com.beratcan.app.repository.QuestionRepository;
 import com.beratcan.app.repository.TestRepository;
 import jakarta.transaction.Transactional;
 import org.springframework.stereotype.Service;
-
+import lombok.RequiredArgsConstructor;
 import java.util.List;
 import java.util.stream.Collectors;
 
 @Service
+@RequiredArgsConstructor
 public class QuestionService {
 
     private final QuestionRepository questionRepository;
     private final TestRepository testRepository;
-
-    public QuestionService(QuestionRepository questionRepository, TestRepository testRepository) {
-        this.questionRepository = questionRepository;
-        this.testRepository = testRepository;
-    }
+    private final BookService bookService;
 
     // CREATE
     public QuestionResponse addQuestion(Long testId, QuestionRequest request) {
@@ -39,14 +37,15 @@ public class QuestionService {
         question.setVideoUrl(request.getVideoUrl());
 
         question = questionRepository.save(question);
+        bookService.countBookData(test.getTopic().getBook().getId());
         return toQuestionResponse(question);
     }
 
     // READ
-    public List<QuestionResponse> getQuestionsByTest(Long testId) {
+    public List<QuestionUrlResponse> getQuestionsByTest(Long testId) {
         return questionRepository.findByTestId(testId)
                 .stream()
-                .map(this::toQuestionResponse)
+                .map(this::toQuestionUrlResponse)
                 .collect(Collectors.toList());
     }
 
@@ -83,6 +82,7 @@ public class QuestionService {
         Question question = questionRepository.findById(questionId)
                 .orElseThrow(() -> new IllegalArgumentException("Question not found with ID: " + questionId));
         questionRepository.delete(question);
+        bookService.countBookData(question.getTest().getTopic().getBook().getId());
     }
 
     @Transactional
@@ -159,6 +159,14 @@ public class QuestionService {
             response.setHints(List.of());
         }
 
+        return response;
+    }
+
+    // HELPER
+    private QuestionUrlResponse toQuestionUrlResponse(Question question) {
+        QuestionUrlResponse response = new QuestionUrlResponse();
+        response.setId(question.getId());
+        response.setImageUrl(question.getImageUrl());
         return response;
     }
 

@@ -38,32 +38,9 @@ public class Book {
     @ManyToMany(mappedBy = "ownedBooks")
     private Set<User> owners = new HashSet<>(); // Kitabı sahiplenen kullanıcılar
 
-    // Hesaplanmış alanlar - veritabanında saklanmaz
-    @Transient
     private Integer numberOfTopics;
 
-    @Transient
     private Integer numberOfTests;
 
-    @Transient
     private Integer numberOfQuestions;
-
-    // Hesaplayıcı metodlar
-    public int getNumberOfTopics() {
-        return topics != null ? topics.size() : 0;
-    }
-
-    public int getNumberOfTests() {
-        return topics != null ? topics.stream()
-                .mapToInt(topic -> topic.getTests() != null ? topic.getTests().size() : 0)
-                .sum() : 0;
-    }
-
-    public int getNumberOfQuestions() {
-        return topics != null ? topics.stream()
-                .flatMap(
-                        topic -> topic.getTests() != null ? topic.getTests().stream() : java.util.stream.Stream.empty())
-                .mapToInt(test -> test.getQuestions() != null ? test.getQuestions().size() : 0)
-                .sum() : 0;
-    }
 }

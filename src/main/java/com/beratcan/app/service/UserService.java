@@ -47,7 +47,6 @@ public class UserService {
             throw new IllegalArgumentException("Bu kullanıcı adı zaten kayıtlı.");
         }
 
-
         // User oluştur
         User user = new User();
         user.setFirstName(dto.getFirstName());

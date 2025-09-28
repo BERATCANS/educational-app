@@ -9,35 +9,34 @@ import com.beratcan.app.repository.BookRepository;
 import com.beratcan.app.repository.TestRepository;
 import com.beratcan.app.repository.TopicRepository;
 import org.springframework.stereotype.Service;
-
+import lombok.RequiredArgsConstructor;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
+@RequiredArgsConstructor
 public class TopicService {
 
     private final TopicRepository topicRepository;
     private final BookRepository bookRepository;
     private final TestRepository testRepository;
-
-    public TopicService(TopicRepository topicRepository, BookRepository bookRepository, TestRepository testRepository) {
-        this.topicRepository = topicRepository;
-        this.bookRepository = bookRepository;
-        this.testRepository = testRepository;
-    }
+    private final BookService bookService;
 
     // Helper: Topic -> TopicResponse
     private TopicResponse toTopicResponse(Topic topic) {
         TopicResponse response = new TopicResponse();
         response.setId(topic.getId());
         response.setTitle(topic.getTitle());
+        response.setNumberOfTests(topic.getNumberOfTests());
+        response.setNumberOfQuestions(topic.getNumberOfQuestions());
         return response;
     }
 
     public TopicResponse addTopic(Long bookId, TopicRequest request) {
         Optional<Book> bookOpt = bookRepository.findById(bookId);
-        if (bookOpt.isEmpty()) throw new RuntimeException("Book not found");
+        if (bookOpt.isEmpty())
+            throw new RuntimeException("Book not found");
 
         Topic topic = new Topic();
         topic.setTitle(request.getTitle());
@@ -52,7 +51,7 @@ public class TopicService {
             }
         }
         Topic saved = topicRepository.save(topic);
-
+        bookService.countBookData(saved.getBook().getId());
         return toTopicResponse(saved);
     }
 
@@ -75,6 +74,7 @@ public class TopicService {
         }
 
         Topic updated = topicRepository.save(topic);
+        bookService.countBookData(updated.getBook().getId());
         return toTopicResponse(updated);
     }
 
@@ -82,6 +82,7 @@ public class TopicService {
         Topic topic = topicRepository.findById(topicId)
                 .orElseThrow(() -> new RuntimeException("Topic not found"));
         topicRepository.delete(topic);
+        bookService.countBookData(topic.getBook().getId());
     }
 
     public List<TopicResponse> getTopicsByBook(Long bookId) {
