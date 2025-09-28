@@ -29,4 +29,11 @@ public class Topic {
     @OneToMany(mappedBy = "topic", cascade = CascadeType.ALL)
     @JsonManagedReference
     private List<Test> tests = new ArrayList<>();
+
+    @Column(name = "number_of_tests")
+    private Integer numberOfTests = 0;
+
+    @Column(name = "number_of_questions")
+    private Integer numberOfQuestions = 0;
+
 }

@@ -30,4 +30,6 @@ public class Test {
     @JsonManagedReference
     private List<Question> questions = new ArrayList<>();
 
+    @Column(name = "number_of_questions")
+    private Integer numberOfQuestions = 0;
 }
