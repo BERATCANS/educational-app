@@ -14,7 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { SimpleDrawing } from '../components/SimpleDrawing';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { Book, Topic, Test, Question } from '../types';
+import { Book, Topic, Test, Question, TestSubmissionRequest } from '../types';
 import { useQuery } from '@tanstack/react-query';
 import { apiService } from '../services/api';
 import * as SecureStore from 'expo-secure-store';
@@ -44,13 +44,65 @@ export const TestScreen: React.FC = () => {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(initialQuestionIndex);
   const [selectedAnswers, setSelectedAnswers] = useState<Map<number, string>>(new Map());
   const [isTestCompleted, setIsTestCompleted] = useState(false);
+  const [testStartTime] = useState(Date.now()); // Test başlangıç zamanı
   const [showDrawingCanvas, setShowDrawingCanvas] = useState(false);
   const [showDrawingToolbar, setShowDrawingToolbar] = useState(true);
   const [currentTool, setCurrentTool] = useState<'pen' | 'eraser' | 'line'>('pen');
+  const [isTestAbandoned, setIsTestAbandoned] = useState(false); // Test terk edildi mi?
   const [currentColor, setCurrentColor] = useState('#000000');
   const [currentThickness, setCurrentThickness] = useState(2);
   const [drawingsByQuestion, setDrawingsByQuestion] = useState<{[questionId: number]: Array<{id: string, path: string, color: string, thickness: number}>}>({});
   const [flaggedQuestions, setFlaggedQuestions] = useState<Set<number>>(new Set());
+
+  // Abandoned test gönderme fonksiyonu
+  const submitAbandonedTest = async () => {
+    if (isTestCompleted || isTestAbandoned || selectedAnswers.size === 0) {
+      return; // Test zaten tamamlanmış veya terk edilmiş veya hiç cevap yok
+    }
+
+    try {
+      // Gerçek kullanıcı ID'sini al
+      const token = await SecureStore.getItemAsync('auth-storage');
+      
+      if (!token) {
+        console.log('⚠️ No auth token found for abandoned test submission');
+        return;
+      }
+      
+      let userId: number;
+      try {
+        const authData = JSON.parse(token);
+        if (!authData.state?.user?.id) {
+          console.log('⚠️ No user ID found for abandoned test submission');
+          return;
+        }
+        userId = authData.state.user.id;
+      } catch (error) {
+        console.log('⚠️ Error parsing auth data for abandoned test submission:', error);
+        return;
+      }
+
+      // Test submission verilerini hazırla
+      const userAnswers: Record<number, 'A' | 'B' | 'C' | 'D' | 'E'> = {};
+      selectedAnswers.forEach((answer, questionId) => {
+        userAnswers[questionId] = answer as 'A' | 'B' | 'C' | 'D' | 'E';
+      });
+
+      const testSubmission: TestSubmissionRequest = {
+        userId,
+        testId: test.id,
+        userAnswers,
+        totalTimeSeconds: Math.floor((Date.now() - testStartTime) / 1000),
+        isAbandoned: true, // Abandoned olarak işaretle
+      };
+
+      console.log('🚪 Submitting abandoned test:', testSubmission);
+      await apiService.submitTest(testSubmission);
+      console.log('✅ Abandoned test submitted successfully');
+    } catch (error) {
+      console.error('❌ Error submitting abandoned test:', error);
+    }
+  };
 
   // API'den soruları çek - gerçek test ID'sini kullan
   const actualTestId = test.id;
@@ -89,6 +141,17 @@ export const TestScreen: React.FC = () => {
       console.log('🏁 Loaded flagged questions:', Array.from(flaggedIds));
     }
   }, [flaggedQuestionsData]);
+
+  // Component unmount olduğunda abandoned test gönder
+  useEffect(() => {
+    return () => {
+      // Component unmount olduğunda çalışır
+      if (!isTestCompleted && !isTestAbandoned && selectedAnswers.size > 0) {
+        console.log('🚪 TestScreen unmounting - submitting abandoned test');
+        submitAbandonedTest();
+      }
+    };
+  }, [isTestCompleted, isTestAbandoned, selectedAnswers.size]);
 
   // targetQuestionId geldiğinde doğru soruya git
   useEffect(() => {
@@ -178,7 +241,7 @@ export const TestScreen: React.FC = () => {
     }
   };
 
-  const handleFinishTest = () => {
+  const handleFinishTest = async () => {
     const answeredQuestions = selectedAnswers.size;
     const correctAnswers = Array.from(selectedAnswers.entries()).filter(
       ([questionId, answer]) => {
@@ -186,6 +249,50 @@ export const TestScreen: React.FC = () => {
         return question && question.correctAnswer === answer;
       }
     ).length;
+
+    // Test tamamlandı olarak işaretle
+    setIsTestCompleted(true);
+
+    // Test sonuçlarını backend'e gönder
+    try {
+      const token = await SecureStore.getItemAsync('auth-storage');
+      let userId = 1; // Default fallback
+      
+      if (token) {
+        try {
+          const authData = JSON.parse(token);
+          if (authData.state?.user?.id) {
+            userId = authData.state.user.id;
+          }
+        } catch (error) {
+          console.error('Error parsing auth data:', error);
+        }
+      }
+
+      // Test submission verilerini hazırla
+      const userAnswers: Record<number, 'A' | 'B' | 'C' | 'D' | 'E'> = {};
+      selectedAnswers.forEach((answer, questionId) => {
+        userAnswers[questionId] = answer as 'A' | 'B' | 'C' | 'D' | 'E';
+      });
+
+      const testSubmission: TestSubmissionRequest = {
+        userId,
+        testId: test.id,
+        userAnswers,
+        totalTimeSeconds: Math.floor((Date.now() - testStartTime) / 1000),
+        isAbandoned: false, // Normal test tamamlama
+      };
+
+      console.log('📤 Test sonuçları gönderiliyor:', testSubmission);
+
+      // Backend'e test sonuçlarını gönder
+      const result = await apiService.submitTest(testSubmission);
+      console.log('✅ Test sonuçları başarıyla kaydedildi:', result);
+
+    } catch (error) {
+      console.error('❌ Test sonuçları kayıt hatası:', error);
+      // Hata olsa bile kullanıcıya sonuçları göster
+    }
 
     Alert.alert(
       'Test Tamamlandı!',

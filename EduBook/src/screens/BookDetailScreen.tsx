@@ -54,6 +54,7 @@ export const BookDetailScreen: React.FC = () => {
     }
   }, [allTests, currentTestIndex]);
 
+
   // Debug allTests
   useEffect(() => {
     console.log('📈 allTests changed:', allTests.length, 'total tests available');
@@ -424,11 +425,6 @@ export const BookDetailScreen: React.FC = () => {
               </Text>
             </TouchableOpacity>
 
-            <View style={styles.testCounter}>
-              <Text style={styles.testCounterText}>
-                {currentTestIndex + 1} / {allTests.length}
-              </Text>
-            </View>
 
             <TouchableOpacity 
               style={[styles.navButton, currentTestIndex === allTests.length - 1 && styles.navButtonDisabled]}
@@ -476,7 +472,9 @@ export const BookDetailScreen: React.FC = () => {
                   
                   return (
                     <View key={topic.id} style={styles.topicSection}>
-                      <Text style={styles.topicTitle}>{topic.title}</Text>
+                      <View style={styles.topicHeader}>
+                        <Text style={styles.topicTitle}>{topic.title}</Text>
+                      </View>
                       {topicTests.map(({ test }, testIndex) => {
                         // Global test index'ini bul
                         const globalTestIndex = allTests.findIndex(
@@ -508,7 +506,7 @@ export const BookDetailScreen: React.FC = () => {
                             </View>
                             <View style={styles.testItemRight}>
                               <Text style={styles.testQuestionCount}>
-                                {globalTestIndex + 1} / {allTests.length}
+                                {test.numberOfQuestions || 0} Soru
                               </Text>
                             </View>
                           </TouchableOpacity>
@@ -756,12 +754,27 @@ const styles = StyleSheet.create({
   topicSection: {
     marginVertical: 12,
   },
+  topicHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+    paddingHorizontal: 4,
+  },
   topicTitle: {
     fontSize: 16,
     fontWeight: '600',
     color: '#374151',
-    marginBottom: 8,
-    paddingHorizontal: 4,
+    flex: 1,
+  },
+  topicTestCount: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#6b7280',
+    backgroundColor: '#f3f4f6',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
   },
   testItem: {
     flexDirection: 'row',

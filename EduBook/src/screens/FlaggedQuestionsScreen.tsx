@@ -13,6 +13,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import * as SecureStore from 'expo-secure-store';
 import { FlaggedQuestion } from '../types';
 import { apiService } from '../services/api';
 
@@ -136,15 +137,43 @@ export const FlaggedQuestionsScreen: React.FC = () => {
           style: 'destructive',
           onPress: async () => {
             try {
+              // Gerçek kullanıcı ID'sini al
+              const token = await SecureStore.getItemAsync('auth-storage');
+              
+              if (!token) {
+                Alert.alert('Hata', 'Oturum bilgisi bulunamadı. Lütfen tekrar giriş yapın.');
+                (navigation as any).navigate('Login');
+                return;
+              }
+              
+              let userId: number;
+              try {
+                const authData = JSON.parse(token);
+                if (!authData.state?.user?.id) {
+                  Alert.alert('Hata', 'Kullanıcı bilgisi bulunamadı. Lütfen tekrar giriş yapın.');
+                  (navigation as any).navigate('Login');
+                  return;
+                }
+                userId = authData.state.user.id;
+              } catch (error) {
+                console.error('Error parsing auth data:', error);
+                Alert.alert('Hata', 'Oturum bilgisi geçersiz. Lütfen tekrar giriş yapın.');
+                (navigation as any).navigate('Login');
+                return;
+              }
+              
+              console.log('🗑️ Unflagging question:', questionId, 'for user:', userId);
+              
               // Backend'de unflag yap
-              await apiService.unflagQuestion(1, questionId); // userId=1 şimdilik
+              await apiService.unflagQuestion(userId, questionId);
               
               // Frontend'den kaldır
               setQuestions(prev => prev.filter(q => q.questionId !== questionId));
               Alert.alert('Başarılı', 'Soru listeden kaldırıldı!');
             } catch (error) {
               console.error('Unflag error:', error);
-              Alert.alert('Hata', 'Soru kaldırılırken bir hata oluştu.');
+              const errorMessage = error instanceof Error ? error.message : 'Bilinmeyen hata';
+              Alert.alert('Hata', 'Soru kaldırılırken bir hata oluştu: ' + errorMessage);
             }
           }
         },
