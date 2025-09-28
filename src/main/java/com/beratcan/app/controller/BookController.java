@@ -63,6 +63,7 @@ public class BookController {
             @PathVariable Long bookId,
             @RequestBody BookRequest request) {
         Book updatedBook = bookService.updateBook(bookId, request);
+        bookService.countBookData(bookId);
         return ResponseEntity.ok(updatedBook);
     }
 
@@ -71,5 +72,16 @@ public class BookController {
     public ResponseEntity<String> deleteBook(@PathVariable Long bookId) {
         bookService.deleteBook(bookId);
         return ResponseEntity.ok("Book deleted successfully.");
+    }
+
+    // 📊 COUNT - Kitap verilerini say ve güncelle
+    @PostMapping("/{bookId}/count")
+    public ResponseEntity<String> countBookData(@PathVariable Long bookId) {
+        try {
+            bookService.countBookData(bookId);
+            return ResponseEntity.ok("Book ID " + bookId + " sayıları başarıyla güncellendi.");
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body("Hata: " + e.getMessage());
+        }
     }
 }

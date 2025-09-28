@@ -3,11 +3,13 @@ package com.beratcan.app.service;
 import com.beratcan.app.dto.request.BookRequest;
 import com.beratcan.app.entity.Book;
 import com.beratcan.app.entity.BookCode;
+import com.beratcan.app.entity.Test;
 import com.beratcan.app.entity.Topic;
 import com.beratcan.app.entity.User;
 import com.beratcan.app.dto.response.BookResponse;
 import com.beratcan.app.repository.BookCodeRepository;
 import com.beratcan.app.repository.BookRepository;
+import com.beratcan.app.repository.TestRepository;
 import com.beratcan.app.repository.TopicRepository;
 import com.beratcan.app.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -26,6 +28,7 @@ public class BookService {
     private final BookCodeRepository codeRepository;
     private final UserRepository userRepository;
     private final TopicRepository topicRepository;
+    private final TestRepository testRepository;
     private final BookCodeRepository bookCodeRepository;
 
     public Book addBook(Book book, List<String> topics) {
@@ -41,8 +44,10 @@ public class BookService {
                 topic = topicRepository.save(topic);
                 savedBook.getTopics().add(topic);
             }
+
             savedBook = bookRepository.save(savedBook);
         }
+        countBookData(savedBook.getId());
 
         return savedBook;
     }
@@ -134,6 +139,10 @@ public class BookService {
         response.setPublisher(book.getPublisher());
         response.setCoverImageUrl(book.getCoverImageUrl());
         response.setPaid(book.isPaid());
+        // Hesaplanmış alanları entity'deki getter metodlarından al
+        response.setNumberOfTopics(book.getNumberOfTopics());
+        response.setNumberOfTests(book.getNumberOfTests());
+        response.setNumberOfQuestions(book.getNumberOfQuestions());
         return response;
     }
 
@@ -186,5 +195,50 @@ public class BookService {
         }
 
         return result.toString();
+    }
+
+    @Transactional
+    public void countBookData(Long bookId) {
+        Book book = bookRepository.findById(bookId)
+                .orElseThrow(() -> new IllegalArgumentException("Kitap bulunamadı: " + bookId));
+
+        int totalTopics = 0;
+        int totalTests = 0;
+        int totalQuestions = 0;
+
+        // Her topic için sayıları hesapla ve güncelle
+        for (Topic topic : book.getTopics()) {
+            totalTopics++;
+
+            int topicTestCount = 0;
+            int topicQuestionCount = 0;
+
+            // Her test için sayıları hesapla ve güncelle
+            if (topic.getTests() != null) {
+                for (Test test : topic.getTests()) {
+                    topicTestCount++;
+                    totalTests++;
+
+                    int testQuestionCount = test.getQuestions() != null ? test.getQuestions().size() : 0;
+                    topicQuestionCount += testQuestionCount;
+                    totalQuestions += testQuestionCount;
+
+                    // Test'in soru sayısını güncelle ve kaydet
+                    test.setNumberOfQuestions(testQuestionCount);
+                    testRepository.save(test);
+                }
+            }
+
+            // Topic'in test ve soru sayılarını güncelle ve kaydet
+            topic.setNumberOfTests(topicTestCount);
+            topic.setNumberOfQuestions(topicQuestionCount);
+            topicRepository.save(topic);
+        }
+
+        // Book'un toplam sayılarını güncelle ve kaydet
+        book.setNumberOfTopics(totalTopics);
+        book.setNumberOfTests(totalTests);
+        book.setNumberOfQuestions(totalQuestions);
+        bookRepository.save(book);
     }
 }

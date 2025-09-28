@@ -3,14 +3,11 @@ package com.beratcan.app.entity;
 import com.fasterxml.jackson.annotation.JsonBackReference;
 import com.fasterxml.jackson.annotation.JsonManagedReference;
 import jakarta.persistence.*;
-import lombok.Data;
 import lombok.Getter;
 import lombok.Setter;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 @Entity
 @Getter
@@ -33,4 +30,6 @@ public class Test {
     @JsonManagedReference
     private List<Question> questions = new ArrayList<>();
 
+    @Column(name = "number_of_questions")
+    private Integer numberOfQuestions = 0;
 }
