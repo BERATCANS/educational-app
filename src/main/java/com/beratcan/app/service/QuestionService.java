@@ -2,7 +2,6 @@ package com.beratcan.app.service;
 
 import com.beratcan.app.dto.request.QuestionRequest;
 import com.beratcan.app.dto.response.QuestionResponse;
-import com.beratcan.app.dto.response.QuestionUrlResponse;
 import com.beratcan.app.dto.response.TestResponse;
 import com.beratcan.app.entity.Explanation;
 import com.beratcan.app.entity.Hint;
@@ -42,10 +41,10 @@ public class QuestionService {
     }
 
     // READ
-    public List<QuestionUrlResponse> getQuestionsByTest(Long testId) {
+    public List<QuestionResponse> getQuestionsByTest(Long testId) {
         return questionRepository.findByTestId(testId)
                 .stream()
-                .map(this::toQuestionUrlResponse)
+                .map(this::toQuestionResponse)
                 .collect(Collectors.toList());
     }
 
@@ -159,14 +158,6 @@ public class QuestionService {
             response.setHints(List.of());
         }
 
-        return response;
-    }
-
-    // HELPER
-    private QuestionUrlResponse toQuestionUrlResponse(Question question) {
-        QuestionUrlResponse response = new QuestionUrlResponse();
-        response.setId(question.getId());
-        response.setImageUrl(question.getImageUrl());
         return response;
     }
 

@@ -9,7 +9,8 @@ import {
   Question, 
   ApiResponse,
   User,
-  FlaggedQuestion
+  FlaggedQuestion,
+  TestSubmissionRequest
 } from '../types';
 const API_BASE_URL = 'http://192.168.182.220:8080/api'; // Backend URL - local development
 const BASE_URL = 'http://192.168.182.220:8080'; // Base URL for file access
@@ -250,6 +251,7 @@ class ApiService {
     return response.map(test => ({
       id: test.id,
       title: test.title,
+      numberOfQuestions: test.numberOfQuestions || 0,
     }));
   }
 
@@ -259,6 +261,7 @@ class ApiService {
     return {
       id: response.id,
       title: response.title,
+      numberOfQuestions: response.numberOfQuestions || 0,
     };
   }
 
@@ -365,12 +368,22 @@ class ApiService {
       // Mesajın içeriğine göre başarı/hata durumunu ayırt et
       const message = response.message.toLowerCase();
       
+      // Sadece gerçek hata mesajlarını kontrol et
       if (message.includes('geçersiz') || 
-          message.includes('kullanıldı') || 
           message.includes('bulunamadı') ||
           message.includes('sahipsiniz') ||
-          message.includes('hata')) {
+          message.includes('hata') ||
+          message.includes('invalid') ||
+          message.includes('not found') ||
+          message.includes('error')) {
         throw new Error(response.message); // Hata mesajı
+      }
+      
+      // Başarı mesajları için hata fırlatma
+      if (message.includes('başarıyla') || 
+          message.includes('successfully') ||
+          (message.includes('kullanıldı') && message.includes('başarıyla'))) {
+        return response; // Başarı mesajı
       }
       
       return response; // Başarılı mesaj
@@ -397,6 +410,26 @@ class ApiService {
     return await this.request<any>(`/users/${userId}/flag/${questionId}`, {
       method: 'DELETE',
     });
+  }
+
+  // Test Results endpoints
+  async submitTest(testSubmission: TestSubmissionRequest): Promise<any> {
+    return await this.request<any>('/test-results/submit', {
+      method: 'POST',
+      body: JSON.stringify(testSubmission),
+    });
+  }
+
+  async getUserTestResults(userId: number): Promise<any[]> {
+    return await this.request<any[]>(`/test-results/user/${userId}`);
+  }
+
+  async getTestResult(testResultId: number): Promise<any> {
+    return await this.request<any>(`/test-results/${testResultId}`);
+  }
+
+  async getUserStats(userId: number): Promise<any> {
+    return await this.request<any>(`/test-results/user/${userId}/stats`);
   }
 }
 

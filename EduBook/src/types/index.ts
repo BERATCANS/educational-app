@@ -34,6 +34,7 @@ export interface Topic {
 export interface Test {
   id: number;
   title: string;
+  numberOfQuestions?: number;
   topic?: Topic;
   questions?: Question[];
 }
@@ -131,4 +132,35 @@ export interface FlaggedQuestion {
   bookTitle: string;
   topicTitle: string;
   testTitle: string;
+}
+
+// Test Submission types
+export interface TestSubmissionRequest {
+  userId: number;
+  testId: number;
+  userAnswers: Record<number, OptionLetter>; // questionId -> selectedAnswer
+  totalTimeSeconds: number;
+  isAbandoned?: boolean; // Test ortasında çıkıldı mı?
+}
+
+export interface TestResult {
+  id: number;
+  userId: number;
+  testId: number;
+  score: number;
+  totalQuestions: number;
+  successRate: number;
+  timeSpentSeconds: number;
+  status: 'COMPLETED' | 'IN_PROGRESS' | 'ABANDONED';
+  completedAt: string;
+  questionResults: QuestionResult[];
+}
+
+export interface QuestionResult {
+  id: number;
+  questionId: number;
+  selectedAnswer: OptionLetter;
+  isCorrect: boolean;
+  timeSpentSeconds: number;
+  answeredAt: string;
 }

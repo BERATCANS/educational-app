@@ -10,13 +10,17 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { apiService } from '../services/api';
+import { useAuthStore } from '../store/authStore';
 
 export const AddBookScreen: React.FC = () => {
   const [redeemCode, setRedeemCode] = useState('');
   const navigation = useNavigation();
+  const queryClient = useQueryClient();
+  const { user } = useAuthStore();
 
   const submitRedeemCode = async () => {
     if (redeemCode.trim().length === 0) {
@@ -26,18 +30,25 @@ export const AddBookScreen: React.FC = () => {
 
     try {
       await apiService.redeemCode(redeemCode);
-      Alert.alert(
-        'Başarılı!',
-        'Kitap kodunuz doğrulandı ve kütüphanenize eklendi.',
-        [
-          {
-            text: 'Tamam',
-            onPress: () => {
-              navigation.goBack();
-            },
-          },
-        ]
-      );
+      
+      // Cache'i invalidate et - kütüphane güncellensin
+      queryClient.invalidateQueries({
+        queryKey: ['books', user?.id]
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['booksWithStats']
+      });
+      
+      // Kısa bir delay sonra navigation yap
+      setTimeout(() => {
+        (navigation as any).reset({
+          index: 0,
+          routes: [
+            { name: 'MainTabs', params: { screen: 'Library' } }
+          ],
+        });
+      }, 100);
+      
     } catch (error) {
       Alert.alert(
         'Hata',

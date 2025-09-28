@@ -2,7 +2,6 @@ package com.beratcan.app.controller;
 
 import com.beratcan.app.dto.request.QuestionRequest;
 import com.beratcan.app.dto.response.QuestionResponse;
-import com.beratcan.app.dto.response.QuestionUrlResponse;
 import com.beratcan.app.service.QuestionService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -27,7 +26,7 @@ public class QuestionController {
 
     // READ
     @GetMapping("/by-test/{testId}")
-    public List<QuestionUrlResponse> getQuestionsByTest(@PathVariable Long testId) {
+    public List<QuestionResponse> getQuestionsByTest(@PathVariable Long testId) {
         return questionService.getQuestionsByTest(testId);
     }
 

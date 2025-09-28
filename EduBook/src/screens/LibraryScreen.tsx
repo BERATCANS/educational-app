@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   Image,
   FlatList,
   ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -20,6 +21,7 @@ import { useAuthStore } from '../store/authStore';
 export const LibraryScreen: React.FC = () => {
   const navigation = useNavigation<any>();
   const { user } = useAuthStore();
+  const [refreshing, setRefreshing] = useState(false);
 
   // API'den kitapları çek
   const { data: booksData, isLoading, error, refetch } = useQuery({
@@ -81,6 +83,17 @@ export const LibraryScreen: React.FC = () => {
 
   const handleAddBook = () => {
     navigation.navigate('AddBook');
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await refetch();
+    } catch (error) {
+      console.error('Refresh error:', error);
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   const renderBookItem = ({ item: book }: { item: Book }) => (
@@ -209,9 +222,33 @@ export const LibraryScreen: React.FC = () => {
           keyExtractor={(item) => item.id.toString()}
           contentContainerStyle={styles.booksList}
           showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={['#3b82f6']}
+              tintColor="#3b82f6"
+              title="Yenileniyor..."
+              titleColor="#6b7280"
+            />
+          }
         />
       ) : (
-        renderEmptyState()
+        <ScrollView
+          contentContainerStyle={styles.emptyScrollContainer}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={['#3b82f6']}
+              tintColor="#3b82f6"
+              title="Yenileniyor..."
+              titleColor="#6b7280"
+            />
+          }
+        >
+          {renderEmptyState()}
+        </ScrollView>
       )}
     </SafeAreaView>
   );
@@ -325,6 +362,12 @@ const styles = StyleSheet.create({
   },
   booksList: {
     padding: 20,
+  },
+  emptyScrollContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
   },
   bookCard: {
     flexDirection: 'row',
