@@ -7,11 +7,9 @@ import {
   ScrollView,
   Image,
   Dimensions,
-  FlatList,
-  Animated,
-  Modal,
   ActivityIndicator,
   Alert,
+  Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -36,38 +34,25 @@ export const BookDetailScreen: React.FC = () => {
 
   // Tüm testleri flat bir liste halinde topla
   const [allTests, setAllTests] = useState<Array<{test: Test, topic: Topic}>>([]);
-  const [displayedTests, setDisplayedTests] = useState<Array<{test: Test, topic: Topic}>>([]);
-  const [page, setPage] = useState(1);
-  const [loading, setLoading] = useState(false);
-  const testsPerPage = 3; // Her sayfada 3 test
+  const [currentTestIndex, setCurrentTestIndex] = useState(0);
   
   // Drawer states
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-  const drawerAnimation = useRef(new Animated.Value(-screenWidth * 0.8)).current;
-  const flatListRef = useRef<FlatList>(null);
   
-  // Auto-loading system - hangi test'lerin soruları yüklendi
-  const [loadedTests, setLoadedTests] = useState<Set<number>>(new Set());
-  const [testQuestions, setTestQuestions] = useState<{[testId: number]: Question[]}>({});
-  const [loadingTests, setLoadingTests] = useState<Set<number>>(new Set());
+  // Current test questions
+  const [currentTestQuestions, setCurrentTestQuestions] = useState<Question[]>([]);
+  const [loadingQuestions, setLoadingQuestions] = useState(false);
   
   // Image dimensions state - her soru için resim boyutları
   const [imageDimensions, setImageDimensions] = useState<{[questionId: number]: {width: number, height: number}}>({});
-  
-  // Dynamic measurements
-  const [itemHeights, setItemHeights] = useState<{ [key: string]: number }>({});
-  const [bookCoverHeight, setBookCoverHeight] = useState(200);
 
-  // İlk test için otomatik question loading
+  // Current test değiştiğinde sorularını yükle
   useEffect(() => {
-    console.log('📊 displayedTests changed:', displayedTests.length, 'tests displayed');
-    if (displayedTests.length > 0) {
-      // İlk test'in sorularını otomatik yükle
-      const firstTest = displayedTests[0];
-      console.log('🎯 Auto-loading questions for first test:', firstTest.test.id);
-      loadQuestionsForTest(firstTest.test.id, 20);
+    if (allTests.length > 0 && currentTestIndex < allTests.length) {
+      const currentTest = allTests[currentTestIndex];
+      loadQuestionsForTest(currentTest.test.id);
     }
-  }, [displayedTests]);
+  }, [allTests, currentTestIndex]);
 
   // Debug allTests
   useEffect(() => {
@@ -108,38 +93,27 @@ export const BookDetailScreen: React.FC = () => {
     if (allTestsData) {
       console.log('✅ Setting allTests with data:', allTestsData.length, 'items');
       setAllTests(allTestsData);
-      // İlk sayfayı yükle
-      setDisplayedTests(allTestsData.slice(0, testsPerPage));
+      setCurrentTestIndex(0); // İlk teste başla
     }
   }, [allTestsData]);
 
-  const loadMoreTests = () => {
-    console.log('📱 loadMoreTests called - loading:', loading, 'displayed:', displayedTests.length, 'total:', allTests.length);
-    
-    if (loading || displayedTests.length >= allTests.length) {
-      console.log('⏹️ Skipping loadMoreTests - already loading or all loaded');
-      return;
+  // Navigation functions
+  const goToNextTest = () => {
+    if (currentTestIndex < allTests.length - 1) {
+      setCurrentTestIndex(prev => prev + 1);
     }
-    
-    console.log('🚀 Loading more tests...');
-    setLoading(true);
-    setTimeout(() => {
-      const startIndex = page * testsPerPage;
-      const endIndex = startIndex + testsPerPage;
-      const newTests = allTests.slice(startIndex, endIndex);
-      
-      console.log('📊 Loading tests from index', startIndex, 'to', endIndex, '- found', newTests.length, 'new tests');
-      
-      setDisplayedTests(prev => [...prev, ...newTests]);
-      setPage(prev => prev + 1);
-      setLoading(false);
-      
-      // Yeni yüklenen test'ler için de sorularını çek
-      newTests.forEach(({ test }) => {
-        console.log('🎯 Auto-loading questions for newly loaded test:', test.id);
-        loadQuestionsForTest(test.id, 20);
-      });
-    }, 500); // Simulate loading delay
+  };
+
+  const goToPreviousTest = () => {
+    if (currentTestIndex > 0) {
+      setCurrentTestIndex(prev => prev - 1);
+    }
+  };
+
+  const goToTest = (index: number) => {
+    if (index >= 0 && index < allTests.length) {
+      setCurrentTestIndex(index);
+    }
   };
 
   const handleQuestionPress = (test: Test, topic: Topic, question: Question, questionIndex: number) => {
@@ -159,111 +133,38 @@ export const BookDetailScreen: React.FC = () => {
   // Drawer functions
   const openDrawer = () => {
     setIsDrawerOpen(true);
-    Animated.timing(drawerAnimation, {
-      toValue: 0,
-      duration: 300,
-      useNativeDriver: true,
-    }).start();
   };
 
   const closeDrawer = () => {
-    Animated.timing(drawerAnimation, {
-      toValue: -screenWidth * 0.8,
-      duration: 300,
-      useNativeDriver: true,
-    }).start(() => {
-      setIsDrawerOpen(false);
-    });
+    setIsDrawerOpen(false);
   };
 
-  // Dynamic height measurement function
-  const measureItemHeight = (key: string, height: number) => {
-    setItemHeights(prev => ({ ...prev, [key]: height }));
-  };
 
-  const calculateDynamicOffset = (targetIndex: number) => {
-    let totalOffset = bookCoverHeight;
-    
-    // Sum up actual measured heights + margins up to target index
-    for (let i = 0; i < targetIndex; i++) {
-      const itemKey = `${displayedTests[i]?.topic.id}-${displayedTests[i]?.test.id}`;
-      const measuredHeight = itemHeights[itemKey];
-      if (measuredHeight) {
-        // onLayout already includes margins, so just use measured height
-        totalOffset += measuredHeight + 8;
-    } else {
-        // Fallback to estimated height + margin if not measured yet  
-        totalOffset += 280 + 8; // +16 for marginBottom (only for fallback)
-      }
-    }
-    
-    return totalOffset;
-  };
-
-  // Auto-load questions for tests
-  const loadQuestionsForTest = async (testId: number, limit: number = 20) => {
-    // Eğer zaten yüklendiyse veya yükleniyorsa skip
-    if (loadedTests.has(testId) || loadingTests.has(testId)) {
-      return;
-    }
-    
-    // Loading state'e ekle
-    setLoadingTests(prev => new Set(prev).add(testId));
+  // Load questions for current test
+  const loadQuestionsForTest = async (testId: number) => {
+    setLoadingQuestions(true);
     
     try {
-      console.log('📖 Auto-loading questions for test:', testId, 'limit:', limit);
-      const questions = await apiService.getQuestionsForTest(testId, limit);
-      
-      setTestQuestions(prev => ({
-        ...prev,
-        [testId]: questions
-      }));
-      
-      setLoadedTests(prev => new Set(prev).add(testId));
-      console.log('✅ Questions auto-loaded for test:', testId, questions.length);
+      console.log('📖 Loading questions for test:', testId);
+      const questions = await apiService.getQuestionsForTest(testId, 20);
+      setCurrentTestQuestions(questions);
+      console.log('✅ Questions loaded for test:', testId, questions.length);
     } catch (error) {
-      console.error('❌ Error auto-loading questions for test:', testId, error);
+      console.error('❌ Error loading questions for test:', testId, error);
+      setCurrentTestQuestions([]);
     } finally {
-      // Loading state'ten çıkar
-      setLoadingTests(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(testId);
-        return newSet;
-      });
+      setLoadingQuestions(false);
     }
   };
 
-  const navigateToTest = (targetTest: Test, targetTopic: Topic) => {
-    // Always load all tests up to target + extra to ensure it's available
-    const allTestIndex = allTests.findIndex(
+  const scrollToTest = (targetTest: Test, targetTopic: Topic) => {
+    const testIndex = allTests.findIndex(
       item => item.test.id === targetTest.id && item.topic.id === targetTopic.id
     );
     
-    if (allTestIndex !== -1) {
-      // Load all tests up to target + extra
-      const extraTests = 5;
-      const testsToShow = allTests.slice(0, Math.min(allTestIndex + 1 + extraTests, allTests.length));
-      setDisplayedTests(testsToShow);
-      setPage(Math.ceil(testsToShow.length / testsPerPage));
-      
-      // Wait for render and then calculate dynamic offset
-      setTimeout(() => {
-        const dynamicOffset = calculateDynamicOffset(allTestIndex);
-        
-        flatListRef.current?.scrollToOffset({ 
-          offset: dynamicOffset, 
-          animated: true 
-        });
-      }, 500); // Longer delay to allow measurements
+    if (testIndex !== -1) {
+      setCurrentTestIndex(testIndex);
     }
-    
-    // Navigate to TestScreen
-    console.log('🚀 Navigating to TestScreen with:', { book: book.title, topic: targetTopic.title, test: targetTest.title });
-    navigation.navigate('Test', { 
-      book, 
-      topic: targetTopic, 
-      test: targetTest 
-    });
     
     closeDrawer();
   };
@@ -346,53 +247,61 @@ export const BookDetailScreen: React.FC = () => {
     );
   }, [imageDimensions]);
 
-  const renderTestSection = React.useCallback(({ item }: { item: { test: Test, topic: Topic } }) => {
-    const questions = testQuestions[item.test.id] || [];
-    const isLoading = loadingTests.has(item.test.id);
-    const isLoaded = loadedTests.has(item.test.id);
-    
-    // Debug log (comment out for production)
-    // console.log('🔄 Rendering test section for test:', item.test.id, { questionsCount: questions.length, isLoading, isLoaded });
-    
+  const renderCurrentTest = () => {
+    if (allTests.length === 0 || currentTestIndex >= allTests.length) {
+      return null;
+    }
+
+    const currentTest = allTests[currentTestIndex];
+    const questions = currentTestQuestions;
+    const isLoading = loadingQuestions;
+
     return (
-      <View 
-        style={styles.testSection}
-        onLayout={(event) => {
-          const { height } = event.nativeEvent.layout;
-          const itemKey = `${item.topic.id}-${item.test.id}`;
-          measureItemHeight(itemKey, height);
-        }}
-      >
+      <View style={styles.testSection}>
         {/* Test Header */}
         <View style={styles.testHeader}>
           <View style={styles.testHeaderInfo}>
-            <Text style={styles.testTitle}>{item.topic.title}</Text>
-            <Text style={styles.testSubtitle}>{item.test.title}</Text>
+            <Text style={styles.testTitle}>{currentTest.topic.title}</Text>
+            <Text style={styles.testSubtitle}>{currentTest.test.title}</Text>
           </View>
           <View style={styles.testHeaderActions}>
             <Text style={styles.questionCount}>
               {isLoading 
                 ? 'Yükleniyor...' 
-                : isLoaded 
-                  ? `${questions.length} soru${questions.length === 20 ? ' (ilk 20)' : ''}` 
-                  : 'Henüz yüklenmedi'
+                : `${questions.length} soru`
               }
             </Text>
             {isLoading && <ActivityIndicator size="small" color="#3b82f6" />}
           </View>
         </View>
 
-        {/* Questions Grid - Always show if loaded */}
-        {isLoaded && questions.length > 0 && (
+        {/* Questions Grid */}
+        {!isLoading && questions.length > 0 && (
           <View style={styles.questionsContainer}>
             {questions.map((question, index) => 
-              renderQuestion(question, index, item.test, item.topic)
+              renderQuestion(question, index, currentTest.test, currentTest.topic)
             )}
+          </View>
+        )}
+
+        {/* Loading state for questions */}
+        {isLoading && (
+          <View style={styles.loadingQuestionsContainer}>
+            <ActivityIndicator size="large" color="#3b82f6" />
+            <Text style={styles.loadingQuestionsText}>Sorular yükleniyor...</Text>
+          </View>
+        )}
+
+        {/* Empty state for questions */}
+        {!isLoading && questions.length === 0 && (
+          <View style={styles.emptyQuestionsContainer}>
+            <Ionicons name="document-outline" size={48} color="#9ca3af" />
+            <Text style={styles.emptyQuestionsText}>Bu test için soru bulunamadı</Text>
           </View>
         )}
       </View>
     );
-  }, [testQuestions, loadingTests, loadedTests]);
+  };
 
   // Loading state
   if (topicsLoading || testsLoading) {
@@ -488,7 +397,7 @@ export const BookDetailScreen: React.FC = () => {
           <View style={styles.headerInfo}>
             <Text style={styles.headerTitle}>{book.title}</Text>
             <Text style={styles.headerSubtitle}>
-              {allTests.length} Test
+              {allTests.length > 0 ? `${currentTestIndex + 1} / ${allTests.length} Test` : 'Test Bulunamadı'}
             </Text>
           </View>
           <TouchableOpacity onPress={openDrawer} style={styles.menuButton}>
@@ -496,69 +405,49 @@ export const BookDetailScreen: React.FC = () => {
           </TouchableOpacity>
         </View>
 
-        {/* Tests List with Book Cover */}
-        <FlatList
-          ref={flatListRef}
-          data={displayedTests}
-          renderItem={renderTestSection}
-          keyExtractor={(item) => `${item.topic.id}-${item.test.id}`}
-          style={styles.testsList}
-          showsVerticalScrollIndicator={false}
-          onEndReached={() => {
-            console.log('🔚 onEndReached triggered!');
-            loadMoreTests();
-          }}
-          onEndReachedThreshold={0.3}
-          onScroll={(event) => {
-            const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
-            console.log('📜 Scroll:', {
-              offsetY: Math.round(contentOffset.y),
-              contentHeight: Math.round(contentSize.height),
-              viewHeight: Math.round(layoutMeasurement.height),
-              reachedEnd: contentOffset.y + layoutMeasurement.height >= contentSize.height - 100
-            });
-          }}
-          scrollEventThrottle={500}
-          removeClippedSubviews={true}
-          maxToRenderPerBatch={5}
-          ListFooterComponent={() => {
-            if (loading) {
-              return (
-                <View style={styles.footerLoader}>
-                  <ActivityIndicator size="small" color="#3b82f6" />
-                  <Text style={styles.footerLoaderText}>Daha fazla test yükleniyor...</Text>
-                </View>
-              );
-            }
-            return null;
-          }}
-          windowSize={10}
-          initialNumToRender={3}
-          ListHeaderComponent={
-            <View 
-              style={styles.bookCoverSection}
-              onLayout={(event) => {
-                const { height } = event.nativeEvent.layout;
-                setBookCoverHeight(height);
-              }}
+        {/* Current Test */}
+        <ScrollView style={styles.testsList} showsVerticalScrollIndicator={false}>
+          {renderCurrentTest()}
+        </ScrollView>
+
+        {/* Navigation Buttons */}
+        {allTests.length > 1 && (
+          <View style={styles.navigationContainer}>
+            <TouchableOpacity 
+              style={[styles.navButton, currentTestIndex === 0 && styles.navButtonDisabled]}
+              onPress={goToPreviousTest}
+              disabled={currentTestIndex === 0}
             >
-              <Image source={{ uri: book.coverImageUrl }} style={styles.bookCover} resizeMode="cover" />
+              <Ionicons name="chevron-back" size={24} color={currentTestIndex === 0 ? "#9ca3af" : "#1e293b"} />
+              <Text style={[styles.navButtonText, currentTestIndex === 0 && styles.navButtonTextDisabled]}>
+                Önceki
+              </Text>
+            </TouchableOpacity>
+
+            <View style={styles.testCounter}>
+              <Text style={styles.testCounterText}>
+                {currentTestIndex + 1} / {allTests.length}
+              </Text>
             </View>
-          }
-          ListEmptyComponent={
-            <View style={styles.emptyState}>
-              <Ionicons name="document-outline" size={48} color="#9ca3af" />
-              <Text style={styles.emptyTitle}>Henüz test yok</Text>
-              <Text style={styles.emptySubtitle}>Bu kitap için test eklenmemiş</Text>
-            </View>
-          }
-        />
+
+            <TouchableOpacity 
+              style={[styles.navButton, currentTestIndex === allTests.length - 1 && styles.navButtonDisabled]}
+              onPress={goToNextTest}
+              disabled={currentTestIndex === allTests.length - 1}
+            >
+              <Text style={[styles.navButtonText, currentTestIndex === allTests.length - 1 && styles.navButtonTextDisabled]}>
+                Sonraki
+              </Text>
+              <Ionicons name="chevron-forward" size={24} color={currentTestIndex === allTests.length - 1 ? "#9ca3af" : "#1e293b"} />
+            </TouchableOpacity>
+          </View>
+        )}
 
         {/* Drawer Modal */}
         <Modal
           visible={isDrawerOpen}
           transparent={true}
-          animationType="none"
+          animationType="slide"
           onRequestClose={closeDrawer}
         >
           <View style={styles.drawerOverlay}>
@@ -567,16 +456,9 @@ export const BookDetailScreen: React.FC = () => {
               activeOpacity={1} 
               onPress={closeDrawer}
             />
-            <Animated.View 
-              style={[
-                styles.drawerContainer,
-                {
-                  transform: [{ translateX: drawerAnimation }]
-                }
-              ]}
-            >
+            <View style={styles.drawerContainer}>
               <View style={styles.drawerHeader}>
-                <Text style={styles.drawerTitle}>İçindekiler</Text>
+                <Text style={styles.drawerTitle}>Test Listesi</Text>
                 <TouchableOpacity onPress={closeDrawer} style={styles.closeButton}>
                   <Ionicons name="close" size={24} color="#1e293b" />
                 </TouchableOpacity>
@@ -586,8 +468,8 @@ export const BookDetailScreen: React.FC = () => {
                 {topicsLoading ? (
                   <View style={styles.drawerLoadingContainer}>
                     <ActivityIndicator size="small" color="#3b82f6" />
-                    <Text style={styles.loadingText}>Topics yükleniyor...</Text>
-              </View>
+                    <Text style={styles.loadingText}>Testler yükleniyor...</Text>
+                  </View>
                 ) : topicsData?.map((topic) => {
                   // Bu topic için testleri bul
                   const topicTests = allTests.filter(testItem => testItem.topic.id === topic.id);
@@ -595,22 +477,43 @@ export const BookDetailScreen: React.FC = () => {
                   return (
                     <View key={topic.id} style={styles.topicSection}>
                       <Text style={styles.topicTitle}>{topic.title}</Text>
-                      {topicTests.map(({ test }) => (
-            <TouchableOpacity
-                          key={`${topic.id}-${test.id}`}
-                          style={styles.testItem}
-                          onPress={() => navigateToTest(test, topic)}
-                          activeOpacity={0.7}
-                        >
-                          <View style={styles.testItemContent}>
-                            <Ionicons name="document-text-outline" size={16} color="#3b82f6" />
-                            <Text style={styles.testItemText}>{test.title}</Text>
-                          </View>
-                          <Text style={styles.testQuestionCount}>
-                            {testQuestions[test.id]?.length || 0} soru
-                          </Text>
-            </TouchableOpacity>
-                      ))}
+                      {topicTests.map(({ test }, testIndex) => {
+                        // Global test index'ini bul
+                        const globalTestIndex = allTests.findIndex(
+                          item => item.test.id === test.id && item.topic.id === topic.id
+                        );
+                        
+                        return (
+                          <TouchableOpacity
+                            key={`${topic.id}-${test.id}`}
+                            style={[
+                              styles.testItem,
+                              globalTestIndex === currentTestIndex && styles.testItemActive
+                            ]}
+                            onPress={() => scrollToTest(test, topic)}
+                            activeOpacity={0.7}
+                          >
+                            <View style={styles.testItemContent}>
+                              <Ionicons 
+                                name="document-text-outline" 
+                                size={16} 
+                                color={globalTestIndex === currentTestIndex ? "#3b82f6" : "#6b7280"} 
+                              />
+                              <Text style={[
+                                styles.testItemText,
+                                globalTestIndex === currentTestIndex && styles.testItemTextActive
+                              ]}>
+                                {test.title}
+                              </Text>
+                            </View>
+                            <View style={styles.testItemRight}>
+                              <Text style={styles.testQuestionCount}>
+                                {globalTestIndex + 1} / {allTests.length}
+                              </Text>
+                            </View>
+                          </TouchableOpacity>
+                        );
+                      })}
                       {topicTests.length === 0 && (
                         <Text style={styles.noTestText}>Bu konu için henüz test yok</Text>
                       )}
@@ -624,7 +527,7 @@ export const BookDetailScreen: React.FC = () => {
                   </View>
                 )}
               </ScrollView>
-            </Animated.View>
+            </View>
           </View>
         </Modal>
       </View>
@@ -686,7 +589,6 @@ const styles = StyleSheet.create({
   },
   testsList: {
     flex: 1,
-    minHeight: 400, // Minimum height to ensure scrolling
   },
   testSection: {
     backgroundColor: '#ffffff',
@@ -719,45 +621,11 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     position: 'relative', // Dikey çizgi için
   },
-  verticalCenterLine: {
-    position: 'absolute',
-    left: '50%',
-    transform: [{ translateX: -0.5 }], // Çizgiyi tam ortaya hizala
-    top: 0,
-    width: 1,
-    height: '100%',
-    backgroundColor: '#e2e8f0',
-    zIndex: 1,
-  },
-  questionItem: {
-    alignItems: 'center', // Center the image
-    marginBottom: 16,
-    marginHorizontal: 8,
-  },
   questionImagePlaceholder: {
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#f1f5f9',
     borderRadius: 12,
-  },
-  testStats: {
-    paddingVertical: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#f1f5f9',
-    alignItems: 'center',
-  },
-  testStatsText: {
-    fontSize: 14,
-    color: '#64748b',
-  },
-  emptyState: {
-    alignItems: 'center',
-    paddingVertical: 40,
-    paddingHorizontal: 16,
-  },
-  loadingFooter: {
-    paddingVertical: 20,
-    alignItems: 'center',
   },
   // Drawer styles
   drawerOverlay: {
@@ -777,6 +645,91 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 4,
     elevation: 5,
+  },
+  // Navigation styles
+  navigationContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#ffffff',
+    borderTopWidth: 1,
+    borderTopColor: '#e2e8f0',
+  },
+  navButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  navButtonDisabled: {
+    backgroundColor: '#f1f5f9',
+    borderColor: '#e2e8f0',
+  },
+  navButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1e293b',
+    marginHorizontal: 4,
+  },
+  navButtonTextDisabled: {
+    color: '#9ca3af',
+  },
+  testCounter: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: '#3b82f6',
+    borderRadius: 20,
+  },
+  testCounterText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#ffffff',
+  },
+  // Loading and empty states for questions
+  loadingQuestionsContainer: {
+    alignItems: 'center',
+    paddingVertical: 40,
+    paddingHorizontal: 16,
+  },
+  loadingQuestionsText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: '#6b7280',
+  },
+  emptyQuestionsContainer: {
+    alignItems: 'center',
+    paddingVertical: 40,
+    paddingHorizontal: 16,
+  },
+  emptyQuestionsText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: '#6b7280',
+    textAlign: 'center',
+  },
+  // Drawer item styles
+  testItemActive: {
+    backgroundColor: '#eff6ff',
+    borderColor: '#3b82f6',
+    borderWidth: 1,
+  },
+  testItemRight: {
+    alignItems: 'flex-end',
+  },
+  testItemTopic: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginBottom: 2,
+  },
+  testItemTextActive: {
+    color: '#3b82f6',
+    fontWeight: '600',
   },
   drawerHeader: {
     flexDirection: 'row',
@@ -939,27 +892,6 @@ const styles = StyleSheet.create({
     color: '#6b7280',
     fontWeight: '500',
   },
-  loadingQuestionsContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 20,
-    gap: 8,
-  },
-  loadingQuestionsText: {
-    fontSize: 14,
-    color: '#6b7280',
-  },
-  questionImageContainer: {
-    position: 'relative',
-    width: '100%',
-    height: '100%',
-  },
-  questionImage: {
-    width: '100%',
-    height: '100%',
-    borderRadius: 8,
-  },
   questionNumberOverlay: {
     position: 'absolute',
     top: 4,
@@ -975,16 +907,5 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 10,
     fontWeight: 'bold',
-  },
-  footerLoader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 20,
-    gap: 8,
-  },
-  footerLoaderText: {
-    fontSize: 14,
-    color: '#6b7280',
   },
 });
