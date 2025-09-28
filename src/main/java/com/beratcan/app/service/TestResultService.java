@@ -1,5 +1,6 @@
 package com.beratcan.app.service;
 
+import com.beratcan.app.dto.response.TestResultResponse;
 import com.beratcan.app.entity.*;
 import com.beratcan.app.entity.enums.OptionLetter;
 import com.beratcan.app.entity.enums.TestStatus;
@@ -8,8 +9,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 public class TestResultService {
@@ -43,13 +46,29 @@ public class TestResultService {
         Test test = testRepository.findById(testId)
                 .orElseThrow(() -> new RuntimeException("Test not found"));
 
-        // Test sonucunu oluştur
-        TestResult testResult = new TestResult();
-        testResult.setUser(user);
-        testResult.setTest(test);
-        testResult.setTimeSpentSeconds(totalTimeSeconds);
-        testResult.setStatus(TestStatus.COMPLETED);
-        testResult.setCompletedAt(LocalDateTime.now());
+        // Önce mevcut test sonucunu kontrol et
+        TestResult existingTestResult = testResultRepository
+                .findFirstByUserIdAndTestIdOrderByCompletedAtDesc(userId, testId)
+                .orElse(null);
+
+        TestResult testResult;
+        if (existingTestResult != null) {
+            // Mevcut test sonucunu güncelle
+            testResult = existingTestResult;
+            testResult.setTimeSpentSeconds(totalTimeSeconds);
+            testResult.setStatus(TestStatus.COMPLETED);
+            testResult.setCompletedAt(LocalDateTime.now());
+            // Mevcut question result'ları temizle
+            testResult.getQuestionResults().clear();
+        } else {
+            // Yeni test sonucu oluştur
+            testResult = new TestResult();
+            testResult.setUser(user);
+            testResult.setTest(test);
+            testResult.setTimeSpentSeconds(totalTimeSeconds);
+            testResult.setStatus(TestStatus.COMPLETED);
+            testResult.setCompletedAt(LocalDateTime.now());
+        }
 
         int correctCount = 0;
         int totalQuestions = userAnswers.size();
@@ -101,5 +120,41 @@ public class TestResultService {
 
     public Long getUserTotalTestCount(Long userId) {
         return testResultRepository.countTestsByUserId(userId);
+    }
+
+    // Kullanıcının belirli bir test için sonucunu getir
+    public TestResult getUserTestResultByTestId(Long userId, Long testId) {
+        return testResultRepository.findFirstByUserIdAndTestIdOrderByCompletedAtDesc(userId, testId)
+                .orElse(null); // Eğer bulunamazsa null döner
+    }
+
+    // Kullanıcının belirli bir kitaptaki tüm test sonuçlarını getir
+    public List<TestResultResponse> getUserTestResultsByBookId(Long userId, Long bookId) {
+        try {
+            // Önce kullanıcının tüm test sonuçlarını al
+            List<TestResult> allUserResults = testResultRepository.findByUserIdOrderByCompletedAtDesc(userId);
+
+            List<TestResultResponse> responses = new ArrayList<>();
+
+            // Her test sonucu için, o testin kitabı kontrol et
+            for (TestResult testResult : allUserResults) {
+                Test test = testResult.getTest();
+                if (test != null && test.getTopic() != null && test.getTopic().getBook() != null) {
+                    if (test.getTopic().getBook().getId().equals(bookId)) {
+                        // Bu test sonucu istenen kitaba ait
+                        TestResultResponse response = new TestResultResponse();
+                        response.setUserId(userId);
+                        response.setTestId(test.getId());
+                        response.setSuccessRate(testResult.getSuccessRate());
+                        responses.add(response);
+                    }
+                }
+            }
+
+            return responses;
+        } catch (Exception e) {
+            e.printStackTrace();
+            return new ArrayList<>();
+        }
     }
 }

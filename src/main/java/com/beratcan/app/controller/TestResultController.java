@@ -1,6 +1,7 @@
 package com.beratcan.app.controller;
 
 import com.beratcan.app.dto.request.TestSubmissionRequest;
+import com.beratcan.app.dto.response.TestResultResponse;
 import com.beratcan.app.entity.TestResult;
 import com.beratcan.app.service.TestResultService;
 import org.springframework.http.ResponseEntity;
@@ -56,5 +57,28 @@ public class TestResultController {
                 "userId", userId);
 
         return ResponseEntity.ok(stats);
+    }
+
+    // Kullanıcının belirli bir test için sonucu
+    @GetMapping("/user/{userId}/test/{testId}")
+    public ResponseEntity<TestResult> getUserTestResult(@PathVariable Long userId, @PathVariable Long testId) {
+        TestResult result = testResultService.getUserTestResultByTestId(userId, testId);
+        if (result != null) {
+            return ResponseEntity.ok(result);
+        } else {
+            return ResponseEntity.notFound().build();
+        }
+    }
+
+    // Kullanıcının belirli bir kitaptaki tüm test sonuçları
+    @GetMapping("/user/{userId}/book/{bookId}")
+    public ResponseEntity<List<TestResultResponse>> getUserTestResultsByBookId(@PathVariable Long userId,
+            @PathVariable Long bookId) {
+        try {
+            List<TestResultResponse> results = testResultService.getUserTestResultsByBookId(userId, bookId);
+            return ResponseEntity.ok(results);
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body(null);
+        }
     }
 }
