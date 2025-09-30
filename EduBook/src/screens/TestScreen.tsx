@@ -14,8 +14,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { SimpleDrawing } from '../components/SimpleDrawing';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { Book, Topic, Test, Question, TestSubmissionRequest } from '../types';
-import { useQuery } from '@tanstack/react-query';
+import { Book, Topic, Test, Question, TestSubmissionRequest, TestResult } from '../types';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiService } from '../services/api';
 import * as SecureStore from 'expo-secure-store';
 
@@ -26,6 +26,7 @@ export const TestScreen: React.FC = () => {
   console.log('🚀🚀🚀 TEST SCREEN MOUNTED! 🚀🚀🚀');
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
+  const queryClient = useQueryClient();
   const { book, topic, test, initialQuestionIndex = 0, targetQuestionId } = route.params as { 
     book: Book; 
     topic: Topic; 
@@ -53,6 +54,7 @@ export const TestScreen: React.FC = () => {
   const [currentThickness, setCurrentThickness] = useState(2);
   const [drawingsByQuestion, setDrawingsByQuestion] = useState<{[questionId: number]: Array<{id: string, path: string, color: string, thickness: number}>}>({});
   const [flaggedQuestions, setFlaggedQuestions] = useState<Set<number>>(new Set());
+  const [previousTestResult, setPreviousTestResult] = useState<TestResult | null>(null);
 
   // Abandoned test gönderme fonksiyonu
   const submitAbandonedTest = async () => {
@@ -96,9 +98,24 @@ export const TestScreen: React.FC = () => {
         isAbandoned: true, // Abandoned olarak işaretle
       };
 
-      console.log('🚪 Submitting abandoned test:', testSubmission);
-      await apiService.submitTest(testSubmission);
-      console.log('✅ Abandoned test submitted successfully');
+             console.log('🚪 Submitting abandoned test:', testSubmission);
+             
+             // userAnswers'ı temizle - undefined key'leri kaldır
+             const cleanUserAnswers: Record<number, 'A' | 'B' | 'C' | 'D' | 'E'> = {};
+             Object.entries(testSubmission.userAnswers).forEach(([key, value]) => {
+               if (key !== 'undefined' && !isNaN(Number(key))) {
+                 cleanUserAnswers[Number(key)] = value;
+               }
+             });
+             
+             const cleanTestSubmission = {
+               ...testSubmission,
+               userAnswers: cleanUserAnswers
+             };
+             
+             console.log('🧹 Cleaned test submission:', cleanTestSubmission);
+             await apiService.submitTest(cleanTestSubmission);
+             console.log('✅ Abandoned test submitted successfully');
     } catch (error) {
       console.error('❌ Error submitting abandoned test:', error);
     }
@@ -122,11 +139,50 @@ export const TestScreen: React.FC = () => {
     queryFn: () => apiService.getFlaggedQuestions(),
     enabled: true,
   });
+
+  // Önceki test sonucunu çek
+  const { data: previousTestResultData, error: testResultError } = useQuery({
+    queryKey: ['testResult', test.id],
+    queryFn: async () => {
+      const token = await SecureStore.getItemAsync('auth-storage');
+      if (!token) return null;
+      
+      try {
+        const authData = JSON.parse(token);
+        const userId = authData.state?.user?.id;
+        if (!userId) return null;
+        
+        const response = await apiService.getUserTestResult(userId, test.id);
+        
+        // Backend artık {found: boolean, data: TestResult} formatında döndürüyor
+        if (!response || !response.found) {
+          console.log('ℹ️ No previous test result found for test:', test.id, '- This is normal for first-time attempts');
+          return null;
+        }
+        
+        console.log('✅ Found previous test result for test:', test.id);
+        return response.data;
+      } catch (error) {
+        console.error('❌ Error fetching test result for test:', test.id, error);
+        return null;
+      }
+    },
+    enabled: true,
+    retry: false, // Hata durumunda tekrar deneme
+    staleTime: 30 * 1000, // 30 saniye cache - daha sık yenilensin
+  });
   console.log('📊 useQuery result:', { 
     questionsData: questionsData?.length, 
     isLoading, 
     error: error?.message,
     enabled: !!test.id 
+  });
+  
+  console.log('📊 Test result query:', {
+    testId: test.id,
+    hasResult: !!previousTestResultData,
+    isFirstAttempt: previousTestResultData === null,
+    error: testResultError?.message
   });
 
   const questions = questionsData || [];
@@ -142,16 +198,30 @@ export const TestScreen: React.FC = () => {
     }
   }, [flaggedQuestionsData]);
 
-  // Component unmount olduğunda abandoned test gönder
+  // Önceki test sonucunu state'e yükle
   useEffect(() => {
-    return () => {
-      // Component unmount olduğunda çalışır
-      if (!isTestCompleted && !isTestAbandoned && selectedAnswers.size > 0) {
-        console.log('🚪 TestScreen unmounting - submitting abandoned test');
-        submitAbandonedTest();
+    if (previousTestResultData) {
+      setPreviousTestResult(previousTestResultData);
+      console.log('📊 Loaded previous test result:', previousTestResultData);
+      
+      // Önceki cevapları selectedAnswers'a yükle
+      if (previousTestResultData.questionResults) {
+        const previousAnswers = new Map<number, string>();
+        previousTestResultData.questionResults.forEach((qr: any) => {
+          // questionId'yi question object'inden al
+          const questionId = qr.question?.id || qr.questionId;
+          if (questionId) {
+            previousAnswers.set(questionId, qr.selectedAnswer);
+          }
+        });
+        setSelectedAnswers(previousAnswers);
+        console.log('🔄 Loaded previous answers:', previousAnswers);
       }
-    };
-  }, [isTestCompleted, isTestAbandoned, selectedAnswers.size]);
+    }
+  }, [previousTestResultData]);
+
+  // Component unmount olduğunda abandoned test gönderme - KALDIRILDI
+  // Sadece manuel "Testten Çık" butonuna basıldığında gönderilecek
 
   // targetQuestionId geldiğinde doğru soruya git
   useEffect(() => {
@@ -288,6 +358,10 @@ export const TestScreen: React.FC = () => {
       // Backend'e test sonuçlarını gönder
       const result = await apiService.submitTest(testSubmission);
       console.log('✅ Test sonuçları başarıyla kaydedildi:', result);
+      
+      // Test result cache'ini invalidate et - yeni test result'ı çekilsin
+      queryClient.invalidateQueries({ queryKey: ['testResult', test.id] });
+      console.log('🔄 Test result cache invalidated for test:', test.id);
 
     } catch (error) {
       console.error('❌ Test sonuçları kayıt hatası:', error);
@@ -306,7 +380,16 @@ export const TestScreen: React.FC = () => {
         {
           text: 'Testi Kapat',
           onPress: async () => {
-            // Çizimler otomatik kaydediliyor, ekstra kaydetmeye gerek yok
+            // Test result'ını BookDetailScreen'e gönder
+            const testResult = {
+              testId: test.id,
+              successRate: Math.round((correctAnswers / totalQuestions) * 100),
+              score: correctAnswers,
+              totalQuestions: totalQuestions,
+              status: 'COMPLETED'
+            };
+            
+            // Sadece geri dön, test result'ı zaten backend'e kaydedildi
             navigation.goBack();
           },
         },
@@ -314,7 +397,7 @@ export const TestScreen: React.FC = () => {
           text: 'Tekrar Çöz',
           onPress: () => {
             setCurrentQuestionIndex(0);
-            setSelectedAnswers(new Map());
+            // selectedAnswers'ı temizleme - önceki cevapları koru
             setIsTestCompleted(false);
           },
         },
@@ -328,10 +411,19 @@ export const TestScreen: React.FC = () => {
     if (selectedAnswers.size > 0) {
       Alert.alert(
         'Testten Çık',
-        'Testi yarıda bırakmak istediğinizden emin misiniz? İlerlemeniz kaydedilmeyecek.',
+        'Testi yarıda bırakmak istediğinizden emin misiniz? Mevcut cevaplarınız kaydedilecek.',
         [
           { text: 'İptal', style: 'cancel' },
-          { text: 'Çık', style: 'destructive', onPress: () => navigation.goBack() },
+          { 
+            text: 'Çık', 
+            style: 'destructive', 
+            onPress: async () => {
+              // Abandoned test gönder
+              setIsTestAbandoned(true);
+              await submitAbandonedTest();
+              navigation.goBack();
+            }
+          },
         ]
       );
     } else {
@@ -977,6 +1069,22 @@ const styles = StyleSheet.create({
   headerSubtitle: {
     fontSize: 12,
     color: '#64748b',
+  },
+  previousResultContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+    backgroundColor: '#fef3c7',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    alignSelf: 'flex-start',
+  },
+  previousResultText: {
+    fontSize: 11,
+    color: '#92400e',
+    fontWeight: '600',
+    marginLeft: 4,
   },
   placeholder: {
     width: 40,

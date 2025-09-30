@@ -7,6 +7,7 @@ import com.beratcan.app.service.TestResultService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -61,13 +62,19 @@ public class TestResultController {
 
     // Kullanıcının belirli bir test için sonucu
     @GetMapping("/user/{userId}/test/{testId}")
-    public ResponseEntity<TestResult> getUserTestResult(@PathVariable Long userId, @PathVariable Long testId) {
+    public ResponseEntity<Map<String, Object>> getUserTestResult(@PathVariable Long userId, @PathVariable Long testId) {
         TestResult result = testResultService.getUserTestResultByTestId(userId, testId);
+        
+        Map<String, Object> response = new HashMap<>();
         if (result != null) {
-            return ResponseEntity.ok(result);
+            response.put("found", true);
+            response.put("data", result);
         } else {
-            return ResponseEntity.notFound().build();
+            response.put("found", false);
+            response.put("message", "No test result found for this test");
         }
+        
+        return ResponseEntity.ok(response);
     }
 
     // Kullanıcının belirli bir kitaptaki tüm test sonuçları

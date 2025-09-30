@@ -431,6 +431,10 @@ class ApiService {
   async getUserStats(userId: number): Promise<any> {
     return await this.request<any>(`/test-results/user/${userId}/stats`);
   }
+
+  async getUserTestResult(userId: number, testId: number): Promise<any> {
+    return await this.request<any>(`/test-results/user/${userId}/test/${testId}`);
+  }
 }
 
 export const apiService = new ApiService();

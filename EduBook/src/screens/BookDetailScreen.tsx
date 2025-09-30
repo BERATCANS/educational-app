@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -17,6 +17,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useQuery } from '@tanstack/react-query';
 import { Book, Topic, Test, Question } from '../types';
 import { apiService } from '../services/api';
+import * as SecureStore from 'expo-secure-store';
+
+// Elle çizilmiş ikonlar
+const checkmarkHanddrawn = require('../../assets/checkmark-handdrawn.png');
+const crossHanddrawn = require('../../assets/cross-handdrawn.png');
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -36,6 +41,13 @@ export const BookDetailScreen: React.FC = () => {
   const [allTests, setAllTests] = useState<Array<{test: Test, topic: Topic}>>([]);
   const [currentTestIndex, setCurrentTestIndex] = useState(0);
   
+  // Test result'ları için state
+  const [testResults, setTestResults] = useState<{[testId: number]: any}>({});
+  
+  // Optimizasyon için state'ler
+  const [hasInitialized, setHasInitialized] = useState(false);
+  const [isUpdatingFromTest, setIsUpdatingFromTest] = useState(false);
+  
   // Drawer states
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   
@@ -43,16 +55,98 @@ export const BookDetailScreen: React.FC = () => {
   const [currentTestQuestions, setCurrentTestQuestions] = useState<Question[]>([]);
   const [loadingQuestions, setLoadingQuestions] = useState(false);
   
+  // Memoized values for performance
+  const currentTest = useMemo(() => {
+    return allTests[currentTestIndex] || null;
+  }, [allTests, currentTestIndex]);
+  
+  const memoizedTestResults = useMemo(() => {
+    return testResults;
+  }, [testResults]);
+  
   // Image dimensions state - her soru için resim boyutları
   const [imageDimensions, setImageDimensions] = useState<{[questionId: number]: {width: number, height: number}}>({});
 
+  // Test result'ları çek - tek seferde tümünü
+  useEffect(() => {
+    const fetchTestResults = async () => {
+      if (allTests.length === 0) return;
+      
+      try {
+        const token = await SecureStore.getItemAsync('auth-storage');
+        if (!token) return;
+        
+        const authData = JSON.parse(token);
+        const userId = authData.state?.user?.id;
+        if (!userId) return;
+        
+        // Tek seferde tüm test result'larını çek
+        const allResults = await apiService.getUserTestResults(userId);
+        
+        // Test ID'ye göre map'le
+        const results: {[testId: number]: any} = {};
+        allResults.forEach((result: any) => {
+          if (result.test && result.test.id) {
+            results[result.test.id] = result;
+          }
+        });
+        
+        setTestResults(results);
+        console.log('📊 Loaded test results:', results);
+      } catch (error) {
+        console.error('Error fetching test results:', error);
+      }
+    };
+    
+    fetchTestResults();
+  }, [allTests]);
+
+  // Screen focus olduğunda test result'larını yenile
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', () => {
+      console.log('🔄 BookDetailScreen focused, refreshing test results...');
+      if (allTests.length > 0) {
+        // Test result'larını yenile
+        const fetchTestResults = async () => {
+          try {
+            const token = await SecureStore.getItemAsync('auth-storage');
+            if (!token) return;
+            
+            const authData = JSON.parse(token);
+            const userId = authData.state?.user?.id;
+            if (!userId) return;
+            
+            const allResults = await apiService.getUserTestResults(userId);
+            const results: {[testId: number]: any} = {};
+            allResults.forEach((result: any) => {
+              if (result.test && result.test.id) {
+                results[result.test.id] = result;
+              }
+            });
+            
+            setTestResults(results);
+            console.log('🔄 Refreshed test results on focus:', results);
+          } catch (error) {
+            console.error('Error refreshing test results:', error);
+          }
+        };
+        
+        fetchTestResults();
+      }
+    });
+
+    return unsubscribe;
+  }, [navigation, allTests.length]);
+
+  // Test bittiğinde gelen updatedTestResult'ı dinle (artık kullanılmıyor, focus listener ile hallediliyor)
+  // Bu useEffect'i kaldırdık çünkü artık navigation.focus listener kullanıyoruz
+
   // Current test değiştiğinde sorularını yükle
   useEffect(() => {
-    if (allTests.length > 0 && currentTestIndex < allTests.length) {
-      const currentTest = allTests[currentTestIndex];
+    if (currentTest) {
       loadQuestionsForTest(currentTest.test.id);
     }
-  }, [allTests, currentTestIndex]);
+  }, [currentTest]);
 
 
   // Debug allTests
@@ -91,12 +185,13 @@ export const BookDetailScreen: React.FC = () => {
 
   useEffect(() => {
     console.log('🔄 allTestsData changed:', allTestsData);
-    if (allTestsData) {
+    if (allTestsData && !hasInitialized && !isUpdatingFromTest) {
       console.log('✅ Setting allTests with data:', allTestsData.length, 'items');
       setAllTests(allTestsData);
-      setCurrentTestIndex(0); // İlk teste başla
+      setCurrentTestIndex(0); // Sadece ilk yüklemede ilk teste başla
+      setHasInitialized(true);
     }
-  }, [allTestsData]);
+  }, [allTestsData, hasInitialized, isUpdatingFromTest]);
 
   // Navigation functions
   const goToNextTest = () => {
@@ -142,7 +237,7 @@ export const BookDetailScreen: React.FC = () => {
 
 
   // Load questions for current test
-  const loadQuestionsForTest = async (testId: number) => {
+  const loadQuestionsForTest = useCallback(async (testId: number) => {
     setLoadingQuestions(true);
     
     try {
@@ -156,7 +251,7 @@ export const BookDetailScreen: React.FC = () => {
     } finally {
       setLoadingQuestions(false);
     }
-  };
+  }, []);
 
   const scrollToTest = (targetTest: Test, targetTopic: Topic) => {
     const testIndex = allTests.findIndex(
@@ -176,6 +271,22 @@ export const BookDetailScreen: React.FC = () => {
     
     // Get stored dimensions for this question
     const storedDimensions = imageDimensions[question.id];
+    
+    // Check if this question was answered correctly in previous test result
+    const testResult = memoizedTestResults[test.id];
+    let questionStatus: 'correct' | 'incorrect' | 'unanswered' | null = null;
+    
+    if (testResult && testResult.questionResults) {
+      const questionResult = testResult.questionResults.find((qr: any) => 
+        qr.question?.id === question.id || qr.questionId === question.id
+      );
+      
+      if (questionResult) {
+        questionStatus = questionResult.isCorrect ? 'correct' : 'incorrect';
+      } else {
+        questionStatus = 'unanswered';
+      }
+    }
     
     // Calculate height based on aspect ratio if dimensions are available
     const imageStyle = storedDimensions 
@@ -236,24 +347,84 @@ export const BookDetailScreen: React.FC = () => {
               <View style={[styles.questionNumberOverlay, { top: 8, right: 8 }]}>
                 <Text style={styles.questionNumber}>{index + 1}</Text>
               </View>
+              
+              {/* Question status indicator - sol üstte */}
+              {questionStatus && (
+                questionStatus === 'correct' ? (
+                  <Image 
+                    source={checkmarkHanddrawn} 
+                    style={styles.handdrawnCheckmark}
+                    resizeMode="contain"
+                    tintColor={undefined}
+                  />
+                ) : questionStatus === 'incorrect' ? (
+                  <Image 
+                    source={crossHanddrawn} 
+                    style={styles.handdrawnCross}
+                    resizeMode="contain"
+                    tintColor={undefined}
+                  />
+                ) : (
+                  <View style={[
+                    styles.questionStatusIndicator,
+                    styles.leftTopIndicator,
+                    styles.unansweredIndicator
+                  ]}>
+                    <Ionicons 
+                      name="help-circle" 
+                      size={18} 
+                      color="white" 
+                    />
+                  </View>
+                )
+              )}
             </View>
           ) : (
             <View style={[styles.questionImagePlaceholder, { width: targetWidth, height: 200 }]}>
               <Ionicons name="image-outline" size={32} color="#9ca3af" />
               <Text style={{fontSize: 14, color: 'gray', marginTop: 8}}>Soru {index + 1}</Text>
+              {/* Question status indicator for placeholder - sol üstte */}
+              {questionStatus && (
+                questionStatus === 'correct' ? (
+                  <Image 
+                    source={checkmarkHanddrawn} 
+                    style={styles.handdrawnCheckmark}
+                    resizeMode="contain"
+                    tintColor={undefined}
+                  />
+                ) : questionStatus === 'incorrect' ? (
+                  <Image 
+                    source={crossHanddrawn} 
+                    style={styles.handdrawnCross}
+                    resizeMode="contain"
+                    tintColor={undefined}
+                  />
+                ) : (
+                  <View style={[
+                    styles.questionStatusIndicator,
+                    styles.leftTopIndicator,
+                    styles.unansweredIndicator
+                  ]}>
+                    <Ionicons 
+                      name="help-circle" 
+                      size={18} 
+                      color="white" 
+                    />
+                  </View>
+                )
+              )}
           </View>
           )}
         </TouchableOpacity>
       </View>
     );
-  }, [imageDimensions]);
+  }, [imageDimensions, memoizedTestResults]);
 
   const renderCurrentTest = () => {
     if (allTests.length === 0 || currentTestIndex >= allTests.length) {
       return null;
     }
 
-    const currentTest = allTests[currentTestIndex];
     const questions = currentTestQuestions;
     const isLoading = loadingQuestions;
 
@@ -263,7 +434,17 @@ export const BookDetailScreen: React.FC = () => {
         <View style={styles.testHeader}>
           <View style={styles.testHeaderInfo}>
             <Text style={styles.testTitle}>{currentTest.topic.title}</Text>
-            <Text style={styles.testSubtitle}>{currentTest.test.title}</Text>
+            <View style={styles.testTitleRow}>
+              <Text style={styles.testSubtitle}>{currentTest.test.title}</Text>
+              {memoizedTestResults[currentTest.test.id] && (
+                <View style={styles.headerSuccessRateContainer}>
+                  <Ionicons name="trophy" size={14} color="#f59e0b" />
+                  <Text style={styles.headerSuccessRateText}>
+                    %{Math.round(memoizedTestResults[currentTest.test.id].successRate)}
+                  </Text>
+                </View>
+              )}
+            </View>
           </View>
           <View style={styles.testHeaderActions}>
             <Text style={styles.questionCount}>
@@ -508,6 +689,14 @@ export const BookDetailScreen: React.FC = () => {
                               <Text style={styles.testQuestionCount}>
                                 {test.numberOfQuestions || 0} Soru
                               </Text>
+                              {memoizedTestResults[test.id] && (
+                                <View style={styles.successRateContainer}>
+                                  <Ionicons name="trophy" size={12} color="#f59e0b" />
+                                  <Text style={styles.successRateText}>
+                                    %{Math.round(memoizedTestResults[test.id].successRate)}
+                                  </Text>
+                                </View>
+                              )}
                             </View>
                           </TouchableOpacity>
                         );
@@ -612,6 +801,26 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#64748b',
     marginTop: 2,
+  },
+  testTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 2,
+  },
+  headerSuccessRateContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: 8,
+    backgroundColor: '#fef3c7',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  headerSuccessRateText: {
+    fontSize: 11,
+    color: '#92400e',
+    fontWeight: '600',
+    marginLeft: 2,
   },
   questionsContainer: {
     flexDirection: 'column', // Single column for dynamic sizing
@@ -719,6 +928,21 @@ const styles = StyleSheet.create({
   },
   testItemRight: {
     alignItems: 'flex-end',
+  },
+  successRateContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+    backgroundColor: '#fef3c7',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  successRateText: {
+    fontSize: 10,
+    color: '#92400e',
+    fontWeight: '600',
+    marginLeft: 2,
   },
   testItemTopic: {
     fontSize: 12,
@@ -920,5 +1144,54 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 10,
     fontWeight: 'bold',
+  },
+  // Question status indicators
+  questionStatusIndicator: {
+    position: 'absolute',
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 3,
+    borderColor: '#ffffff',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  leftTopIndicator: {
+    top: '50%',
+    left: 8,
+    transform: [{ translateY: -14 }], // Yarı yüksekliği kadar yukarı kaydır
+  },
+  correctIndicator: {
+    backgroundColor: '#22c55e', // Daha canlı yeşil
+  },
+  incorrectIndicator: {
+    backgroundColor: '#dc2626', // Daha canlı kırmızı
+  },
+  unansweredIndicator: {
+    backgroundColor: '#6b7280', // Gray
+  },
+  // Elle çizilmiş tik resmi için özel stil
+  handdrawnCheckmark: {
+    position: 'absolute',
+    top: 20,
+    left: -10,
+    width: 80,
+    height: 80,
+  },
+  // Elle çizilmiş çarpı resmi için özel stil
+  handdrawnCross: {
+    position: 'absolute',
+    top: 20,
+    left: -10,
+    width: 80,
+    height: 80,
   },
 });

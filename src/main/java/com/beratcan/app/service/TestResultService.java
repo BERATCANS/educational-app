@@ -71,7 +71,8 @@ public class TestResultService {
         }
 
         int correctCount = 0;
-        int totalQuestions = userAnswers.size();
+        // Toplam soru sayısını test'ten al - numberOfQuestions alanını kullan
+        int totalQuestions = test.getNumberOfQuestions();
 
         // Her soru için cevabı kaydet
         for (Map.Entry<Long, OptionLetter> entry : userAnswers.entrySet()) {
