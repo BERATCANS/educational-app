@@ -36,4 +36,7 @@ public class Topic {
     @Column(name = "number_of_questions")
     private Integer numberOfQuestions = 0;
 
+    @Column(name = "sequence_number")
+    private Integer sequenceNumber;
+
 }

@@ -9,4 +9,5 @@ public class QuestionRequest {
     private OptionLetter correctAnswer;
     private int answerNumber;
     private String videoUrl;
+    private Integer sequenceNumber; // Opsiyonel, belirtilmezse otomatik atanır
 }

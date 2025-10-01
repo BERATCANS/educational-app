@@ -13,7 +13,7 @@ import java.util.List;
 @Getter
 @Setter
 @Table(name = "questions")
-//email verify ekle
+// email verify ekle
 public class Question {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -42,5 +42,8 @@ public class Question {
 
     @Column
     private String videoUrl;
+
+    @Column(name = "sequence_number")
+    private Integer sequenceNumber;
 
 }

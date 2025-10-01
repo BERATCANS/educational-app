@@ -35,6 +35,10 @@ public class QuestionService {
         question.setCorrectAnswer(request.getCorrectAnswer());
         question.setVideoUrl(request.getVideoUrl());
 
+        // Sequence number atama
+        Integer sequenceNumber = getNextSequenceNumber(testId, request.getSequenceNumber());
+        question.setSequenceNumber(sequenceNumber);
+
         question = questionRepository.save(question);
         bookService.countBookData(test.getTopic().getBook().getId());
         return toQuestionResponse(question);
@@ -42,7 +46,7 @@ public class QuestionService {
 
     // READ
     public List<QuestionResponse> getQuestionsByTest(Long testId) {
-        return questionRepository.findByTestId(testId)
+        return questionRepository.findByTestIdOrderBySequenceNumberAsc(testId)
                 .stream()
                 .map(this::toQuestionResponse)
                 .collect(Collectors.toList());
@@ -124,6 +128,33 @@ public class QuestionService {
         questionRepository.save(question);
     }
 
+    // Helper: Otomatik sequenceNumber atama
+    private Integer getNextSequenceNumber(Long testId, Integer requestedSequenceNumber) {
+        if (requestedSequenceNumber != null) {
+            // Eğer belirli bir sequence number isteniyorsa, o numaranın kullanılıp
+            // kullanılmadığını kontrol et
+            if (questionRepository.existsByTestIdAndSequenceNumber(testId, requestedSequenceNumber)) {
+                throw new RuntimeException("Sequence number " + requestedSequenceNumber
+                        + " is already in use. Please delete the existing question with this sequence number first.");
+            }
+            return requestedSequenceNumber;
+        } else {
+            // Otomatik olarak en küçük boş numarayı bul
+            Integer maxSequence = questionRepository.findMaxSequenceNumberByTestId(testId);
+            if (maxSequence == null) {
+                return 1; // İlk soru
+            }
+
+            // 1'den başlayarak boş numarayı bul
+            for (int i = 1; i <= maxSequence + 1; i++) {
+                if (!questionRepository.existsByTestIdAndSequenceNumber(testId, i)) {
+                    return i;
+                }
+            }
+            return maxSequence + 1; // Fallback
+        }
+    }
+
     // HELPER
     private QuestionResponse toQuestionResponse(Question question) {
         QuestionResponse response = new QuestionResponse();
@@ -132,12 +163,14 @@ public class QuestionService {
         response.setCorrectAnswer(question.getCorrectAnswer());
         response.setAnswerNumber(question.getAnswerNumber());
         response.setVideoUrl(question.getVideoUrl());
+        response.setSequenceNumber(question.getSequenceNumber());
 
         // Test bilgisini ekle
         if (question.getTest() != null) {
             TestResponse testResponse = new TestResponse();
             testResponse.setId(question.getTest().getId());
             testResponse.setTitle(question.getTest().getTitle());
+            testResponse.setSequenceNumber(question.getTest().getSequenceNumber());
             response.setTest(testResponse);
         }
 

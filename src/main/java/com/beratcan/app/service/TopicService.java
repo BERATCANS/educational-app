@@ -30,7 +30,35 @@ public class TopicService {
         response.setTitle(topic.getTitle());
         response.setNumberOfTests(topic.getNumberOfTests());
         response.setNumberOfQuestions(topic.getNumberOfQuestions());
+        response.setSequenceNumber(topic.getSequenceNumber());
         return response;
+    }
+
+    // Helper: Otomatik sequenceNumber atama
+    private Integer getNextSequenceNumber(Long bookId, Integer requestedSequenceNumber) {
+        if (requestedSequenceNumber != null) {
+            // Eğer belirli bir sequence number isteniyorsa, o numaranın kullanılıp
+            // kullanılmadığını kontrol et
+            if (topicRepository.existsByBookIdAndSequenceNumber(bookId, requestedSequenceNumber)) {
+                throw new RuntimeException("Sequence number " + requestedSequenceNumber
+                        + " is already in use. Please delete the existing topic with this sequence number first.");
+            }
+            return requestedSequenceNumber;
+        } else {
+            // Otomatik olarak en küçük boş numarayı bul
+            Integer maxSequence = topicRepository.findMaxSequenceNumberByBookId(bookId);
+            if (maxSequence == null) {
+                return 1; // İlk topic
+            }
+
+            // 1'den başlayarak boş numarayı bul
+            for (int i = 1; i <= maxSequence + 1; i++) {
+                if (!topicRepository.existsByBookIdAndSequenceNumber(bookId, i)) {
+                    return i;
+                }
+            }
+            return maxSequence + 1; // Fallback
+        }
     }
 
     public TopicResponse addTopic(Long bookId, TopicRequest request) {
@@ -41,6 +69,11 @@ public class TopicService {
         Topic topic = new Topic();
         topic.setTitle(request.getTitle());
         topic.setBook(bookOpt.get());
+
+        // Sequence number atama
+        Integer sequenceNumber = getNextSequenceNumber(bookId, request.getSequenceNumber());
+        topic.setSequenceNumber(sequenceNumber);
+
         if (request.getTests() != null) {
             for (String testTitle : request.getTests()) {
                 Test test = new Test();
@@ -86,7 +119,7 @@ public class TopicService {
     }
 
     public List<TopicResponse> getTopicsByBook(Long bookId) {
-        return topicRepository.findByBookId(bookId)
+        return topicRepository.findByBookIdOrderBySequenceNumberAsc(bookId)
                 .stream()
                 .map(this::toTopicResponse)
                 .collect(Collectors.toList());

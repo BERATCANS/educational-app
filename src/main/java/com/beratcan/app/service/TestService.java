@@ -31,6 +31,11 @@ public class TestService {
         Test test = new Test();
         test.setTitle(request.getTitle());
         test.setTopic(topic);
+
+        // Sequence number atama
+        Integer sequenceNumber = getNextSequenceNumber(topicId, request.getSequenceNumber());
+        test.setSequenceNumber(sequenceNumber);
+
         test = testRepository.save(test);
 
         if (request.getQuestions() != null) {
@@ -52,7 +57,7 @@ public class TestService {
 
     // READ
     public List<TestResponse> getTestsByTopic(Long topicId) {
-        return testRepository.findByTopicId(topicId)
+        return testRepository.findByTopicIdOrderBySequenceNumberAsc(topicId)
                 .stream()
                 .map(this::toTestResponse)
                 .collect(Collectors.toList());
@@ -105,6 +110,34 @@ public class TestService {
         response.setId(test.getId());
         response.setTitle(test.getTitle());
         response.setNumberOfQuestions(test.getNumberOfQuestions());
+        response.setSequenceNumber(test.getSequenceNumber());
         return response;
+    }
+
+    // Helper: Otomatik sequenceNumber atama
+    private Integer getNextSequenceNumber(Long topicId, Integer requestedSequenceNumber) {
+        if (requestedSequenceNumber != null) {
+            // Eğer belirli bir sequence number isteniyorsa, o numaranın kullanılıp
+            // kullanılmadığını kontrol et
+            if (testRepository.existsByTopicIdAndSequenceNumber(topicId, requestedSequenceNumber)) {
+                throw new RuntimeException("Sequence number " + requestedSequenceNumber
+                        + " is already in use. Please delete the existing test with this sequence number first.");
+            }
+            return requestedSequenceNumber;
+        } else {
+            // Otomatik olarak en küçük boş numarayı bul
+            Integer maxSequence = testRepository.findMaxSequenceNumberByTopicId(topicId);
+            if (maxSequence == null) {
+                return 1; // İlk test
+            }
+
+            // 1'den başlayarak boş numarayı bul
+            for (int i = 1; i <= maxSequence + 1; i++) {
+                if (!testRepository.existsByTopicIdAndSequenceNumber(topicId, i)) {
+                    return i;
+                }
+            }
+            return maxSequence + 1; // Fallback
+        }
     }
 }

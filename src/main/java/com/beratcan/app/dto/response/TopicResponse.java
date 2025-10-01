@@ -8,4 +8,5 @@ public class TopicResponse {
     private String title;
     private Integer numberOfTests;
     private Integer numberOfQuestions;
+    private Integer sequenceNumber;
 }

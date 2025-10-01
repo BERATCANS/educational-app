@@ -8,4 +8,5 @@ import java.util.List;
 public class TopicRequest {
     private String title;
     private List<String> tests; // Opsiyonel, test eklemek için
+    private Integer sequenceNumber; // Opsiyonel, belirtilmezse otomatik atanır
 }

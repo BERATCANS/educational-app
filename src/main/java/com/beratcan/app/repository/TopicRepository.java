@@ -9,4 +9,10 @@ import java.util.List;
 @Repository
 public interface TopicRepository extends JpaRepository<Topic, Long> {
     List<Topic> findByBookId(Long bookId);
+
+    List<Topic> findByBookIdOrderBySequenceNumberAsc(Long bookId);
+
+    boolean existsByBookIdAndSequenceNumber(Long bookId, Integer sequenceNumber);
+
+    Integer findMaxSequenceNumberByBookId(Long bookId);
 }
