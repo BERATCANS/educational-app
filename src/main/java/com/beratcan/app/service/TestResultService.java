@@ -3,7 +3,6 @@ package com.beratcan.app.service;
 import com.beratcan.app.dto.response.TestResultResponse;
 import com.beratcan.app.entity.*;
 import com.beratcan.app.entity.enums.OptionLetter;
-import com.beratcan.app.entity.enums.TestStatus;
 import com.beratcan.app.repository.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -56,17 +55,13 @@ public class TestResultService {
             // Mevcut test sonucunu güncelle
             testResult = existingTestResult;
             testResult.setTimeSpentSeconds(totalTimeSeconds);
-            testResult.setStatus(TestStatus.COMPLETED);
             testResult.setCompletedAt(LocalDateTime.now());
-            // Mevcut question result'ları temizle
-            testResult.getQuestionResults().clear();
         } else {
             // Yeni test sonucu oluştur
             testResult = new TestResult();
             testResult.setUser(user);
             testResult.setTest(test);
             testResult.setTimeSpentSeconds(totalTimeSeconds);
-            testResult.setStatus(TestStatus.COMPLETED);
             testResult.setCompletedAt(LocalDateTime.now());
         }
 
@@ -87,12 +82,27 @@ public class TestResultService {
                 correctCount++;
             }
 
-            QuestionResult questionResult = new QuestionResult();
-            questionResult.setTestResult(testResult);
-            questionResult.setQuestion(question);
-            questionResult.setSelectedAnswer(selectedAnswer);
-            questionResult.setIsCorrect(isCorrect);
-            questionResult.setAnsweredAt(LocalDateTime.now());
+            // Mevcut QuestionResult'ı kontrol et (userId ve questionId ile)
+            List<QuestionResult> existingQuestionResults = questionResultRepository
+                    .findByUserIdAndQuestionId(userId, questionId);
+            
+            QuestionResult questionResult;
+            if (!existingQuestionResults.isEmpty()) {
+                // Mevcut QuestionResult'ı güncelle
+                questionResult = existingQuestionResults.get(0); // En son olanı al
+                questionResult.setTestResult(testResult);
+                questionResult.setSelectedAnswer(selectedAnswer);
+                questionResult.setIsCorrect(isCorrect);
+                questionResult.setAnsweredAt(LocalDateTime.now());
+            } else {
+                // Yeni QuestionResult oluştur
+                questionResult = new QuestionResult();
+                questionResult.setTestResult(testResult);
+                questionResult.setQuestion(question);
+                questionResult.setSelectedAnswer(selectedAnswer);
+                questionResult.setIsCorrect(isCorrect);
+                questionResult.setAnsweredAt(LocalDateTime.now());
+            }
 
             testResult.getQuestionResults().add(questionResult);
         }

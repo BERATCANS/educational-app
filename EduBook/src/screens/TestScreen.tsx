@@ -49,77 +49,12 @@ export const TestScreen: React.FC = () => {
   const [showDrawingCanvas, setShowDrawingCanvas] = useState(false);
   const [showDrawingToolbar, setShowDrawingToolbar] = useState(true);
   const [currentTool, setCurrentTool] = useState<'pen' | 'eraser' | 'line'>('pen');
-  const [isTestAbandoned, setIsTestAbandoned] = useState(false); // Test terk edildi mi?
   const [currentColor, setCurrentColor] = useState('#000000');
   const [currentThickness, setCurrentThickness] = useState(2);
   const [drawingsByQuestion, setDrawingsByQuestion] = useState<{[questionId: number]: Array<{id: string, path: string, color: string, thickness: number}>}>({});
   const [flaggedQuestions, setFlaggedQuestions] = useState<Set<number>>(new Set());
   const [previousTestResult, setPreviousTestResult] = useState<TestResult | null>(null);
 
-  // Abandoned test gönderme fonksiyonu
-  const submitAbandonedTest = async () => {
-    if (isTestCompleted || isTestAbandoned || selectedAnswers.size === 0) {
-      return; // Test zaten tamamlanmış veya terk edilmiş veya hiç cevap yok
-    }
-
-    try {
-      // Gerçek kullanıcı ID'sini al
-      const token = await SecureStore.getItemAsync('auth-storage');
-      
-      if (!token) {
-        console.log('⚠️ No auth token found for abandoned test submission');
-        return;
-      }
-      
-      let userId: number;
-      try {
-        const authData = JSON.parse(token);
-        if (!authData.state?.user?.id) {
-          console.log('⚠️ No user ID found for abandoned test submission');
-          return;
-        }
-        userId = authData.state.user.id;
-      } catch (error) {
-        console.log('⚠️ Error parsing auth data for abandoned test submission:', error);
-        return;
-      }
-
-      // Test submission verilerini hazırla
-      const userAnswers: Record<number, 'A' | 'B' | 'C' | 'D' | 'E'> = {};
-      selectedAnswers.forEach((answer, questionId) => {
-        userAnswers[questionId] = answer as 'A' | 'B' | 'C' | 'D' | 'E';
-      });
-
-      const testSubmission: TestSubmissionRequest = {
-        userId,
-        testId: test.id,
-        userAnswers,
-        totalTimeSeconds: Math.floor((Date.now() - testStartTime) / 1000),
-        isAbandoned: true, // Abandoned olarak işaretle
-      };
-
-             console.log('🚪 Submitting abandoned test:', testSubmission);
-             
-             // userAnswers'ı temizle - undefined key'leri kaldır
-             const cleanUserAnswers: Record<number, 'A' | 'B' | 'C' | 'D' | 'E'> = {};
-             Object.entries(testSubmission.userAnswers).forEach(([key, value]) => {
-               if (key !== 'undefined' && !isNaN(Number(key))) {
-                 cleanUserAnswers[Number(key)] = value;
-               }
-             });
-             
-             const cleanTestSubmission = {
-               ...testSubmission,
-               userAnswers: cleanUserAnswers
-             };
-             
-             console.log('🧹 Cleaned test submission:', cleanTestSubmission);
-             await apiService.submitTest(cleanTestSubmission);
-             console.log('✅ Abandoned test submitted successfully');
-    } catch (error) {
-      console.error('❌ Error submitting abandoned test:', error);
-    }
-  };
 
   // API'den soruları çek - gerçek test ID'sini kullan
   const actualTestId = test.id;
@@ -220,8 +155,13 @@ export const TestScreen: React.FC = () => {
     }
   }, [previousTestResultData]);
 
-  // Component unmount olduğunda abandoned test gönderme - KALDIRILDI
-  // Sadece manuel "Testten Çık" butonuna basıldığında gönderilecek
+
+  // Test tamamlandığında otomatik olarak sonuçları kaydet ve çık
+  useEffect(() => {
+    if (isTestCompleted) {
+      handleFinishTest();
+    }
+  }, [isTestCompleted]);
 
   // targetQuestionId geldiğinde doğru soruya git
   useEffect(() => {
@@ -311,7 +251,8 @@ export const TestScreen: React.FC = () => {
     }
   };
 
-  const handleFinishTest = async () => {
+  // Sadece test sonuçlarını kaydet, navigation yapma
+  const saveTestResults = async () => {
     const answeredQuestions = selectedAnswers.size;
     const correctAnswers = Array.from(selectedAnswers.entries()).filter(
       ([questionId, answer]) => {
@@ -319,9 +260,6 @@ export const TestScreen: React.FC = () => {
         return question && question.correctAnswer === answer;
       }
     ).length;
-
-    // Test tamamlandı olarak işaretle
-    setIsTestCompleted(true);
 
     // Test sonuçlarını backend'e gönder
     try {
@@ -350,7 +288,6 @@ export const TestScreen: React.FC = () => {
         testId: test.id,
         userAnswers,
         totalTimeSeconds: Math.floor((Date.now() - testStartTime) / 1000),
-        isAbandoned: false, // Normal test tamamlama
       };
 
       console.log('📤 Test sonuçları gönderiliyor:', testSubmission);
@@ -362,51 +299,29 @@ export const TestScreen: React.FC = () => {
       // Test result cache'ini invalidate et - yeni test result'ı çekilsin
       queryClient.invalidateQueries({ queryKey: ['testResult', test.id] });
       console.log('🔄 Test result cache invalidated for test:', test.id);
-
+      
     } catch (error) {
       console.error('❌ Test sonuçları kayıt hatası:', error);
-      // Hata olsa bile kullanıcıya sonuçları göster
     }
+  };
 
-    Alert.alert(
-      'Test Tamamlandı!',
-      `Sonuçlarınız:\n\n` +
-      `Toplam Soru: ${totalQuestions}\n` +
-      `Cevaplanan: ${answeredQuestions}\n` +
-      `Doğru: ${correctAnswers}\n` +
-      `Yanlış: ${answeredQuestions - correctAnswers}\n` +
-      `Başarı Oranı: ${Math.round((correctAnswers / totalQuestions) * 100)}%`,
-      [
-        {
-          text: 'Testi Kapat',
-          onPress: async () => {
-            // Test result'ını BookDetailScreen'e gönder
-            const testResult = {
-              testId: test.id,
-              successRate: Math.round((correctAnswers / totalQuestions) * 100),
-              score: correctAnswers,
-              totalQuestions: totalQuestions,
-              status: 'COMPLETED'
-            };
-            
-            // Sadece geri dön, test result'ı zaten backend'e kaydedildi
-            navigation.goBack();
-          },
-        },
-        {
-          text: 'Tekrar Çöz',
-          onPress: () => {
-            setCurrentQuestionIndex(0);
-            // selectedAnswers'ı temizleme - önceki cevapları koru
-            setIsTestCompleted(false);
-          },
-        },
-      ]
-    );
+  // Test tamamlandığında çağrılacak fonksiyon
+  const handleFinishTest = async () => {
+    // Test sonuçlarını kaydet
+    await saveTestResults();
+    
+    // Test tamamlandı, direkt geri dön
+    navigation.goBack();
   };
 
   const goBack = async () => {
     // Çizimler otomatik kaydediliyor
+    
+    // Eğer test tamamlandıysa uyarı gösterme, direkt çık
+    if (isTestCompleted) {
+      navigation.goBack();
+      return;
+    }
     
     if (selectedAnswers.size > 0) {
       Alert.alert(
@@ -418,9 +333,8 @@ export const TestScreen: React.FC = () => {
             text: 'Çık', 
             style: 'destructive', 
             onPress: async () => {
-              // Abandoned test gönder
-              setIsTestAbandoned(true);
-              await submitAbandonedTest();
+              // Mevcut cevapları kaydet (navigation yapma)
+              await saveTestResults();
               navigation.goBack();
             }
           },
@@ -610,34 +524,6 @@ export const TestScreen: React.FC = () => {
     );
   };
 
-  const renderTestCompleted = () => (
-    <View style={styles.completedContainer}>
-      <Ionicons name="checkmark-circle" size={80} color="#10b981" />
-      <Text style={styles.completedTitle}>Test Tamamlandı!</Text>
-      <Text style={styles.completedSubtitle}>
-        Tüm soruları cevapladınız. Sonuçlarınızı görmek için "Testi Bitir" butonuna tıklayın.
-      </Text>
-      
-      <View style={styles.completedStats}>
-        <View style={styles.statItem}>
-          <Text style={styles.statValue}>{totalQuestions}</Text>
-          <Text style={styles.statLabel}>Toplam Soru</Text>
-        </View>
-        <View style={styles.statItem}>
-          <Text style={styles.statValue}>{selectedAnswers.size}</Text>
-          <Text style={styles.statLabel}>Cevaplanan</Text>
-        </View>
-      </View>
-
-      <TouchableOpacity
-        style={styles.finishButton}
-        onPress={handleFinishTest}
-        activeOpacity={0.7}
-      >
-        <Text style={styles.finishButtonText}>Testi Bitir</Text>
-      </TouchableOpacity>
-    </View>
-  );
 
   // Loading state
   if (isLoading) {
@@ -964,7 +850,7 @@ export const TestScreen: React.FC = () => {
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
-          {isTestCompleted ? renderTestCompleted() : renderQuestionContent()}
+          {renderQuestionContent()}
         </ScrollView>
 
         {/* Combined Answer Options & Navigation */}
@@ -1208,61 +1094,6 @@ const styles = StyleSheet.create({
   },
   selectedAnswerLetterText: {
     color: '#ffffff',
-  },
-  completedContainer: {
-    alignItems: 'center',
-    padding: 40,
-  },
-  completedTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#1e293b',
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  completedSubtitle: {
-    fontSize: 16,
-    color: '#64748b',
-    textAlign: 'center',
-    marginBottom: 32,
-    lineHeight: 24,
-  },
-  completedStats: {
-    flexDirection: 'row',
-    gap: 40,
-    marginBottom: 32,
-  },
-  statItem: {
-    alignItems: 'center',
-  },
-  statValue: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#3b82f6',
-    marginBottom: 4,
-  },
-  statLabel: {
-    fontSize: 14,
-    color: '#64748b',
-  },
-  finishButton: {
-    backgroundColor: '#10b981',
-    paddingHorizontal: 32,
-    paddingVertical: 16,
-    borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  finishButtonText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '600',
   },
   navButton: {
     flexDirection: 'row',

@@ -138,7 +138,7 @@ export const RegisterScreen: React.FC = () => {
         >
           <View style={styles.header}>
             <Text style={styles.title}>Hesap Oluştur</Text>
-            <Text style={styles.subtitle}>EduBook'a katılmak için bilgilerinizi girin</Text>
+            <Text style={styles.subtitle}>KitApp'e katılmak için bilgilerinizi girin</Text>
           </View>
 
           <View style={styles.form}>

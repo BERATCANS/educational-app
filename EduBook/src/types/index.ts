@@ -140,7 +140,6 @@ export interface TestSubmissionRequest {
   testId: number;
   userAnswers: Record<number, OptionLetter>; // questionId -> selectedAnswer
   totalTimeSeconds: number;
-  isAbandoned?: boolean; // Test ortasında çıkıldı mı?
 }
 
 export interface TestResult {

@@ -105,7 +105,7 @@ export const LoginScreen: React.FC = () => {
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.header}>
-          <Text style={styles.title}>EduBook</Text>
+          <Text style={styles.title}>KitApp</Text>
           <Text style={styles.subtitle}>Eğitim yolculuğuna hoş geldiniz</Text>
         </View>
 

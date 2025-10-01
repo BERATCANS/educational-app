@@ -1,6 +1,5 @@
 package com.beratcan.app.entity;
 
-import com.beratcan.app.entity.enums.TestStatus;
 import com.fasterxml.jackson.annotation.JsonBackReference;
 import jakarta.persistence.*;
 import lombok.Getter;
@@ -39,10 +38,6 @@ public class TestResult {
 
     @Column
     private Integer timeSpentSeconds; // Toplam geçen süre
-
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
-    private TestStatus status = TestStatus.COMPLETED; // COMPLETED, IN_PROGRESS, ABANDONED
 
     @Column(nullable = false)
     private LocalDateTime completedAt = LocalDateTime.now();

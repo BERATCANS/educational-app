@@ -349,7 +349,7 @@ export const BookDetailScreen: React.FC = () => {
               </View>
               
               {/* Question status indicator - sol üstte */}
-              {questionStatus && (
+              {questionStatus && questionStatus !== 'unanswered' && (
                 questionStatus === 'correct' ? (
                   <Image 
                     source={checkmarkHanddrawn} 
@@ -364,19 +364,7 @@ export const BookDetailScreen: React.FC = () => {
                     resizeMode="contain"
                     tintColor={undefined}
                   />
-                ) : (
-                  <View style={[
-                    styles.questionStatusIndicator,
-                    styles.leftTopIndicator,
-                    styles.unansweredIndicator
-                  ]}>
-                    <Ionicons 
-                      name="help-circle" 
-                      size={18} 
-                      color="white" 
-                    />
-                  </View>
-                )
+                ) : null
               )}
             </View>
           ) : (
@@ -384,7 +372,7 @@ export const BookDetailScreen: React.FC = () => {
               <Ionicons name="image-outline" size={32} color="#9ca3af" />
               <Text style={{fontSize: 14, color: 'gray', marginTop: 8}}>Soru {index + 1}</Text>
               {/* Question status indicator for placeholder - sol üstte */}
-              {questionStatus && (
+              {questionStatus && questionStatus !== 'unanswered' && (
                 questionStatus === 'correct' ? (
                   <Image 
                     source={checkmarkHanddrawn} 
@@ -399,19 +387,7 @@ export const BookDetailScreen: React.FC = () => {
                     resizeMode="contain"
                     tintColor={undefined}
                   />
-                ) : (
-                  <View style={[
-                    styles.questionStatusIndicator,
-                    styles.leftTopIndicator,
-                    styles.unansweredIndicator
-                  ]}>
-                    <Ionicons 
-                      name="help-circle" 
-                      size={18} 
-                      color="white" 
-                    />
-                  </View>
-                )
+                ) : null
               )}
           </View>
           )}

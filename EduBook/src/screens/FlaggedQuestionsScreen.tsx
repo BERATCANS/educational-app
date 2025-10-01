@@ -97,7 +97,7 @@ export const FlaggedQuestionsScreen: React.FC = () => {
             const book = {
               id: question.bookId,
               title: question.bookTitle,
-              publisher: 'EduBook Yayınları',
+              publisher: 'KitApp Yayınları',
               coverImageUrl: '',
               paid: true,
             };

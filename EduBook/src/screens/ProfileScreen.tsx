@@ -96,7 +96,7 @@ export const ProfileScreen: React.FC = () => {
 
         {/* App Version */}
         <View style={styles.versionContainer}>
-          <Text style={styles.versionText}>EduBook v1.0.0</Text>
+          <Text style={styles.versionText}>KitApp v1.0.0</Text>
         </View>
       </ScrollView>
     </SafeAreaView>
