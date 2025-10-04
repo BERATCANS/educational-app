@@ -124,6 +124,9 @@ export const TestScreen: React.FC = () => {
   const currentQuestion = questions[currentQuestionIndex];
   const totalQuestions = questions.length;
 
+  // Teste ikinci kez girildiğini tespit et
+  const isRetakingTest = previousTestResultData !== null;
+
   // İşaretlenen soruları state'e yükle
   useEffect(() => {
     if (flaggedQuestionsData) {
@@ -863,7 +866,8 @@ export const TestScreen: React.FC = () => {
                   key={letter}
                   style={[
                     styles.answerOption,
-                    selectedAnswers.get(currentQuestion.id) === letter && styles.selectedAnswerOption
+                    selectedAnswers.get(currentQuestion.id) === letter && styles.selectedAnswerOption,
+                    isRetakingTest && currentQuestion.correctAnswer === letter && styles.correctAnswerOption
                   ]}
                   onPress={() => handleAnswerSelect(letter)}
                   activeOpacity={0.7}
@@ -1086,6 +1090,14 @@ const styles = StyleSheet.create({
     borderColor: '#3b82f6',
     shadowColor: '#3b82f6',
     shadowOpacity: 0.2,
+  },
+  correctAnswerOption: {
+    borderColor: '#22c55e', // Yeşil çerçeve
+    borderWidth: 5, // Daha kalın çerçeve
+    shadowColor: '#22c55e',
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
   },
   answerLetterText: {
     fontSize: Math.max(16, screenWidth * 0.04), // 4% of screen width, min 16px

@@ -12,8 +12,8 @@ import {
   FlaggedQuestion,
   TestSubmissionRequest
 } from '../types';
-const API_BASE_URL = 'http://10.169.77.89:8080/api'; // Backend URL - local development
-const BASE_URL = 'http://10.169.77.89:8080'; // Base URL for file access
+const API_BASE_URL = 'http://192.168.182.220:8080/api'; // Backend URL - local development
+const BASE_URL = 'http://192.168.182.220:8080'; // Base URL for file access
 
 class ApiService {
   private async getAuthHeaders(): Promise<Record<string, string>> {

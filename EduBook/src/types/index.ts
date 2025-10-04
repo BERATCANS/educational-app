@@ -26,6 +26,7 @@ export interface Book {
 export interface Topic {
   id: number;
   title: string;
+  sequenceNumber?: number;
   book?: Book;
   tests?: Test[];
 }
@@ -35,6 +36,7 @@ export interface Test {
   id: number;
   title: string;
   numberOfQuestions?: number;
+  sequenceNumber?: number;
   topic?: Topic;
   questions?: Question[];
 }
@@ -48,6 +50,7 @@ export interface Question {
   hints: string[];
   explanation: string;
   videoUrl?: string;
+  sequenceNumber?: number;
   test?: Test; // Test bilgisini ekle
 }
 
