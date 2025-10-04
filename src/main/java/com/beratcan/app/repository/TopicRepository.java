@@ -2,6 +2,8 @@ package com.beratcan.app.repository;
 
 import com.beratcan.app.entity.Topic;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -14,5 +16,6 @@ public interface TopicRepository extends JpaRepository<Topic, Long> {
 
     boolean existsByBookIdAndSequenceNumber(Long bookId, Integer sequenceNumber);
 
-    Integer findMaxSequenceNumberByBookId(Long bookId);
+    @Query("SELECT MAX(t.sequenceNumber) FROM Topic t WHERE t.book.id = :bookId")
+    Integer findMaxSequenceNumberByBookId(@Param("bookId") Long bookId);
 }
