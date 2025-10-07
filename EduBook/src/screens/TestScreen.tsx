@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   Image,
   Alert,
   Dimensions,
+  Modal,
   ActivityIndicator, ViewStyle,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -48,9 +49,20 @@ export const TestScreen: React.FC = () => {
   const [testStartTime] = useState(Date.now()); // Test başlangıç zamanı
   const [showDrawingCanvas, setShowDrawingCanvas] = useState(false);
   const [showDrawingToolbar, setShowDrawingToolbar] = useState(true);
-  const [currentTool, setCurrentTool] = useState<'pen' | 'eraser' | 'line'>('pen');
+  const [currentTool, setCurrentTool] = useState<'pen' | 'eraser' | 'line' | 'triangle' | 'circle' | 'rectangle' | 'square' | 'highlighter'>('pen');
   const [currentColor, setCurrentColor] = useState('#000000');
   const [currentThickness, setCurrentThickness] = useState(2);
+  
+  // Ayrı renk ve kalınlık ayarları
+  const [penColor, setPenColor] = useState('#000000');
+  const [penThickness, setPenThickness] = useState(2);
+  const [highlighterColor, setHighlighterColor] = useState('#ffff00');
+  const [highlighterThickness, setHighlighterThickness] = useState(8);
+  const [showColorPalette, setShowColorPalette] = useState(false);
+  const [showThicknessPalette, setShowThicknessPalette] = useState(false);
+  const [showShapePalette, setShowShapePalette] = useState(false);
+  const [isDrawingShape, setIsDrawingShape] = useState(false);
+  const [shapeStartPoint, setShapeStartPoint] = useState<{x: number, y: number} | null>(null);
   const [drawingsByQuestion, setDrawingsByQuestion] = useState<{[questionId: number]: Array<{id: string, path: string, color: string, thickness: number}>}>({});
   const [flaggedQuestions, setFlaggedQuestions] = useState<Set<number>>(new Set());
   const [previousTestResult, setPreviousTestResult] = useState<TestResult | null>(null);
@@ -220,16 +232,21 @@ export const TestScreen: React.FC = () => {
     loadCurrentQuestionDrawing();
   }, [currentQuestion?.id]);
 
-  // Debounced save: Çizim değişikliklerini 500ms delay ile kaydet
+  // Soru değiştiğinde önceki sorunun çizimlerini kaydet
+  const prevQuestionIdRef = useRef<number | null>(null);
+  
   useEffect(() => {
-    if (!currentQuestion || !drawingsByQuestion[currentQuestion.id]) return;
+    // Eğer önceki soru varsa ve farklıysa, onu kaydet
+    if (prevQuestionIdRef.current !== null && 
+        prevQuestionIdRef.current !== currentQuestion?.id &&
+        drawingsByQuestion[prevQuestionIdRef.current]) {
+      console.log('💾 Saving previous question drawings:', prevQuestionIdRef.current);
+      saveDrawingsToStorage(prevQuestionIdRef.current, drawingsByQuestion[prevQuestionIdRef.current]);
+    }
     
-    const timeoutId = setTimeout(() => {
-      saveDrawingsToStorage(currentQuestion.id, drawingsByQuestion[currentQuestion.id]);
-    }, 500);
-    
-    return () => clearTimeout(timeoutId);
-  }, [drawingsByQuestion, currentQuestion?.id]);
+    // Mevcut soru ID'sini güncelle
+    prevQuestionIdRef.current = currentQuestion?.id || null;
+  }, [currentQuestion?.id]);
 
   const handleAnswerSelect = (answer: string) => {
     if (!currentQuestion) return;
@@ -310,6 +327,13 @@ export const TestScreen: React.FC = () => {
 
   // Test tamamlandığında çağrılacak fonksiyon
   const handleFinishTest = async () => {
+    // Tüm çizimleri kaydet
+    for (const [questionId, paths] of Object.entries(drawingsByQuestion)) {
+      if (paths && paths.length > 0) {
+        await saveDrawingsToStorage(parseInt(questionId), paths);
+      }
+    }
+    
     // Test sonuçlarını kaydet
     await saveTestResults();
     
@@ -318,7 +342,12 @@ export const TestScreen: React.FC = () => {
   };
 
   const goBack = async () => {
-    // Çizimler otomatik kaydediliyor
+    // Tüm çizimleri kaydet
+    for (const [questionId, paths] of Object.entries(drawingsByQuestion)) {
+      if (paths && paths.length > 0) {
+        await saveDrawingsToStorage(parseInt(questionId), paths);
+      }
+    }
     
     // Eğer test tamamlandıysa uyarı gösterme, direkt çık
     if (isTestCompleted) {
@@ -356,38 +385,184 @@ export const TestScreen: React.FC = () => {
     setShowDrawingCanvas(!showDrawingCanvas);
   };
 
-  const handleToolSelect = (tool: 'pen' | 'eraser' | 'line') => {
+  const handleToolSelect = (tool: 'pen' | 'eraser' | 'line' | 'triangle' | 'circle' | 'rectangle' | 'square' | 'highlighter') => {
     setCurrentTool(tool);
+    
+    // Tool değiştiğinde kendi renk ve kalınlığına geç
+    if (tool === 'pen') {
+      setCurrentColor(penColor);
+      setCurrentThickness(penThickness);
+    } else if (tool === 'highlighter') {
+      setCurrentColor(highlighterColor);
+      setCurrentThickness(highlighterThickness);
+    }
+  };
+
+  // Şekil çizme fonksiyonları
+  const generateShapePath = (startX: number, startY: number, endX: number, endY: number, shapeType: string): string => {
+    const width = Math.abs(endX - startX);
+    const height = Math.abs(endY - startY);
+    const minX = Math.min(startX, endX);
+    const minY = Math.min(startY, endY);
+
+    switch (shapeType) {
+      case 'triangle':
+        const centerX = minX + width / 2;
+        const topY = minY;
+        const leftX = minX;
+        const rightX = minX + width;
+        const bottomY = minY + height;
+        return `M${centerX},${topY} L${rightX},${bottomY} L${leftX},${bottomY} Z`;
+      
+      case 'circle':
+        // Merkez: başlangıç noktası (startX, startY)
+        // Yarıçap: başlangıç noktasından bitiş noktasına olan mesafe
+        const radius = Math.sqrt(Math.pow(endX - startX, 2) + Math.pow(endY - startY, 2));
+        const centerX_circle = startX;
+        const centerY_circle = startY;
+        return `M${centerX_circle - radius},${centerY_circle} A${radius},${radius} 0 1,1 ${centerX_circle + radius},${centerY_circle} A${radius},${radius} 0 1,1 ${centerX_circle - radius},${centerY_circle}`;
+      
+      case 'rectangle':
+        return `M${minX},${minY} L${minX + width},${minY} L${minX + width},${minY + height} L${minX},${minY + height} Z`;
+      
+      case 'square':
+        const size = Math.min(width, height);
+        return `M${minX},${minY} L${minX + size},${minY} L${minX + size},${minY + size} L${minX},${minY + size} Z`;
+      
+      default:
+        return '';
+    }
   };
 
   const handleColorSelect = (color: string) => {
     setCurrentColor(color);
+    setShowColorPalette(false); // Renk seçildikten sonra paleti kapat
+    
+    // Tool'a göre ayrı state'leri güncelle
+    if (currentTool === 'pen') {
+      setPenColor(color);
+    } else if (currentTool === 'highlighter') {
+      setHighlighterColor(color);
+    }
+    
     // Line modundaysa line'da kal, değilse pen'e geç
     if (currentTool === 'eraser') {
       setCurrentTool('pen');
     }
   };
 
+  const handleHighlighterColorSelect = (color: string) => {
+    setCurrentColor(color);
+    setHighlighterColor(color);
+    setShowColorPalette(false);
+  };
+
+  const handleColorPaletteToggle = () => {
+    setShowColorPalette(!showColorPalette);
+  };
+
+  // Renk paleti renkleri (daha az renk, daha kompakt)
+  const colorPalette = [
+    '#000000', '#ffffff', '#ff0000', '#00ff00', '#0000ff', '#ffff00',
+    '#ff00ff', '#00ffff', '#ffa500', '#800080', '#808080', '#ffd700'
+  ];
+
+  // Fosforlu kalem renkleri
+  const highlighterPalette = [
+    '#ffff00', '#ffeb3b', '#ffc107', '#ff9800', '#ff5722', '#e91e63', '#9c27b0',
+    '#673ab7', '#3f51b5', '#2196f3', '#00bcd4', '#009688', '#4caf50', '#8bc34a',
+    '#cddc39', '#ffeb3b'
+  ];
+
+  // Kalınlık seçenekleri
+  const penThicknessOptions = [1, 2, 3, 4, 5, 6, 8, 10, 12, 16];
+  const highlighterThicknessOptions = [4, 6, 8, 10, 12, 14, 16, 18, 20, 24];
+
   const handleThicknessSelect = (thickness: number) => {
     setCurrentThickness(thickness);
+    setShowThicknessPalette(false); // Kalınlık seçildikten sonra paleti kapat
+    
+    // Tool'a göre ayrı state'leri güncelle
+    if (currentTool === 'pen') {
+      setPenThickness(thickness);
+    } else if (currentTool === 'highlighter') {
+      setHighlighterThickness(thickness);
+    }
+  };
+
+  const handleThicknessPaletteToggle = () => {
+    setShowThicknessPalette(!showThicknessPalette);
+  };
+
+  const handleShapePaletteToggle = () => {
+    setShowShapePalette(!showShapePalette);
+  };
+
+  const handleShapeSelect = (shape: 'line' | 'triangle' | 'circle' | 'rectangle' | 'square') => {
+    setCurrentTool(shape);
+    setShowShapePalette(false);
+  };
+
+  // Şekil çizme handler'ları
+  const handleShapeStart = (x: number, y: number) => {
+    setShapeStartPoint({ x, y });
+    setIsDrawingShape(true);
+  };
+
+  const handleShapeEnd = (x: number, y: number) => {
+    if (!shapeStartPoint || !currentQuestion) return;
+    
+    const shapePath = generateShapePath(shapeStartPoint.x, shapeStartPoint.y, x, y, currentTool);
+    if (shapePath) {
+      const newPathObj = {
+        id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        path: shapePath,
+        color: currentColor,
+        thickness: currentThickness,
+        tool: currentTool
+      };
+      
+      const newDrawings = {
+        ...drawingsByQuestion,
+        [currentQuestion.id]: [...(drawingsByQuestion[currentQuestion.id] || []), newPathObj]
+      };
+      
+      setDrawingsByQuestion(newDrawings);
+      
+      // Anında kaydet
+      saveDrawingsToStorage(currentQuestion.id, newDrawings[currentQuestion.id]);
+    }
+    
+    setShapeStartPoint(null);
+    setIsDrawingShape(false);
   };
 
   const handleUndo = () => {
     if (!currentQuestion) return;
     
-    setDrawingsByQuestion(prev => ({
-      ...prev,
-      [currentQuestion.id]: (prev[currentQuestion.id] || []).slice(0, -1)
-    }));
+    const newDrawings = {
+      ...drawingsByQuestion,
+      [currentQuestion.id]: (drawingsByQuestion[currentQuestion.id] || []).slice(0, -1)
+    };
+    
+    setDrawingsByQuestion(newDrawings);
+    
+    // Anında kaydet
+    saveDrawingsToStorage(currentQuestion.id, newDrawings[currentQuestion.id]);
   };
 
   const handleClear = () => {
     if (!currentQuestion) return;
     
-    setDrawingsByQuestion(prev => ({
-      ...prev,
+    const newDrawings = {
+      ...drawingsByQuestion,
       [currentQuestion.id]: []
-    }));
+    };
+    
+    setDrawingsByQuestion(newDrawings);
+    
+    // Anında kaydet
+    saveDrawingsToStorage(currentQuestion.id, []);
   };
 
   const handlePathsChange = (newPaths: any[]) => {
@@ -397,6 +572,9 @@ export const TestScreen: React.FC = () => {
       ...prev,
       [currentQuestion.id]: newPaths
     }));
+    
+    // Çizim değiştiğinde anında kaydet
+    saveDrawingsToStorage(currentQuestion.id, newPaths);
   };
 
   // Storage fonksiyonları
@@ -489,7 +667,7 @@ export const TestScreen: React.FC = () => {
               >
                 <Ionicons 
                   name={showDrawingToolbar ? "chevron-up" : "chevron-down"} 
-                  size={20} 
+                  size={14} 
                   color="#64748b" 
                 />
               </TouchableOpacity>
@@ -521,6 +699,8 @@ export const TestScreen: React.FC = () => {
             currentTool={currentTool}
             paths={currentQuestionPaths}
             onPathsChange={handlePathsChange}
+            onShapeStart={handleShapeStart}
+            onShapeEnd={handleShapeEnd}
           />
         </View>
       </>
@@ -674,7 +854,7 @@ export const TestScreen: React.FC = () => {
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
         {/* Combined Header & Tools */}
-        <View style={[styles.headerToolsContainer, showDrawingCanvas && styles.expandedHeaderTools]}>
+        <View style={styles.headerToolsContainer}>
           {/* Header Section */}
           <View style={styles.header}>
             <TouchableOpacity onPress={goBack} style={styles.backButton}>
@@ -732,116 +912,237 @@ export const TestScreen: React.FC = () => {
             {/* Drawing Tools */}
             {showDrawingCanvas && (
               <View style={styles.drawingContainer}>
-                {/* Drawing Toolbar */}
-                <View style={[styles.drawingToolbar, !showDrawingToolbar && styles.hiddenToolbar]}>
-                  {/* Tool Selection */}
-                  <View style={styles.drawingSection}>
-                    <Text style={styles.sectionTitle}>Araç</Text>
-                    <View style={styles.toolRow}>
-                      <TouchableOpacity 
-                        style={[styles.drawingTool, currentTool === 'pen' && styles.activeTool]}
-                        onPress={() => handleToolSelect('pen')}
-                      >
-                        <Ionicons name="pencil" size={18} color={currentTool === 'pen' ? "#3b82f6" : "#64748b"} />
-                        <Text style={[styles.drawingToolText, currentTool === 'pen' && styles.activeToolText]}>Kalem</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity 
-                        style={[styles.drawingTool, currentTool === 'line' && styles.activeTool]}
-                        onPress={() => handleToolSelect('line')}
-                      >
-                        <Ionicons name="remove" size={18} color={currentTool === 'line' ? "#10b981" : "#64748b"} />
-                        <Text style={[styles.drawingToolText, currentTool === 'line' && styles.activeToolText]}>Çizgi</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity 
-                        style={[styles.drawingTool, currentTool === 'eraser' && styles.activeTool]}
-                        onPress={() => handleToolSelect('eraser')}
-                      >
-                        <Ionicons name="trash" size={18} color={currentTool === 'eraser' ? "#ef4444" : "#64748b"} />
-                        <Text style={[styles.drawingToolText, currentTool === 'eraser' && styles.activeToolText]}>Silgi</Text>
-                      </TouchableOpacity>
-                    </View>
+                {/* Compact Drawing Toolbar */}
+                <View style={[styles.compactDrawingToolbar, !showDrawingToolbar && styles.hiddenToolbar]}>
+                  {/* Sol Grup - Araçlar */}
+                  <View style={styles.toolbarGroup}>
+                    <TouchableOpacity 
+                      style={[styles.compactTool, currentTool === 'pen' && styles.activeCompactTool]}
+                      onPress={() => handleToolSelect('pen')}
+                    >
+                      <Ionicons name="pencil" size={18} color={currentTool === 'pen' ? "#3b82f6" : "#64748b"} />
+                    </TouchableOpacity>
+                    
+                    <TouchableOpacity 
+                      style={[styles.compactTool, currentTool === 'highlighter' && styles.activeCompactTool]}
+                      onPress={() => handleToolSelect('highlighter')}
+                    >
+                      <Ionicons name="brush" size={18} color={currentTool === 'highlighter' ? "#f59e0b" : "#64748b"} />
+                    </TouchableOpacity>
+                    
+                    <TouchableOpacity 
+                      style={[styles.compactTool, currentTool === 'eraser' && styles.activeCompactTool]}
+                      onPress={() => handleToolSelect('eraser')}
+                    >
+                      <Ionicons name="remove-circle" size={18} color={currentTool === 'eraser' ? "#ef4444" : "#64748b"} />
+                    </TouchableOpacity>
+                    
+                    <TouchableOpacity 
+                      style={[styles.compactTool, ['line', 'triangle', 'circle', 'rectangle', 'square'].includes(currentTool) && styles.activeCompactTool]}
+                      onPress={handleShapePaletteToggle}
+                    >
+                      <Ionicons name="shapes" size={18} color={['line', 'triangle', 'circle', 'rectangle', 'square'].includes(currentTool) ? "#3b82f6" : "#64748b"} />
+                    </TouchableOpacity>
                   </View>
 
-                  {/* Colors & Thickness */}
-                  <View style={styles.colorThicknessSection}>
-                    <View style={styles.colorSection}>
-                      <Text style={styles.sectionTitle}>Renk</Text>
-                      <View style={styles.colorRow}>
-                        <TouchableOpacity 
-                          style={[
-                            styles.colorButton, 
-                            { backgroundColor: '#000000' },
-                            currentColor === '#000000' && styles.activeColorButton
-                          ]}
-                          onPress={() => handleColorSelect('#000000')}
-                        />
-                        <TouchableOpacity 
-                          style={[
-                            styles.colorButton, 
-                            { backgroundColor: '#ff0000' },
-                            currentColor === '#ff0000' && styles.activeColorButton
-                          ]}
-                          onPress={() => handleColorSelect('#ff0000')}
-                        />
-                        <TouchableOpacity 
-                          style={[
-                            styles.colorButton, 
-                            { backgroundColor: '#0000ff' },
-                            currentColor === '#0000ff' && styles.activeColorButton
-                          ]}
-                          onPress={() => handleColorSelect('#0000ff')}
-                        />
-                        <TouchableOpacity 
-                          style={[
-                            styles.colorButton, 
-                            { backgroundColor: '#00ff00' },
-                            currentColor === '#00ff00' && styles.activeColorButton
-                          ]}
-                          onPress={() => handleColorSelect('#00ff00')}
-                        />
-                      </View>
-                    </View>
+                  {/* Orta Grup - Renk ve Kalınlık */}
+                  <View style={styles.toolbarGroup}>
+                    <TouchableOpacity 
+                      style={[
+                        styles.compactColorButton, 
+                        { backgroundColor: currentColor },
+                        currentTool === 'highlighter' && styles.highlighterButton
+                      ]}
+                      onPress={handleColorPaletteToggle}
+                    />
 
-                    <View style={styles.thicknessSection}>
-                      <Text style={styles.sectionTitle}>Kalınlık</Text>
-                      <View style={styles.thicknessRow}>
-                        <TouchableOpacity 
-                          style={[styles.thicknessButton, currentThickness === 2 && styles.activeThickness]}
-                          onPress={() => handleThicknessSelect(2)}
-                        >
-                          <View style={[styles.thicknessDot, { width: 2, height: 2 }]} />
-                        </TouchableOpacity>
-                        <TouchableOpacity 
-                          style={[styles.thicknessButton, currentThickness === 4 && styles.activeThickness]}
-                          onPress={() => handleThicknessSelect(4)}
-                        >
-                          <View style={[styles.thicknessDot, { width: 4, height: 4 }]} />
-                        </TouchableOpacity>
-                        <TouchableOpacity 
-                          style={[styles.thicknessButton, currentThickness === 6 && styles.activeThickness]}
-                          onPress={() => handleThicknessSelect(6)}
-                        >
-                          <View style={[styles.thicknessDot, { width: 6, height: 6 }]} />
-                        </TouchableOpacity>
-                      </View>
-                    </View>
+                    <TouchableOpacity 
+                      style={styles.compactThicknessButton}
+                      onPress={handleThicknessPaletteToggle}
+                    >
+                      <View style={[styles.compactThicknessDot, { 
+                        width: Math.min(currentThickness * 1.5, 12), 
+                        height: Math.min(currentThickness * 1.5, 12) 
+                      }]} />
+                    </TouchableOpacity>
                   </View>
 
-                  {/* Actions */}
-                  <View style={styles.drawingSection}>
-                    <Text style={styles.sectionTitle}>İşlem</Text>
-                    <View style={styles.actionRow}>
-                      <TouchableOpacity style={styles.actionButton} onPress={handleUndo}>
-                        <Ionicons name="arrow-undo" size={16} color="#64748b" />
-                        <Text style={styles.actionButtonText}>Geri</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity style={styles.actionButton} onPress={handleClear}>
-                        <Ionicons name="trash-outline" size={16} color="#ef4444" />
-                        <Text style={styles.actionButtonText}>Temizle</Text>
-                      </TouchableOpacity>
-                    </View>
+                  {/* Sağ Grup - Aksiyonlar */}
+                  <View style={styles.toolbarGroup}>
+                    <TouchableOpacity 
+                      style={styles.compactActionButton}
+                      onPress={handleUndo}
+                    >
+                      <Ionicons name="arrow-undo" size={18} color="#64748b" />
+                    </TouchableOpacity>
+                    
+                    <TouchableOpacity 
+                      style={styles.compactActionButton}
+                      onPress={handleClear}
+                    >
+                      <Ionicons name="trash-outline" size={18} color="#ef4444" />
+                    </TouchableOpacity>
                   </View>
                 </View>
+
+                {/* Modals */}
+                {/* Renk paleti modal */}
+                {showColorPalette && (
+                  <Modal
+                    transparent={true}
+                    visible={showColorPalette}
+                    onRequestClose={() => setShowColorPalette(false)}
+                  >
+                    <TouchableOpacity 
+                      style={styles.colorPaletteOverlay}
+                      activeOpacity={1}
+                      onPress={() => setShowColorPalette(false)}
+                    >
+            <View style={styles.colorPaletteModal}>
+              <Text style={styles.colorPaletteTitle}>
+                {currentTool === 'highlighter' ? 'Fosforlu Kalem Rengi' : 'Renk Seçin'}
+              </Text>
+              <View style={styles.colorPalette}>
+                {(currentTool === 'highlighter' ? highlighterPalette : colorPalette).map((color, index) => (
+                  <TouchableOpacity
+                    key={index}
+                    style={[
+                      styles.paletteColorButton,
+                      { backgroundColor: color },
+                      currentColor === color && styles.activePaletteColor,
+                      currentTool === 'highlighter' && styles.highlighterPaletteButton
+                    ]}
+                    onPress={() => currentTool === 'highlighter' ? handleHighlighterColorSelect(color) : handleColorSelect(color)}
+                  />
+                ))}
+              </View>
+            </View>
+                    </TouchableOpacity>
+                  </Modal>
+                )}
+
+                {/* Kalınlık paleti modal */}
+                {showThicknessPalette && (
+                  <Modal
+                    transparent={true}
+                    visible={showThicknessPalette}
+                    onRequestClose={() => setShowThicknessPalette(false)}
+                  >
+                    <TouchableOpacity 
+                      style={styles.thicknessPaletteOverlay}
+                      activeOpacity={1}
+                      onPress={() => setShowThicknessPalette(false)}
+                    >
+                      <View style={styles.thicknessPaletteModal}>
+                        <Text style={styles.thicknessPaletteTitle}>
+                          {currentTool === 'highlighter' ? 'Fosforlu Kalem Kalınlığı' : 'Kalınlık Seçin'}
+                        </Text>
+                        <View style={styles.thicknessPalette}>
+                          {(currentTool === 'highlighter' ? highlighterThicknessOptions : penThicknessOptions).map((thickness, index) => (
+                            <TouchableOpacity
+                              key={index}
+                              style={[
+                                styles.thicknessPaletteButton,
+                                currentThickness === thickness && styles.activeThicknessPalette
+                              ]}
+                              onPress={() => handleThicknessSelect(thickness)}
+                            >
+                              <View style={[styles.thicknessPaletteDot, { 
+                                width: thickness, 
+                                height: thickness 
+                              }]} />
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+                      </View>
+                    </TouchableOpacity>
+                  </Modal>
+                )}
+
+                {/* Şekil paleti modal */}
+                {showShapePalette && (
+                  <Modal
+                    transparent={true}
+                    visible={showShapePalette}
+                    onRequestClose={() => setShowShapePalette(false)}
+                  >
+                    <TouchableOpacity 
+                      style={styles.shapePaletteOverlay}
+                      activeOpacity={1}
+                      onPress={() => setShowShapePalette(false)}
+                    >
+                      <View style={styles.shapePaletteModal}>
+                        <Text style={styles.shapePaletteTitle}>Şekil Seçin</Text>
+                        <View style={styles.shapePalette}>
+                          <TouchableOpacity
+                            style={[
+                              styles.shapePaletteButton,
+                              currentTool === 'line' && styles.activeShapePalette
+                            ]}
+                            onPress={() => handleShapeSelect('line')}
+                          >
+                            <Ionicons name="remove" size={24} color={currentTool === 'line' ? "#3b82f6" : "#64748b"} />
+                            <Text style={[styles.shapePaletteText, currentTool === 'line' && styles.activeShapePaletteText]}>
+                              Çizgi
+                            </Text>
+                          </TouchableOpacity>
+                          
+                          <TouchableOpacity
+                            style={[
+                              styles.shapePaletteButton,
+                              currentTool === 'triangle' && styles.activeShapePalette
+                            ]}
+                            onPress={() => handleShapeSelect('triangle')}
+                          >
+                            <Ionicons name="triangle" size={24} color={currentTool === 'triangle' ? "#3b82f6" : "#64748b"} />
+                            <Text style={[styles.shapePaletteText, currentTool === 'triangle' && styles.activeShapePaletteText]}>
+                              Üçgen
+                            </Text>
+                          </TouchableOpacity>
+                          
+                          <TouchableOpacity
+                            style={[
+                              styles.shapePaletteButton,
+                              currentTool === 'circle' && styles.activeShapePalette
+                            ]}
+                            onPress={() => handleShapeSelect('circle')}
+                          >
+                            <Ionicons name="ellipse" size={24} color={currentTool === 'circle' ? "#3b82f6" : "#64748b"} />
+                            <Text style={[styles.shapePaletteText, currentTool === 'circle' && styles.activeShapePaletteText]}>
+                              Çember
+                            </Text>
+                          </TouchableOpacity>
+                          
+                          <TouchableOpacity
+                            style={[
+                              styles.shapePaletteButton,
+                              currentTool === 'rectangle' && styles.activeShapePalette
+                            ]}
+                            onPress={() => handleShapeSelect('rectangle')}
+                          >
+                            <Ionicons name="square" size={24} color={currentTool === 'rectangle' ? "#3b82f6" : "#64748b"} />
+                            <Text style={[styles.shapePaletteText, currentTool === 'rectangle' && styles.activeShapePaletteText]}>
+                              Dikdörtgen
+                            </Text>
+                          </TouchableOpacity>
+                          
+                          <TouchableOpacity
+                            style={[
+                              styles.shapePaletteButton,
+                              currentTool === 'square' && styles.activeShapePalette
+                            ]}
+                            onPress={() => handleShapeSelect('square')}
+                          >
+                            <Ionicons name="stop" size={24} color={currentTool === 'square' ? "#3b82f6" : "#64748b"} />
+                            <Text style={[styles.shapePaletteText, currentTool === 'square' && styles.activeShapePaletteText]}>
+                              Kare
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    </TouchableOpacity>
+                  </Modal>
+                )}
               </View>
             )}
           </View>
@@ -935,9 +1236,6 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
-  expandedHeaderTools: {
-    paddingBottom: 8,
-  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1006,11 +1304,13 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 8,
+    paddingHorizontal: 4,
   },
   questionNumber: {
     fontSize: Math.max(14, screenWidth * 0.04), // 4% of screen width, min 14px
     fontWeight: '600',
     color: '#374151',
+    marginTop: 10,
     marginBottom: 0,
   },
   questionProgress: {
@@ -1182,13 +1482,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
     borderWidth: 1,
     borderColor: '#e2e8f0',
-    borderRadius: 20,
-    padding: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    borderRadius: 12,
+    padding: 0,
+    minWidth: 28,
+    minHeight: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   drawingSection: {
     alignItems: 'center',
@@ -1363,5 +1662,252 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 24,
     marginBottom: 24,
+  },
+  // Renk paleti stilleri
+  currentColorButton: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#e2e8f0',
+    marginRight: 8,
+  },
+  colorPalette: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  paletteColorButton: {
+    width: 32, // Modal için daha büyük
+    height: 32, // Modal için daha büyük
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: '#e2e8f0',
+    margin: 2,
+  },
+  activePaletteColor: {
+    borderColor: '#3b82f6',
+    borderWidth: 2,
+  },
+  // Modal stilleri
+  colorPaletteOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  colorPaletteModal: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    padding: 20,
+    margin: 20,
+    maxWidth: 300,
+    alignItems: 'center',
+  },
+  colorPaletteTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1f2937',
+    marginBottom: 16,
+  },
+  // Kalınlık modal stilleri
+  currentThicknessButton: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#ffffff',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    marginRight: 8,
+  },
+  thicknessPaletteOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  thicknessPaletteModal: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    padding: 20,
+    margin: 20,
+    maxWidth: 300,
+    alignItems: 'center',
+  },
+  thicknessPaletteTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1f2937',
+    marginBottom: 16,
+  },
+  thicknessPalette: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  thicknessPaletteButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#ffffff',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#e2e8f0',
+    margin: 2,
+  },
+  thicknessPaletteDot: {
+    backgroundColor: '#374151',
+    borderRadius: 10,
+  },
+  activeThicknessPalette: {
+    borderColor: '#3b82f6',
+    borderWidth: 3,
+  },
+  // Compact toolbar stilleri
+  compactDrawingToolbar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    backgroundColor: '#f8fafc',
+    borderTopWidth: 1,
+    borderTopColor: '#e2e8f0',
+    flexWrap: 'nowrap',
+  },
+  toolbarGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  compactTool: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#ffffff',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#e2e8f0',
+    marginHorizontal: 2,
+    marginVertical: 2,
+  },
+  activeCompactTool: {
+    borderColor: '#3b82f6',
+    backgroundColor: '#e0f2fe',
+  },
+  toolbarSeparator: {
+    width: 1,
+    height: 20,
+    backgroundColor: '#e2e8f0',
+    marginHorizontal: 2,
+    marginVertical: 2,
+  },
+  compactColorButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 2,
+    borderColor: '#e2e8f0',
+    marginHorizontal: 2,
+    marginVertical: 2,
+  },
+  compactThicknessButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#ffffff',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#e2e8f0',
+    marginHorizontal: 2,
+    marginVertical: 2,
+  },
+  compactThicknessDot: {
+    backgroundColor: '#374151',
+    borderRadius: 10,
+  },
+  compactActionButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#ffffff',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#e2e8f0',
+    marginHorizontal: 2,
+    marginVertical: 2,
+  },
+  // Şekil paleti stilleri
+  shapePaletteOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  shapePaletteModal: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    padding: 20,
+    margin: 20,
+    maxWidth: 350,
+    alignItems: 'center',
+  },
+  shapePaletteTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1f2937',
+    marginBottom: 16,
+  },
+  shapePalette: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  shapePaletteButton: {
+    width: 80,
+    height: 80,
+    borderRadius: 12,
+    backgroundColor: '#f8fafc',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#e2e8f0',
+    margin: 4,
+  },
+  shapePaletteText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#64748b',
+    marginTop: 4,
+  },
+  activeShapePalette: {
+    borderColor: '#3b82f6',
+    backgroundColor: '#e0f2fe',
+  },
+  activeShapePaletteText: {
+    color: '#3b82f6',
+    fontWeight: '600',
+  },
+  highlighterButton: {
+    borderWidth: 2,
+    borderColor: '#f59e0b',
+    borderRadius: 4,
+  },
+  highlighterPaletteButton: {
+    opacity: 0.8,
+    borderWidth: 2,
+    borderColor: 'rgba(0,0,0,0.2)',
   },
 });
