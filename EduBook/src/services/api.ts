@@ -182,7 +182,7 @@ class ApiService {
         id: book.id,
         title: book.title,
         publisher: book.publisher,
-        coverImageUrl: book.coverImageUrl,
+        coverImageUrl: book.coverImageUrl ? `${BASE_URL}/${book.coverImageUrl}` : '',
         paid: book.paid, // Backend'den gelen paid değeri
       }));
       

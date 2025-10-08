@@ -66,6 +66,11 @@ export const TestScreen: React.FC = () => {
   const [drawingsByQuestion, setDrawingsByQuestion] = useState<{[questionId: number]: Array<{id: string, path: string, color: string, thickness: number}>}>({});
   const [flaggedQuestions, setFlaggedQuestions] = useState<Set<number>>(new Set());
   const [previousTestResult, setPreviousTestResult] = useState<TestResult | null>(null);
+  
+  // Hint modal state
+  const [showHintModal, setShowHintModal] = useState(false);
+  const [currentHintLevel, setCurrentHintLevel] = useState(0); // 0, 1, 2, 3
+  const [hintHistory, setHintHistory] = useState<{[questionId: number]: number}>({});
 
 
   // API'den soruları çek - gerçek test ID'sini kullan
@@ -246,6 +251,13 @@ export const TestScreen: React.FC = () => {
     
     // Mevcut soru ID'sini güncelle
     prevQuestionIdRef.current = currentQuestion?.id || null;
+  }, [currentQuestion?.id]);
+
+  // Soru değiştiğinde hint level'ı sıfırla
+  useEffect(() => {
+    if (currentQuestion) {
+      setCurrentHintLevel(0);
+    }
   }, [currentQuestion?.id]);
 
   const handleAnswerSelect = (answer: string) => {
@@ -645,6 +657,51 @@ export const TestScreen: React.FC = () => {
     }
   };
 
+  // Hint fonksiyonları
+  const handleHintPress = () => {
+    if (!currentQuestion) return;
+    
+    const questionId = currentQuestion.id;
+    const currentLevel = hintHistory[questionId] || 0;
+    let nextLevel;
+    
+    if (currentLevel < 3) {
+      nextLevel = currentLevel + 1; // 1, 2, 3
+    } else {
+      nextLevel = 4; // 4. basıştan sonra hep 4
+    }
+    
+    console.log('🔍 handleHintPress - questionId:', questionId, 'currentLevel:', currentLevel, 'nextLevel:', nextLevel);
+    
+    setHintHistory(prev => ({
+      ...prev,
+      [questionId]: nextLevel
+    }));
+    setCurrentHintLevel(nextLevel);
+    setShowHintModal(true);
+  };
+
+  const handleHintClose = () => {
+    setShowHintModal(false);
+  };
+
+  const getDisplayedHints = () => {
+    if (!currentQuestion || !currentQuestion.hints) return [];
+    console.log('🔍 getDisplayedHints - currentHintLevel:', currentHintLevel, 'hints length:', currentQuestion.hints.length);
+    
+    if (currentHintLevel === 0) return [];
+    
+    // 4. basıştan sonra tüm hintleri göster
+    if (currentHintLevel > 3) {
+      console.log('🔍 Showing all hints (4+ basış)');
+      return currentQuestion.hints;
+    }
+    
+    // 1., 2., 3. basışta sadece o seviyedeki hint'i göster
+    console.log('🔍 Showing hint at index:', currentHintLevel - 1);
+    return [currentQuestion.hints[currentHintLevel - 1]];
+  };
+
 
 
 
@@ -704,6 +761,47 @@ export const TestScreen: React.FC = () => {
           />
         </View>
       </>
+    );
+  };
+
+  // Hint Modal Component
+  const HintModal = () => {
+    if (!showHintModal || !currentQuestion) return null;
+    
+    const displayedHints = getDisplayedHints();
+    
+    return (
+      <Modal transparent visible={showHintModal} animationType="fade">
+        <TouchableOpacity 
+          style={styles.hintOverlay} 
+          activeOpacity={1} 
+          onPress={handleHintClose}
+        >
+          <View style={styles.hintModal}>
+            <View style={styles.hintHeader}>
+              <Text style={styles.hintTitle}>
+                İpucu {currentHintLevel > 3 ? '3/3 (Tümü)' : `${currentHintLevel}/3`}
+              </Text>
+              <TouchableOpacity onPress={handleHintClose}>
+                <Ionicons name="close" size={24} color="#666" />
+              </TouchableOpacity>
+            </View>
+            
+            <ScrollView 
+              style={styles.hintContent}
+              contentContainerStyle={styles.hintScrollContent}
+              showsVerticalScrollIndicator={true}
+              bounces={false}
+            >
+              {displayedHints.map((hint, index) => (
+                <View key={index} style={styles.hintItem}>
+                  <Text style={styles.hintText}>{hint}</Text>
+                </View>
+              ))}
+            </ScrollView>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     );
   };
 
@@ -882,9 +980,18 @@ export const TestScreen: React.FC = () => {
           {/* Tool Buttons Section */}
           <View style={styles.toolButtons}>
             <View style={styles.mainToolButtons}>
-              <TouchableOpacity style={styles.toolButton} activeOpacity={0.7}>
+              <TouchableOpacity 
+                style={[
+                  styles.toolButton,
+                  (hintHistory[currentQuestion?.id] || 0) > 0 && styles.activeToolButton
+                ]} 
+                activeOpacity={0.7}
+                onPress={handleHintPress}
+              >
                 <Ionicons name="bulb-outline" size={14} color="#f59e0b" />
-                <Text style={styles.toolButtonText}>İpucu</Text>
+                <Text style={styles.toolButtonText}>
+                  İpucu {(hintHistory[currentQuestion?.id] || 0) > 0 && `(${Math.min(hintHistory[currentQuestion?.id], 3)}/3)`}
+                </Text>
               </TouchableOpacity>
               
               <TouchableOpacity style={styles.toolButton} activeOpacity={0.7}>
@@ -1212,6 +1319,9 @@ export const TestScreen: React.FC = () => {
             </View>
           </View>
         )}
+        
+        {/* Hint Modal */}
+        <HintModal />
       </View>
     </SafeAreaView>
   );
@@ -1909,5 +2019,55 @@ const styles = StyleSheet.create({
     opacity: 0.8,
     borderWidth: 2,
     borderColor: 'rgba(0,0,0,0.2)',
+  },
+  // Hint modal stilleri
+  hintOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  hintModal: {
+    backgroundColor: 'white',
+    borderRadius: 16,
+    margin: 20,
+    width: '90%',
+    height: '50%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  hintHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  hintTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1f2937',
+  },
+  hintContent: {
+    flex: 1,
+  },
+  hintScrollContent: {
+    padding: 20,
+    paddingBottom: 10,
+    justifyContent: 'center',
+    flexGrow: 1,
+  },
+  hintItem: {
+    marginBottom: 16,
+  },
+  hintText: {
+    fontSize: 16,
+    color: '#374151',
+    flex: 1,
+    lineHeight: 24,
   },
 });

@@ -25,6 +25,7 @@ export const DashboardScreen: React.FC = () => {
     bookCount: 0,
     testCount: 0,
   });
+  const [userBooks, setUserBooks] = useState<Book[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -35,6 +36,7 @@ export const DashboardScreen: React.FC = () => {
         api.getBooksForUser(1), // User ID'yi auth store'dan alabilirsiniz
       ]);
       
+      setUserBooks(books);
       setStats({
         flaggedCount: flaggedQuestions.length,
         bookCount: books.length,
@@ -65,6 +67,10 @@ export const DashboardScreen: React.FC = () => {
   const handleLibrary = () => {
     // Kütüphane sekmesine git
     navigation.navigate('Library' as never);
+  };
+
+  const handleBookPress = (book: Book) => {
+    navigation.navigate('BookDetail', { book });
   };
 
   return (
@@ -122,22 +128,45 @@ export const DashboardScreen: React.FC = () => {
             </TouchableOpacity>
           </View>
           
-          <TouchableOpacity
-            style={styles.libraryCard}
-            onPress={handleLibrary}
-            activeOpacity={0.8}
-          >
-            <View style={styles.libraryCardContent}>
-              <Ionicons name="library" size={32} color="#3b82f6" />
-              <View style={styles.libraryCardText}>
-                <Text style={styles.libraryCardTitle}>Kitaplarınızı Görüntüleyin</Text>
-                <Text style={styles.libraryCardSubtitle}>
-                  Kütüphanenizdeki tüm kitapları, konuları ve testleri keşfedin
-                </Text>
+          {userBooks.length > 0 ? (
+            <FlatList
+              data={userBooks}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              keyExtractor={(item) => item.id.toString()}
+              contentContainerStyle={styles.booksList}
+              renderItem={({ item: book }) => (
+                <TouchableOpacity
+                  style={styles.bookCard}
+                  onPress={() => handleBookPress(book)}
+                  activeOpacity={0.8}
+                >
+                  <Image
+                    source={{ uri: book.coverImageUrl }}
+                    style={styles.bookCover}
+                    resizeMode="cover"
+                  />
+                </TouchableOpacity>
+              )}
+            />
+          ) : (
+            <TouchableOpacity
+              style={styles.libraryCard}
+              onPress={handleAddBook}
+              activeOpacity={0.8}
+            >
+              <View style={styles.libraryCardContent}>
+                <Ionicons name="add-circle" size={32} color="#3b82f6" />
+                <View style={styles.libraryCardText}>
+                  <Text style={styles.libraryCardTitle}>İlk Kitabınızı Ekleyin</Text>
+                  <Text style={styles.libraryCardSubtitle}>
+                    Kitap kodunu girerek kütüphanenizi oluşturmaya başlayın
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={24} color="#9ca3af" />
               </View>
-              <Ionicons name="chevron-forward" size={24} color="#9ca3af" />
-            </View>
-          </TouchableOpacity>
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* Quick Stats */}
@@ -329,5 +358,26 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#64748b',
     textAlign: 'center',
+  },
+  booksList: {
+    paddingHorizontal: 4,
+  },
+  bookCard: {
+    marginRight: 12,
+    borderRadius: 12,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  bookCover: {
+    width: 100,
+    height: 140,
+    backgroundColor: '#f3f4f6',
   },
 });
