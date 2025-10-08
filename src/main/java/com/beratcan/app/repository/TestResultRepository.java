@@ -35,4 +35,21 @@ public interface TestResultRepository extends JpaRepository<TestResult, Long> {
             "JOIN tp.book b " +
             "WHERE b.id = :bookId")
     List<Long> findTestIdsByBookId(@Param("bookId") Long bookId);
+
+    // Kullanıcının belirli bir kitap için çözülen test sayısı
+    @Query("SELECT COUNT(DISTINCT tr.test.id) FROM TestResult tr " +
+            "JOIN tr.test t " +
+            "JOIN t.topic tp " +
+            "JOIN tp.book b " +
+            "WHERE tr.user.id = :userId AND b.id = :bookId")
+    Long countTestsByUserIdAndBookId(@Param("userId") Long userId, @Param("bookId") Long bookId);
+
+    // Kullanıcının belirli bir kitap için en son test çözme tarihi
+    @Query("SELECT MAX(tr.completedAt) FROM TestResult tr " +
+            "JOIN tr.test t " +
+            "JOIN t.topic tp " +
+            "JOIN tp.book b " +
+            "WHERE tr.user.id = :userId AND b.id = :bookId")
+    java.time.LocalDateTime findLastCompletedDateByUserIdAndBookId(@Param("userId") Long userId,
+            @Param("bookId") Long bookId);
 }

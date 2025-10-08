@@ -10,15 +10,19 @@ import com.beratcan.app.dto.response.BookResponse;
 import com.beratcan.app.repository.BookCodeRepository;
 import com.beratcan.app.repository.BookRepository;
 import com.beratcan.app.repository.TestRepository;
+import com.beratcan.app.repository.TestResultRepository;
 import com.beratcan.app.repository.TopicRepository;
 import com.beratcan.app.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.ArrayList;
 import java.util.Optional;
+import java.util.Comparator;
 
 @Service
 @RequiredArgsConstructor
@@ -30,6 +34,7 @@ public class BookService {
     private final TopicRepository topicRepository;
     private final TestRepository testRepository;
     private final BookCodeRepository bookCodeRepository;
+    private final TestResultRepository testResultRepository;
 
     public Book addBook(Book book, List<String> topics) {
 
@@ -91,23 +96,65 @@ public class BookService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        // Paralı kitaplar (sahip olduğu)
-        List<BookResponse> paidBooks = user.getOwnedBooks().stream()
+        // Paralı kitaplar (sahip olduğu) - skorlama ile sıralı
+        List<Book> paidBooks = user.getOwnedBooks().stream()
                 .filter(Book::isPaid)
-                .map(this::toBookResponse)
+                .sorted((b1, b2) -> {
+                    double score1 = calculateBookUsageScore(userId, b1.getId());
+                    double score2 = calculateBookUsageScore(userId, b2.getId());
+                    return Double.compare(score2, score1); // Yüksekten düşüğe
+                })
                 .toList();
 
-        // Ücretsiz kitaplar
-        List<BookResponse> freeBooks = bookRepository.findByPaidFalse().stream()
-                .map(this::toBookResponse)
+        // Ücretsiz kitaplar - skorlama ile sıralı
+        List<Book> freeBooks = bookRepository.findByPaidFalse().stream()
+                .sorted((b1, b2) -> {
+                    double score1 = calculateBookUsageScore(userId, b1.getId());
+                    double score2 = calculateBookUsageScore(userId, b2.getId());
+                    return Double.compare(score2, score1); // Yüksekten düşüğe
+                })
                 .toList();
 
         // Önce paralı sonra ücretsiz kitaplar
         List<BookResponse> allBooks = new ArrayList<>();
-        allBooks.addAll(paidBooks);
-        allBooks.addAll(freeBooks);
+        allBooks.addAll(paidBooks.stream().map(this::toBookResponse).toList());
+        allBooks.addAll(freeBooks.stream().map(this::toBookResponse).toList());
 
         return allBooks;
+    }
+
+    /**
+     * Kitap kullanım skorunu hesaplar
+     * Skor = Toplam Test Sayısı / Kaç Gün Önce Çözüldü
+     * Hiç test çözülmemişse skor = 0
+     */
+    private double calculateBookUsageScore(Long userId, Long bookId) {
+        // Çözülen test sayısı
+        Long testCount = testResultRepository.countTestsByUserIdAndBookId(userId, bookId);
+
+        if (testCount == null || testCount == 0) {
+            return 0.0; // Hiç test çözülmemiş
+        }
+
+        // En son test çözme tarihi
+        LocalDateTime lastCompleted = testResultRepository.findLastCompletedDateByUserIdAndBookId(userId, bookId);
+
+        if (lastCompleted == null) {
+            return 0.0; // Tarihi bulunamadı
+        }
+
+        // Kaç gün önce çözüldü
+        long daysAgo = ChronoUnit.DAYS.between(lastCompleted, LocalDateTime.now());
+
+        // 0 gün önce (bugün) çözüldüyse, 1 gün olarak hesapla (bölme hatası önleme)
+        if (daysAgo == 0) {
+            daysAgo = 1;
+        }
+
+        // Skor hesapla
+        double score = (double) testCount / daysAgo;
+
+        return score;
     }
 
     // 📌 Kitap güncelleme
