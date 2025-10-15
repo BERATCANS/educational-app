@@ -166,3 +166,42 @@ export interface QuestionResult {
   timeSpentSeconds: number;
   answeredAt: string;
 }
+
+// Daily Question types
+export interface DailyQuestion {
+  id: number;
+  imageUrl: string;
+  answerNumber: number;
+  videoUrl?: string;
+  displayDate: string;
+  startTime: string;
+  endTime: string;
+  active: boolean;
+  hasUserAnswered: boolean;
+  userAnswer?: {
+    selectedAnswer: OptionLetter;
+    answeredAt: string;
+  };
+  afterEndTime?: {
+    correctAnswer: OptionLetter;
+    explanation: string;
+    statistics: {
+      totalAnswers: number;
+      distribution: Record<OptionLetter, number>;
+    };
+  };
+  errorMessage?: string;
+}
+
+export interface DailyQuestionAnswerRequest {
+  dailyQuestionId: number;
+  selectedAnswer: OptionLetter;
+}
+
+export interface GetCurrentQuestionResponse {
+  success: boolean;
+  data: DailyQuestion;
+  message?: string;
+}
+
+export type SubmitAnswerResponse = GetCurrentQuestionResponse;

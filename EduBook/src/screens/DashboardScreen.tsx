@@ -82,6 +82,25 @@ export const DashboardScreen: React.FC = () => {
           <Text style={styles.subtitleText}>Bugün ne öğrenmek istiyorsunuz?</Text>
         </View>
 
+        {/* Günlük Soru */}
+        <TouchableOpacity
+          style={styles.dailyQuestionCard}
+          onPress={() => navigation.navigate('DailyQuestion')}
+          activeOpacity={0.8}
+        >
+          <View style={styles.dailyQuestionContent}>
+            <View style={styles.dailyQuestionLeft}>
+              <Text style={styles.dailyQuestionTitle}>Günün Sorusu</Text>
+              <Text style={styles.dailyQuestionSubtitle}>
+                Her gün yeni bir soru, her gün yeni bir öğrenme fırsatı!
+              </Text>
+            </View>
+            <View style={styles.dailyQuestionRight}>
+              <Ionicons name="calendar" size={24} color="#3b82f6" />
+            </View>
+          </View>
+        </TouchableOpacity>
+
         {/* Top Section - İşaretlenen Sorular ve Kitap Ekle */}
         <View style={styles.topSection}>
           {/* Sol: İşaretlenen Sorular */}
@@ -196,6 +215,42 @@ export const DashboardScreen: React.FC = () => {
 };
 
 const styles = StyleSheet.create({
+  dailyQuestionCard: {
+    backgroundColor: '#ffffff',
+    margin: 16,
+    marginBottom: 0,
+    borderRadius: 16,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  dailyQuestionContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  dailyQuestionLeft: {
+    flex: 1,
+  },
+  dailyQuestionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1e293b',
+    marginBottom: 4,
+  },
+  dailyQuestionSubtitle: {
+    fontSize: 14,
+    color: '#64748b',
+    lineHeight: 20,
+  },
+  dailyQuestionRight: {
+    marginLeft: 16,
+  },
   safeArea: {
     flex: 1,
     backgroundColor: '#f8fafc',

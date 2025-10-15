@@ -10,10 +10,14 @@ import {
   ApiResponse,
   User,
   FlaggedQuestion,
-  TestSubmissionRequest
+  TestSubmissionRequest,
+  DailyQuestion,
+  DailyQuestionAnswerRequest,
+  GetCurrentQuestionResponse,
+  SubmitAnswerResponse
 } from '../types';
-const API_BASE_URL = 'http://192.168.182.220:8080/api'; // Backend URL - local development
-const BASE_URL = 'http://192.168.182.220:8080'; // Base URL for file access
+const API_BASE_URL = 'http://10.235.179.220:8080/api'; // Backend URL - local development
+const BASE_URL = 'http://10.235.179.220:8080'; // Base URL for file access
 
 class ApiService {
   private async getAuthHeaders(): Promise<Record<string, string>> {
@@ -48,7 +52,8 @@ class ApiService {
 
   private async request<T>(
     endpoint: string, 
-    options: RequestInit = {}
+    options: RequestInit = {},
+    retryCount = 0
   ): Promise<T> {
     const url = `${API_BASE_URL}${endpoint}`;
     
@@ -68,26 +73,56 @@ class ApiService {
       if (!response.ok) {
         // Backend'den gelen hata mesajını al
         let errorMessage = 'Bir hata oluştu';
+        let shouldRetry = false;
         
         try {
           const errorText = await response.text();
-          // Eğer JSON ise parse et, değilse direkt metni kullan
           try {
             const errorData = JSON.parse(errorText);
             errorMessage = errorData.message || errorText;
           } catch {
-            // JSON değilse, direkt text mesajını kullan
             errorMessage = errorText;
           }
         } catch {
-          // Response okunamazsa status'a göre mesaj ver
-          if (response.status === 400) {
-            errorMessage = 'Kullanıcı adı veya şifre hatalı';
-          } else if (response.status === 401) {
-            errorMessage = 'Yetkisiz erişim';
-          } else if (response.status === 500) {
-            errorMessage = 'Sunucu hatası';
+          switch (response.status) {
+            case 400:
+              errorMessage = 'Geçersiz istek';
+              break;
+            case 401:
+              errorMessage = 'Yetkisiz erişim';
+              break;
+            case 403:
+              errorMessage = 'Erişim reddedildi';
+              break;
+            case 404:
+              errorMessage = 'Kaynak bulunamadı';
+              break;
+            case 408:
+              errorMessage = 'İstek zaman aşımına uğradı';
+              shouldRetry = true;
+              break;
+            case 429:
+              errorMessage = 'Çok fazla istek gönderildi';
+              shouldRetry = true;
+              break;
+            case 500:
+              errorMessage = 'Sunucu hatası';
+              shouldRetry = true;
+              break;
+            case 502:
+            case 503:
+            case 504:
+              errorMessage = 'Sunucu geçici olarak kullanılamıyor';
+              shouldRetry = true;
+              break;
           }
+        }
+
+        // Retry logic
+        if (shouldRetry && retryCount < 3) {
+          console.log(`🔄 Retrying request (${retryCount + 1}/3)...`);
+          await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
+          return this.request<T>(endpoint, options, retryCount + 1);
         }
         
         throw new Error(errorMessage);
@@ -434,6 +469,66 @@ class ApiService {
 
   async getUserTestResult(userId: number, testId: number): Promise<any> {
     return await this.request<any>(`/test-results/user/${userId}/test/${testId}`);
+  }
+
+  // Daily Question endpoints
+  async getCurrentDailyQuestion(userId: number): Promise<DailyQuestion> {
+    try {
+      console.log('📅 Fetching current daily question for userId:', userId);
+      const response = await this.request<DailyQuestion>(`/daily-questions/current?userId=${userId}`);
+      console.log('✅ Daily question response:', response);
+      // Resim URL'sini düzelt
+      if (response && response.imageUrl) {
+        console.log('🔧 Original imageUrl:', response.imageUrl);
+        response.imageUrl = `${BASE_URL}${response.imageUrl}`;
+        console.log('🔧 Fixed imageUrl:', response.imageUrl);
+      }
+      // Distribution verisini logla
+      if (response && response.afterEndTime && response.afterEndTime.statistics) {
+        console.log('📊 Backend distribution:', response.afterEndTime.statistics.distribution);
+      }
+      // Eğer response null ise veya id yoksa boş bir DailyQuestion objesi dön
+      if (!response || !response.id) {
+        return {
+          id: 0,
+          imageUrl: '',
+          answerNumber: 0,
+          videoUrl: '',
+          displayDate: '',
+          startTime: '',
+          endTime: '',
+          hasUserAnswered: false,
+          userAnswer: undefined,
+          afterEndTime: undefined,
+          errorMessage: response?.errorMessage || 'Aktif günlük soru bulunamadı',
+          active: false
+        };
+      }
+      return response;
+    } catch (error) {
+      console.error('❌ Error fetching daily question:', error);
+      throw error;
+    }
+  }
+
+  async submitDailyQuestionAnswer(userId: number, answer: DailyQuestionAnswerRequest): Promise<DailyQuestion> {
+    try {
+      console.log('📝 Submitting answer for daily question:', answer);
+      const response = await this.request<DailyQuestion>(`/daily-questions/answer?userId=${userId}`, {
+        method: 'POST',
+        body: JSON.stringify(answer),
+      });
+      console.log('✅ Answer submission response:', response);
+      console.log('📊 Answer distribution:', response?.afterEndTime?.statistics?.distribution);
+      // Resim URL'sini düzelt
+      if (response && response.imageUrl) {
+        response.imageUrl = `${BASE_URL}${response.imageUrl}`;
+      }
+      return response;
+    } catch (error) {
+      console.error('❌ Error submitting answer:', error);
+      throw error;
+    }
   }
 }
 

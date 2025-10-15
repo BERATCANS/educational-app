@@ -13,6 +13,7 @@ import { AddBookScreen } from './src/screens/AddBookScreen';
 import { BookDetailScreen } from './src/screens/BookDetailScreen';
 import { LibraryScreen } from './src/screens/LibraryScreen';
 import { TestScreen } from './src/screens/TestScreen';
+import { DailyQuestionScreen } from './src/screens/DailyQuestionScreen';
 import { useAuthStore } from './src/store/authStore';
 
 const Stack = createNativeStackNavigator();
@@ -44,6 +45,7 @@ export default function App() {
                 <Stack.Screen name="AddBook" component={AddBookScreen} />
                 <Stack.Screen name="BookDetail" component={BookDetailScreen} />
                 <Stack.Screen name="Test" component={TestScreen} />
+                <Stack.Screen name="DailyQuestion" component={DailyQuestionScreen} />
               </>
             )}
           </Stack.Navigator>
