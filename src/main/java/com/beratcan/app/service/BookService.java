@@ -48,6 +48,7 @@ public class BookService {
                 topic.setBook(savedBook);
                 topic = topicRepository.save(topic);
                 savedBook.getTopics().add(topic);
+
             }
 
             savedBook = bookRepository.save(savedBook);

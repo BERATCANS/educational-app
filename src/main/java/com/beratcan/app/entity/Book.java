@@ -3,6 +3,7 @@ package com.beratcan.app.entity;
 import com.beratcan.app.entity.enums.ExamType;
 import com.beratcan.app.entity.enums.FieldType;
 import com.beratcan.app.entity.enums.GradeLevel;
+import com.beratcan.app.entity.enums.LessonType;
 import com.fasterxml.jackson.annotation.JsonManagedReference;
 import jakarta.persistence.*;
 import lombok.Getter;
@@ -38,6 +39,9 @@ public class Book {
 
     @Enumerated(EnumType.STRING)
     private ExamType examType; // Kitap hangi sınav için?
+
+    @Enumerated(EnumType.STRING)
+    private LessonType lessonType; // Kitap yazarı
 
     private String coverImageUrl; // Kitap kapak fotoğrafı URL'si
 

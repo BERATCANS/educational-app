@@ -171,8 +171,8 @@ public class PurchaseService {
 
         // Hiç geçerli kitap yoksa hata fırlat
         if (validBooks.isEmpty()) {
-            throw new RuntimeException("Sepette satın alınabilir kitap yok: " + 
-                String.join(", ", validationErrors));
+            throw new RuntimeException("Sepette satın alınabilir kitap yok: " +
+                    String.join(", ", validationErrors));
         }
 
         // ADIM 2: TEK SEFERDE tüm sepet için ödeme işlemini yap
@@ -184,13 +184,13 @@ public class PurchaseService {
         Purchase dummyPurchase = new Purchase();
         dummyPurchase.setPrice(totalAmount); // Toplam tutar
         dummyPurchase.setTransactionId(transactionId);
-        
+
         boolean paymentSuccess = processPayment(dummyPurchase, paymentRequest);
 
         // ADIM 3: Ödeme başarısız ise hiçbir şey yapma
         if (!paymentSuccess) {
-            throw new RuntimeException("Ödeme işlemi başarısız oldu. Toplam tutar: " + 
-                totalAmount + " TL. Lütfen tekrar deneyin.");
+            throw new RuntimeException("Ödeme işlemi başarısız oldu. Toplam tutar: " +
+                    totalAmount + " TL. Lütfen tekrar deneyin.");
         }
 
         // ADIM 4: Ödeme başarılı - Tüm kitaplar için Purchase kayıtları oluştur
@@ -224,8 +224,8 @@ public class PurchaseService {
 
         // Validation hataları varsa log'a yaz
         if (!validationErrors.isEmpty()) {
-            System.out.println("Bazı kitaplar sepetten çıkarıldı: " + 
-                String.join(", ", validationErrors));
+            System.out.println("Bazı kitaplar sepetten çıkarıldı: " +
+                    String.join(", ", validationErrors));
         }
 
         return successfulPurchases;

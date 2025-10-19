@@ -549,3 +549,6 @@ Hibernate: select dq1_0.id,dq1_0.active,dq1_0.answer_number,dq1_0.correct_answer
 2025-10-19T19:28:55.568+03:00  INFO 70168 --- [   scheduling-1] c.b.a.scheduler.DailyQuestionScheduler   : 🔄 Checking daily question status...
 2025-10-19T19:28:55.571+03:00  INFO 70168 --- [   scheduling-1] c.b.a.scheduler.DailyQuestionScheduler   : 📅 Today's date: 2025-10-19
 Hibernate: select dq1_0.id,dq1_0.active,dq1_0.answer_number,dq1_0.correct_answer,dq1_0.created_at,dq1_0.display_date,dq1_0.end_time,dq1_0.explanation,dq1_0.image_url,dq1_0.start_time,dq1_0.video_url from daily_questions dq1_0 where dq1_0.display_date=?
+2025-10-19T19:29:55.566+03:00  INFO 70168 --- [   scheduling-1] c.b.a.scheduler.DailyQuestionScheduler   : 🔄 Checking daily question status...
+2025-10-19T19:29:55.569+03:00  INFO 70168 --- [   scheduling-1] c.b.a.scheduler.DailyQuestionScheduler   : 📅 Today's date: 2025-10-19
+Hibernate: select dq1_0.id,dq1_0.active,dq1_0.answer_number,dq1_0.correct_answer,dq1_0.created_at,dq1_0.display_date,dq1_0.end_time,dq1_0.explanation,dq1_0.image_url,dq1_0.start_time,dq1_0.video_url from daily_questions dq1_0 where dq1_0.display_date=?
