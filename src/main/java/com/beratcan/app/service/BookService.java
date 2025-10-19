@@ -16,6 +16,7 @@ import com.beratcan.app.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.beratcan.app.dto.response.BookStoreResponse;
 
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
@@ -190,6 +191,12 @@ public class BookService {
         response.setNumberOfTopics(book.getNumberOfTopics());
         response.setNumberOfTests(book.getNumberOfTests());
         response.setNumberOfQuestions(book.getNumberOfQuestions());
+        // Enum alanları
+        response.setGradeLevel(book.getGradeLevel());
+        response.setFieldType(book.getFieldType());
+        response.setExamType(book.getExamType());
+        response.setLessonType(book.getLessonType());
+        response.setPrice(book.getPrice());
         return response;
     }
 
@@ -287,5 +294,28 @@ public class BookService {
         book.setNumberOfTests(totalTests);
         book.setNumberOfQuestions(totalQuestions);
         bookRepository.save(book);
+    }
+
+    public List<BookStoreResponse> getBookStore() {
+        List<Book> books = bookRepository.findAll();
+        return books.stream().map(this::toBookStoreResponse).toList();
+    }
+
+    private BookStoreResponse toBookStoreResponse(Book book) {
+        BookStoreResponse response = new BookStoreResponse();
+        response.setId(book.getId());
+        response.setTitle(book.getTitle());
+        response.setPublisher(book.getPublisher());
+        response.setCoverImageUrl(book.getCoverImageUrl());
+        response.setPaid(book.isPaid());
+        response.setNumberOfTopics(book.getNumberOfTopics());
+        response.setNumberOfTests(book.getNumberOfTests());
+        response.setNumberOfQuestions(book.getNumberOfQuestions());
+        response.setGradeLevel(book.getGradeLevel());
+        response.setFieldType(book.getFieldType());
+        response.setExamType(book.getExamType());
+        response.setLessonType(book.getLessonType());
+        response.setPrice(book.getPrice());
+        return response;
     }
 }

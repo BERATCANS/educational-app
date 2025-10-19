@@ -2,6 +2,7 @@ package com.beratcan.app.controller;
 
 import com.beratcan.app.dto.request.BookRequest;
 import com.beratcan.app.dto.response.BookResponse;
+import com.beratcan.app.dto.response.BookStoreResponse;
 import com.beratcan.app.entity.Book;
 import com.beratcan.app.service.BookService;
 import org.springframework.http.ResponseEntity;
@@ -27,6 +28,11 @@ public class BookController {
         book.setPublisher(request.getPublisher());
         book.setCoverImageUrl(request.getCoverImageUrl());
         book.setPaid(request.isPaid());
+        book.setGradeLevel(request.getGradeLevel());
+        book.setFieldType(request.getFieldType());
+        book.setExamType(request.getExamType());
+        book.setLessonType(request.getLessonType());
+        book.setPrice(request.getPrice());
 
         // topics BookService'e paslanacak
         return bookService.addBook(book, request.getTopics());
@@ -83,5 +89,10 @@ public class BookController {
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body("Hata: " + e.getMessage());
         }
+    }
+
+    @GetMapping("/store")
+    public List<BookStoreResponse> getBookStore() {
+        return bookService.getBookStore();
     }
 }
