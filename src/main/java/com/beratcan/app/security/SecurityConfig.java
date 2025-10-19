@@ -46,7 +46,7 @@ public class SecurityConfig {
         configuration.addAllowedMethod("*"); // Tüm HTTP metodlarına izin ver
         configuration.addAllowedHeader("*"); // Tüm header'lara izin ver
         configuration.setAllowCredentials(true); // Credentials'a izin ver
-        
+
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
         return source;

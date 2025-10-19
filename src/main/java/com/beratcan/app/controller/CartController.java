@@ -1,0 +1,113 @@
+package com.beratcan.app.controller;
+
+import com.beratcan.app.dto.request.AddToCartRequest;
+import com.beratcan.app.dto.response.CartResponse;
+import com.beratcan.app.dto.response.PurchaseResponse;
+import com.beratcan.app.service.CartService;
+import com.beratcan.app.service.PurchaseService;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+import java.util.Map;
+
+@RestController
+@RequestMapping("/api/cart")
+@RequiredArgsConstructor
+public class CartController {
+
+    private final CartService cartService;
+    private final PurchaseService purchaseService;
+
+    /**
+     * Sepete kitap ekle
+     * POST /api/cart/add
+     */
+    @PostMapping("/add")
+    public ResponseEntity<?> addToCart(
+            @RequestBody AddToCartRequest request,
+            Authentication authentication) {
+        try {
+            Long userId = Long.parseLong(authentication.getName());
+            CartResponse response = cartService.addToCart(userId, request.getBookId());
+            return ResponseEntity.ok(response);
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    /**
+     * Sepetten kitap çıkar
+     * DELETE /api/cart/items/{cartItemId}
+     */
+    @DeleteMapping("/items/{cartItemId}")
+    public ResponseEntity<?> removeFromCart(
+            @PathVariable Long cartItemId,
+            Authentication authentication) {
+        try {
+            Long userId = Long.parseLong(authentication.getName());
+            CartResponse response = cartService.removeFromCart(userId, cartItemId);
+            return ResponseEntity.ok(response);
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    /**
+     * Sepeti görüntüle
+     * GET /api/cart
+     */
+    @GetMapping
+    public ResponseEntity<CartResponse> getCart(Authentication authentication) {
+        Long userId = Long.parseLong(authentication.getName());
+        CartResponse response = cartService.getCart(userId);
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Sepeti temizle
+     * DELETE /api/cart/clear
+     */
+    @DeleteMapping("/clear")
+    public ResponseEntity<?> clearCart(Authentication authentication) {
+        try {
+            Long userId = Long.parseLong(authentication.getName());
+            cartService.clearCart(userId);
+            return ResponseEntity.ok(Map.of("message", "Sepet başarıyla temizlendi"));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    /**
+     * Sepetteki ürün sayısı
+     * GET /api/cart/count
+     */
+    @GetMapping("/count")
+    public ResponseEntity<Map<String, Integer>> getCartItemCount(Authentication authentication) {
+        Long userId = Long.parseLong(authentication.getName());
+        int count = cartService.getCartItemCount(userId);
+        return ResponseEntity.ok(Map.of("count", count));
+    }
+
+    /**
+     * Sepeti satın al (tüm kitapları birden)
+     * POST /api/cart/checkout
+     */
+    @PostMapping("/checkout")
+    public ResponseEntity<?> checkout(Authentication authentication) {
+        try {
+            Long userId = Long.parseLong(authentication.getName());
+            List<PurchaseResponse> purchases = purchaseService.checkoutCart(userId);
+            return ResponseEntity.status(HttpStatus.CREATED).body(Map.of(
+                    "message", "Sepetteki tüm kitaplar başarıyla satın alındı",
+                    "purchases", purchases,
+                    "totalItems", purchases.size()));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+}

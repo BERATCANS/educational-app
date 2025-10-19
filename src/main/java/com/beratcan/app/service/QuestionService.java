@@ -198,4 +198,38 @@ public class QuestionService {
         // Şimdilik boş liste döndür, daha sonra implement edilecek
         return List.of();
     }
+
+    /**
+     * AI tarafından üretilen ipucu ekle
+     */
+    @Transactional
+    public void addHint(Long questionId, String hintText) {
+        Question question = questionRepository.findById(questionId)
+                .orElseThrow(() -> new IllegalArgumentException("Question not found with ID: " + questionId));
+
+        Hint hint = new Hint();
+        hint.setText(hintText);
+        hint.setLikes(0);
+        hint.setDislikes(0);
+
+        question.getHints().add(hint);
+        questionRepository.save(question);
+    }
+
+    /**
+     * AI tarafından üretilen çözüm açıklaması ekle
+     */
+    @Transactional
+    public void addExplanation(Long questionId, String explanationText) {
+        Question question = questionRepository.findById(questionId)
+                .orElseThrow(() -> new IllegalArgumentException("Question not found with ID: " + questionId));
+
+        Explanation explanation = new Explanation();
+        explanation.setText(explanationText);
+        explanation.setLikes(0);
+        explanation.setDislikes(0);
+
+        question.setExplanation(explanation);
+        questionRepository.save(question);
+    }
 }
