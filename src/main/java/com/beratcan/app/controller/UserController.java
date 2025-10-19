@@ -9,7 +9,6 @@ import com.beratcan.app.entity.Question;
 import com.beratcan.app.entity.User;
 import com.beratcan.app.entity.enums.City;
 import com.beratcan.app.service.UserService;
-import com.beratcan.app.service.QuestionService;
 import com.beratcan.app.security.JwtUtil;
 
 import lombok.RequiredArgsConstructor;
@@ -26,7 +25,6 @@ import java.util.Set;
 public class UserController {
 
     private final UserService userService;
-    private final QuestionService questionService;
     private final JwtUtil jwtUtil;
 
     @PostMapping("/register")
@@ -162,6 +160,7 @@ public class UserController {
         User user = userService.getUserById(userId);
         return ResponseEntity.ok(new UserResponse(user));
     }
+
     @GetMapping("/cities")
     public City[] getCities() {
         return City.values();

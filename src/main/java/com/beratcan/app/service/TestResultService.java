@@ -11,7 +11,6 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 @Service
 public class TestResultService {
@@ -85,7 +84,7 @@ public class TestResultService {
             // Mevcut QuestionResult'ı kontrol et (userId ve questionId ile)
             List<QuestionResult> existingQuestionResults = questionResultRepository
                     .findByUserIdAndQuestionId(userId, questionId);
-            
+
             QuestionResult questionResult;
             if (!existingQuestionResults.isEmpty()) {
                 // Mevcut QuestionResult'ı güncelle

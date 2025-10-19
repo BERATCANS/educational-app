@@ -1,17 +1,14 @@
 package com.beratcan.app.scheduler;
 
-import com.beratcan.app.entity.DailyQuestion;
 import com.beratcan.app.repository.DailyQuestionRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
-import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.LocalTime;
 
 @Component
 @RequiredArgsConstructor
@@ -29,19 +26,20 @@ public class DailyQuestionScheduler {
         log.info("📅 Today's date: {}", today);
         try {
             dailyQuestionRepository.findByDisplayDate(today).ifPresent(question -> {
-                log.info("📝 Found question for today. ID: {}, Start: {}, End: {}", question.getId(), question.getStartTime(), question.getEndTime());
-            LocalDateTime now = LocalDateTime.now();
-            LocalDateTime startTime = LocalDateTime.of(question.getDisplayDate(), question.getStartTime());
-            LocalDateTime endTime = LocalDateTime.of(question.getDisplayDate(), question.getEndTime());
+                log.info("📝 Found question for today. ID: {}, Start: {}, End: {}", question.getId(),
+                        question.getStartTime(), question.getEndTime());
+                LocalDateTime now = LocalDateTime.now();
+                LocalDateTime startTime = LocalDateTime.of(question.getDisplayDate(), question.getStartTime());
+                LocalDateTime endTime = LocalDateTime.of(question.getDisplayDate(), question.getEndTime());
 
-            boolean shouldBeActive = now.isAfter(startTime) && now.isBefore(endTime);
-            log.info("⏰ Current time: {}, Should be active: {}", now, shouldBeActive);
-            
-            if (question.isActive() != shouldBeActive) {
-                question.setActive(shouldBeActive);
-                dailyQuestionRepository.save(question);
-                log.info("Daily question status updated. ID: {}, Active: {}", question.getId(), shouldBeActive);
-            }
+                boolean shouldBeActive = now.isAfter(startTime) && now.isBefore(endTime);
+                log.info("⏰ Current time: {}, Should be active: {}", now, shouldBeActive);
+
+                if (question.isActive() != shouldBeActive) {
+                    question.setActive(shouldBeActive);
+                    dailyQuestionRepository.save(question);
+                    log.info("Daily question status updated. ID: {}, Active: {}", question.getId(), shouldBeActive);
+                }
             });
         } catch (Exception e) {
             log.error("❌ Error checking question status: {}", e.getMessage(), e);

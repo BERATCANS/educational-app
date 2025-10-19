@@ -2,7 +2,6 @@ package com.beratcan.app.controller;
 
 import com.beratcan.app.dto.request.TestRequest;
 import com.beratcan.app.dto.response.TestResponse;
-import com.beratcan.app.entity.Test;
 import com.beratcan.app.service.TestService;
 import org.springframework.web.bind.annotation.*;
 
