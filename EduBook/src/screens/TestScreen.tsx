@@ -14,8 +14,10 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { SimpleDrawing } from '../components/SimpleDrawing';
+import { AnswerOptions } from '../components/AnswerOptions';
+import { DrawingToolbar } from '../components/DrawingToolbar';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { Book, Topic, Test, Question, TestSubmissionRequest, TestResult } from '../types';
+import { Book, Topic, Test, Question, TestSubmissionRequest, TestResult, OptionLetter } from '../types';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiService } from '../services/api';
 import * as SecureStore from 'expo-secure-store';
@@ -1017,241 +1019,27 @@ export const TestScreen: React.FC = () => {
             </View>
 
             {/* Drawing Tools */}
-            {showDrawingCanvas && (
-              <View style={styles.drawingContainer}>
-                {/* Compact Drawing Toolbar */}
-                <View style={[styles.compactDrawingToolbar, !showDrawingToolbar && styles.hiddenToolbar]}>
-                  {/* Sol Grup - Araçlar */}
-                  <View style={styles.toolbarGroup}>
-                    <TouchableOpacity 
-                      style={[styles.compactTool, currentTool === 'pen' && styles.activeCompactTool]}
-                      onPress={() => handleToolSelect('pen')}
-                    >
-                      <Ionicons name="pencil" size={18} color={currentTool === 'pen' ? "#3b82f6" : "#64748b"} />
-                    </TouchableOpacity>
-                    
-                    <TouchableOpacity 
-                      style={[styles.compactTool, currentTool === 'highlighter' && styles.activeCompactTool]}
-                      onPress={() => handleToolSelect('highlighter')}
-                    >
-                      <Ionicons name="brush" size={18} color={currentTool === 'highlighter' ? "#f59e0b" : "#64748b"} />
-                    </TouchableOpacity>
-                    
-                    <TouchableOpacity 
-                      style={[styles.compactTool, currentTool === 'eraser' && styles.activeCompactTool]}
-                      onPress={() => handleToolSelect('eraser')}
-                    >
-                      <Ionicons name="remove-circle" size={18} color={currentTool === 'eraser' ? "#ef4444" : "#64748b"} />
-                    </TouchableOpacity>
-                    
-                    <TouchableOpacity 
-                      style={[styles.compactTool, ['line', 'triangle', 'circle', 'rectangle', 'square'].includes(currentTool) && styles.activeCompactTool]}
-                      onPress={handleShapePaletteToggle}
-                    >
-                      <Ionicons name="shapes" size={18} color={['line', 'triangle', 'circle', 'rectangle', 'square'].includes(currentTool) ? "#3b82f6" : "#64748b"} />
-                    </TouchableOpacity>
-                  </View>
-
-                  {/* Orta Grup - Renk ve Kalınlık */}
-                  <View style={styles.toolbarGroup}>
-                    <TouchableOpacity 
-                      style={[
-                        styles.compactColorButton, 
-                        { backgroundColor: currentColor },
-                        currentTool === 'highlighter' && styles.highlighterButton
-                      ]}
-                      onPress={handleColorPaletteToggle}
-                    />
-
-                    <TouchableOpacity 
-                      style={styles.compactThicknessButton}
-                      onPress={handleThicknessPaletteToggle}
-                    >
-                      <View style={[styles.compactThicknessDot, { 
-                        width: Math.min(currentThickness * 1.5, 12), 
-                        height: Math.min(currentThickness * 1.5, 12) 
-                      }]} />
-                    </TouchableOpacity>
-                  </View>
-
-                  {/* Sağ Grup - Aksiyonlar */}
-                  <View style={styles.toolbarGroup}>
-                    <TouchableOpacity 
-                      style={styles.compactActionButton}
-                      onPress={handleUndo}
-                    >
-                      <Ionicons name="arrow-undo" size={18} color="#64748b" />
-                    </TouchableOpacity>
-                    
-                    <TouchableOpacity 
-                      style={styles.compactActionButton}
-                      onPress={handleClear}
-                    >
-                      <Ionicons name="trash-outline" size={18} color="#ef4444" />
-                    </TouchableOpacity>
-                  </View>
-                </View>
-
-                {/* Modals */}
-                {/* Renk paleti modal */}
-                {showColorPalette && (
-                  <Modal
-                    transparent={true}
-                    visible={showColorPalette}
-                    onRequestClose={() => setShowColorPalette(false)}
-                  >
-                    <TouchableOpacity 
-                      style={styles.colorPaletteOverlay}
-                      activeOpacity={1}
-                      onPress={() => setShowColorPalette(false)}
-                    >
-            <View style={styles.colorPaletteModal}>
-              <Text style={styles.colorPaletteTitle}>
-                {currentTool === 'highlighter' ? 'Fosforlu Kalem Rengi' : 'Renk Seçin'}
-              </Text>
-              <View style={styles.colorPalette}>
-                {(currentTool === 'highlighter' ? highlighterPalette : colorPalette).map((color, index) => (
-                  <TouchableOpacity
-                    key={index}
-                    style={[
-                      styles.paletteColorButton,
-                      { backgroundColor: color },
-                      currentColor === color && styles.activePaletteColor,
-                      currentTool === 'highlighter' && styles.highlighterPaletteButton
-                    ]}
-                    onPress={() => currentTool === 'highlighter' ? handleHighlighterColorSelect(color) : handleColorSelect(color)}
-                  />
-                ))}
-              </View>
-            </View>
-                    </TouchableOpacity>
-                  </Modal>
-                )}
-
-                {/* Kalınlık paleti modal */}
-                {showThicknessPalette && (
-                  <Modal
-                    transparent={true}
-                    visible={showThicknessPalette}
-                    onRequestClose={() => setShowThicknessPalette(false)}
-                  >
-                    <TouchableOpacity 
-                      style={styles.thicknessPaletteOverlay}
-                      activeOpacity={1}
-                      onPress={() => setShowThicknessPalette(false)}
-                    >
-                      <View style={styles.thicknessPaletteModal}>
-                        <Text style={styles.thicknessPaletteTitle}>
-                          {currentTool === 'highlighter' ? 'Fosforlu Kalem Kalınlığı' : 'Kalınlık Seçin'}
-                        </Text>
-                        <View style={styles.thicknessPalette}>
-                          {(currentTool === 'highlighter' ? highlighterThicknessOptions : penThicknessOptions).map((thickness, index) => (
-                            <TouchableOpacity
-                              key={index}
-                              style={[
-                                styles.thicknessPaletteButton,
-                                currentThickness === thickness && styles.activeThicknessPalette
-                              ]}
-                              onPress={() => handleThicknessSelect(thickness)}
-                            >
-                              <View style={[styles.thicknessPaletteDot, { 
-                                width: thickness, 
-                                height: thickness 
-                              }]} />
-                            </TouchableOpacity>
-                          ))}
-                        </View>
-                      </View>
-                    </TouchableOpacity>
-                  </Modal>
-                )}
-
-                {/* Şekil paleti modal */}
-                {showShapePalette && (
-                  <Modal
-                    transparent={true}
-                    visible={showShapePalette}
-                    onRequestClose={() => setShowShapePalette(false)}
-                  >
-                    <TouchableOpacity 
-                      style={styles.shapePaletteOverlay}
-                      activeOpacity={1}
-                      onPress={() => setShowShapePalette(false)}
-                    >
-                      <View style={styles.shapePaletteModal}>
-                        <Text style={styles.shapePaletteTitle}>Şekil Seçin</Text>
-                        <View style={styles.shapePalette}>
-                          <TouchableOpacity
-                            style={[
-                              styles.shapePaletteButton,
-                              currentTool === 'line' && styles.activeShapePalette
-                            ]}
-                            onPress={() => handleShapeSelect('line')}
-                          >
-                            <Ionicons name="remove" size={24} color={currentTool === 'line' ? "#3b82f6" : "#64748b"} />
-                            <Text style={[styles.shapePaletteText, currentTool === 'line' && styles.activeShapePaletteText]}>
-                              Çizgi
-                            </Text>
-                          </TouchableOpacity>
-                          
-                          <TouchableOpacity
-                            style={[
-                              styles.shapePaletteButton,
-                              currentTool === 'triangle' && styles.activeShapePalette
-                            ]}
-                            onPress={() => handleShapeSelect('triangle')}
-                          >
-                            <Ionicons name="triangle" size={24} color={currentTool === 'triangle' ? "#3b82f6" : "#64748b"} />
-                            <Text style={[styles.shapePaletteText, currentTool === 'triangle' && styles.activeShapePaletteText]}>
-                              Üçgen
-                            </Text>
-                          </TouchableOpacity>
-                          
-                          <TouchableOpacity
-                            style={[
-                              styles.shapePaletteButton,
-                              currentTool === 'circle' && styles.activeShapePalette
-                            ]}
-                            onPress={() => handleShapeSelect('circle')}
-                          >
-                            <Ionicons name="ellipse" size={24} color={currentTool === 'circle' ? "#3b82f6" : "#64748b"} />
-                            <Text style={[styles.shapePaletteText, currentTool === 'circle' && styles.activeShapePaletteText]}>
-                              Çember
-                            </Text>
-                          </TouchableOpacity>
-                          
-                          <TouchableOpacity
-                            style={[
-                              styles.shapePaletteButton,
-                              currentTool === 'rectangle' && styles.activeShapePalette
-                            ]}
-                            onPress={() => handleShapeSelect('rectangle')}
-                          >
-                            <Ionicons name="square" size={24} color={currentTool === 'rectangle' ? "#3b82f6" : "#64748b"} />
-                            <Text style={[styles.shapePaletteText, currentTool === 'rectangle' && styles.activeShapePaletteText]}>
-                              Dikdörtgen
-                            </Text>
-                          </TouchableOpacity>
-                          
-                          <TouchableOpacity
-                            style={[
-                              styles.shapePaletteButton,
-                              currentTool === 'square' && styles.activeShapePalette
-                            ]}
-                            onPress={() => handleShapeSelect('square')}
-                          >
-                            <Ionicons name="stop" size={24} color={currentTool === 'square' ? "#3b82f6" : "#64748b"} />
-                            <Text style={[styles.shapePaletteText, currentTool === 'square' && styles.activeShapePaletteText]}>
-                              Kare
-                            </Text>
-                          </TouchableOpacity>
-                        </View>
-                      </View>
-                    </TouchableOpacity>
-                  </Modal>
-                )}
-              </View>
-            )}
+            <DrawingToolbar
+              showDrawingCanvas={showDrawingCanvas}
+              showDrawingToolbar={showDrawingToolbar}
+              currentTool={currentTool}
+              currentColor={currentColor}
+              currentThickness={currentThickness}
+              showColorPalette={showColorPalette}
+              showThicknessPalette={showThicknessPalette}
+              showShapePalette={showShapePalette}
+              onDrawingToggle={handleDrawingToggle}
+              onToolbarToggle={() => setShowDrawingToolbar(!showDrawingToolbar)}
+              onToolSelect={handleToolSelect}
+              onColorPaletteToggle={handleColorPaletteToggle}
+              onThicknessPaletteToggle={handleThicknessPaletteToggle}
+              onShapePaletteToggle={handleShapePaletteToggle}
+              onColorSelect={handleColorSelect}
+              onThicknessSelect={handleThicknessSelect}
+              onShapeSelect={handleShapeSelect}
+              onUndo={handleUndo}
+              onClear={handleClear}
+            />
           </View>
         </View>
 
@@ -1268,27 +1056,13 @@ export const TestScreen: React.FC = () => {
         {!isTestCompleted && currentQuestion && (
           <View style={styles.combinedFooter}>
             {/* Answer Options */}
-            <View style={styles.answerOptions}>
-              {['A', 'B', 'C', 'D', 'E'].slice(0, currentQuestion.answerNumber).map((letter) => (
-                <TouchableOpacity
-                  key={letter}
-                  style={[
-                    styles.answerOption,
-                    selectedAnswers.get(currentQuestion.id) === letter && styles.selectedAnswerOption,
-                    isRetakingTest && currentQuestion.correctAnswer === letter && styles.correctAnswerOption
-                  ]}
-                  onPress={() => handleAnswerSelect(letter)}
-                  activeOpacity={0.7}
-                >
-                  <Text style={[
-                    styles.answerLetterText,
-                    selectedAnswers.get(currentQuestion.id) === letter && styles.selectedAnswerLetterText
-                  ]}>
-                    {letter}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+            <AnswerOptions
+              answerNumber={currentQuestion.answerNumber}
+              selectedAnswer={selectedAnswers.get(currentQuestion.id) as OptionLetter | null}
+              correctAnswer={isRetakingTest ? currentQuestion.correctAnswer : null}
+              onAnswerSelect={handleAnswerSelect}
+              disabled={isTestCompleted}
+            />
 
             {/* Navigation Buttons */}
             <View style={styles.navigationRow}>
@@ -1471,52 +1245,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginTop: 16,
   },
-  answerOptions: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'center',
-    width: '100%',
-  },
-  answerOption: {
-    width: screenWidth * 0.12, // 12% of screen width
-    height: screenWidth * 0.12,
-    borderRadius: screenWidth * 0.06, // half of width/height
-    backgroundColor: '#f8fafc',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: Math.max(1, screenWidth * 0.005), // 0.5% of screen width, min 1px
-    borderColor: '#e2e8f0',
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: Math.max(1, screenWidth * 0.002), // 0.2% of screen width, min 1px
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: Math.max(1, screenWidth * 0.005), // 0.5% of screen width, min 1px
-    elevation: 1,
-  },
-  selectedAnswerOption: {
-    backgroundColor: '#3b82f6',
-    borderColor: '#3b82f6',
-    shadowColor: '#3b82f6',
-    shadowOpacity: 0.2,
-  },
-  correctAnswerOption: {
-    borderColor: '#22c55e', // Yeşil çerçeve
-    borderWidth: 5, // Daha kalın çerçeve
-    shadowColor: '#22c55e',
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  answerLetterText: {
-    fontSize: Math.max(16, screenWidth * 0.04), // 4% of screen width, min 16px
-    fontWeight: 'bold',
-    color: '#374151',
-  },
-  selectedAnswerLetterText: {
-    color: '#ffffff',
-  },
   navButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1578,15 +1306,6 @@ const styles = StyleSheet.create({
     position: 'relative',
     overflow: 'hidden',
     height: 'auto',
-  },
-  hiddenToolbar: {
-    height: 0,
-    paddingVertical: 0,
-    borderTopWidth: 0,
-    opacity: 0,
-  },
-  drawingContainer: {
-    backgroundColor: '#ffffff',
   },
   toolbarToggle: {
     backgroundColor: '#ffffff',
@@ -1781,244 +1500,6 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: '#e2e8f0',
     marginRight: 8,
-  },
-  colorPalette: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  paletteColorButton: {
-    width: 32, // Modal için daha büyük
-    height: 32, // Modal için daha büyük
-    borderRadius: 16,
-    borderWidth: 2,
-    borderColor: '#e2e8f0',
-    margin: 2,
-  },
-  activePaletteColor: {
-    borderColor: '#3b82f6',
-    borderWidth: 2,
-  },
-  // Modal stilleri
-  colorPaletteOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  colorPaletteModal: {
-    backgroundColor: '#ffffff',
-    borderRadius: 12,
-    padding: 20,
-    margin: 20,
-    maxWidth: 300,
-    alignItems: 'center',
-  },
-  colorPaletteTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#1f2937',
-    marginBottom: 16,
-  },
-  // Kalınlık modal stilleri
-  currentThicknessButton: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: '#ffffff',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    marginRight: 8,
-  },
-  thicknessPaletteOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  thicknessPaletteModal: {
-    backgroundColor: '#ffffff',
-    borderRadius: 12,
-    padding: 20,
-    margin: 20,
-    maxWidth: 300,
-    alignItems: 'center',
-  },
-  thicknessPaletteTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#1f2937',
-    marginBottom: 16,
-  },
-  thicknessPalette: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  thicknessPaletteButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#ffffff',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#e2e8f0',
-    margin: 2,
-  },
-  thicknessPaletteDot: {
-    backgroundColor: '#374151',
-    borderRadius: 10,
-  },
-  activeThicknessPalette: {
-    borderColor: '#3b82f6',
-    borderWidth: 3,
-  },
-  // Compact toolbar stilleri
-  compactDrawingToolbar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-    backgroundColor: '#f8fafc',
-    borderTopWidth: 1,
-    borderTopColor: '#e2e8f0',
-    flexWrap: 'nowrap',
-  },
-  toolbarGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  compactTool: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#ffffff',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#e2e8f0',
-    marginHorizontal: 2,
-    marginVertical: 2,
-  },
-  activeCompactTool: {
-    borderColor: '#3b82f6',
-    backgroundColor: '#e0f2fe',
-  },
-  toolbarSeparator: {
-    width: 1,
-    height: 20,
-    backgroundColor: '#e2e8f0',
-    marginHorizontal: 2,
-    marginVertical: 2,
-  },
-  compactColorButton: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    borderWidth: 2,
-    borderColor: '#e2e8f0',
-    marginHorizontal: 2,
-    marginVertical: 2,
-  },
-  compactThicknessButton: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#ffffff',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#e2e8f0',
-    marginHorizontal: 2,
-    marginVertical: 2,
-  },
-  compactThicknessDot: {
-    backgroundColor: '#374151',
-    borderRadius: 10,
-  },
-  compactActionButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#ffffff',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#e2e8f0',
-    marginHorizontal: 2,
-    marginVertical: 2,
-  },
-  // Şekil paleti stilleri
-  shapePaletteOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  shapePaletteModal: {
-    backgroundColor: '#ffffff',
-    borderRadius: 12,
-    padding: 20,
-    margin: 20,
-    maxWidth: 350,
-    alignItems: 'center',
-  },
-  shapePaletteTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#1f2937',
-    marginBottom: 16,
-  },
-  shapePalette: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  shapePaletteButton: {
-    width: 80,
-    height: 80,
-    borderRadius: 12,
-    backgroundColor: '#f8fafc',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#e2e8f0',
-    margin: 4,
-  },
-  shapePaletteText: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: '#64748b',
-    marginTop: 4,
-  },
-  activeShapePalette: {
-    borderColor: '#3b82f6',
-    backgroundColor: '#e0f2fe',
-  },
-  activeShapePaletteText: {
-    color: '#3b82f6',
-    fontWeight: '600',
-  },
-  highlighterButton: {
-    borderWidth: 2,
-    borderColor: '#f59e0b',
-    borderRadius: 4,
-  },
-  highlighterPaletteButton: {
-    opacity: 0.8,
-    borderWidth: 2,
-    borderColor: 'rgba(0,0,0,0.2)',
   },
   // Hint modal stilleri
   hintOverlay: {
