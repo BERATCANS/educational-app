@@ -25,4 +25,5 @@ public class PurchaseResponse {
     private PurchaseStatus status;
     private String transactionId;
     private String paymentMethod;
+    private String infoMessage; // Bilgilendirme mesajı (error değil)
 }

@@ -53,13 +53,36 @@ public class PurchaseService {
                 .anyMatch(b -> b.getId().equals(bookId));
 
         if (alreadyOwned) {
-            throw new RuntimeException("Bu kitap zaten kütüphanenizde mevcut");
+            // ✅ Exception değil, bilgi mesajı olarak dön
+            // Önceki satın alma kaydını bul
+            Purchase existingPurchase = purchaseRepository
+                    .findByUserIdAndBookIdAndStatus(userId, bookId, PurchaseStatus.COMPLETED)
+                    .orElse(null);
+
+            PurchaseResponse response;
+            if (existingPurchase != null) {
+                response = mapToResponse(existingPurchase);
+            } else {
+                // Kayıt yoksa yeni bir response oluştur
+                response = new PurchaseResponse();
+                response.setUserId(userId);
+                response.setUserName(user.getFirstName() + " " + user.getLastName());
+                response.setBookId(bookId);
+                response.setBookTitle(book.getTitle());
+                response.setBookCoverImageUrl(book.getCoverImageUrl());
+                response.setPrice(book.getPrice());
+                response.setStatus(PurchaseStatus.COMPLETED);
+            }
+            response.setInfoMessage(
+                    "'" + book.getTitle() + "' zaten kütüphanenizde mevcut. Tekrar satın almanıza gerek yok.");
+            return response;
         }
 
-        // Tamamlanmış bir satın alma kaydı var mı kontrol et
+        // Tamamlanmış bir satın alma kaydı var mı kontrol et (gereksiz oldu ama
+        // bırakalım)
         purchaseRepository.findByUserIdAndBookIdAndStatus(userId, bookId, PurchaseStatus.COMPLETED)
                 .ifPresent(p -> {
-                    throw new RuntimeException("Bu kitabı zaten satın almışsınız");
+                    // Bu duruma artık gelmeyecek çünkü yukarıda yakaladık
                 });
 
         // Purchase kaydı oluştur

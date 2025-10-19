@@ -69,12 +69,18 @@ public class CartService {
         boolean alreadyOwned = user.getOwnedBooks().stream()
                 .anyMatch(b -> b.getId().equals(bookId));
         if (alreadyOwned) {
-            throw new RuntimeException("Bu kitap zaten kütüphanenizde mevcut");
+            // ✅ Exception değil, bilgi mesajı olarak dön
+            CartResponse response = mapToResponse(cart);
+            response.setInfoMessage("'" + book.getTitle() + "' zaten kütüphanenizde mevcut. Sepete eklenmedi.");
+            return response;
         }
 
         // Sepette zaten var mı kontrol et
         if (cartItemRepository.existsByCartIdAndBookId(cart.getId(), bookId)) {
-            throw new RuntimeException("Bu kitap zaten sepetinizde mevcut");
+            // ✅ Exception değil, bilgi mesajı olarak dön
+            CartResponse response = mapToResponse(cart);
+            response.setInfoMessage("'" + book.getTitle() + "' zaten sepetinizde mevcut.");
+            return response;
         }
 
         // Sepete ekle
@@ -86,7 +92,9 @@ public class CartService {
         cart.addItem(cartItem);
         cartItemRepository.save(cartItem);
 
-        return mapToResponse(cart);
+        CartResponse response = mapToResponse(cart);
+        response.setInfoMessage("'" + book.getTitle() + "' sepete eklendi.");
+        return response;
     }
 
     /**

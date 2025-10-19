@@ -21,4 +21,5 @@ public class CartResponse {
     private int itemCount; // Toplam ürün sayısı
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    private String infoMessage; // Bilgilendirme mesajı (error değil)
 }
