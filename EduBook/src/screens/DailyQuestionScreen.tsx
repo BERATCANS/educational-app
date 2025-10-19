@@ -24,6 +24,7 @@ import { SimpleDrawing } from '../components/SimpleDrawing';
 import { DailyQuestionTimer } from '../components/DailyQuestionTimer';
 import { AnswerOptions } from '../components/AnswerOptions';
 import { DrawingToolbar } from '../components/DrawingToolbar';
+import { VideoPlayer } from '../components/VideoPlayer';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -39,6 +40,7 @@ export const DailyQuestionScreen: React.FC = () => {
   const userId = useAuthStore(state => state.user?.id) || 1;
   const [selectedAnswer, setSelectedAnswer] = useState<OptionLetter | null>(null);
   const [showDrawingCanvas, setShowDrawingCanvas] = useState(false);
+  const [showVideo, setShowVideo] = useState(false);
   const [showDrawingToolbar, setShowDrawingToolbar] = useState(true);
   const [currentTool, setCurrentTool] = useState<'pen' | 'eraser' | 'line' | 'triangle' | 'circle' | 'rectangle' | 'square' | 'highlighter'>('pen');
   const [currentColor, setCurrentColor] = useState('#000000');
@@ -331,6 +333,19 @@ export const DailyQuestionScreen: React.FC = () => {
         {/* Tool Buttons Section */}
         <View style={styles.toolButtons}>
           <View style={styles.mainToolButtons}>
+            {/* Video Butonu - Sadece süre bittikten sonra göster */}
+            {question.videoUrl && new Date() > new Date(question.displayDate + 'T' + question.endTime) && (
+              <TouchableOpacity 
+                style={styles.toolButton} 
+                activeOpacity={0.7}
+                onPress={() => setShowVideo(true)}
+              >
+                <Ionicons name="play-circle-outline" size={14} color="#3b82f6" />
+                <Text style={styles.toolButtonText}>Video</Text>
+              </TouchableOpacity>
+            )}
+
+            {/* Çizim Butonu */}
             <TouchableOpacity 
               style={[styles.toolButton, showDrawingCanvas && styles.activeToolButton]} 
               activeOpacity={0.7}
@@ -470,16 +485,16 @@ export const DailyQuestionScreen: React.FC = () => {
               answerNumber={question.answerNumber}
             />
 
-            {/* Video */}
-            {question.videoUrl && (
-              <TouchableOpacity style={styles.videoButton}>
-                <MaterialCommunityIcons name="video" size={24} color="#fff" />
-                <Text style={styles.videoButtonText}>Çözüm Videosunu İzle</Text>
-              </TouchableOpacity>
-            )}
           </View>
         )}
       </ScrollView>
+
+      {/* Video Player */}
+      <VideoPlayer 
+        videoUrl={question.videoUrl || ''}
+        visible={showVideo}
+        onClose={() => setShowVideo(false)}
+      />
 
       {/* Soru aktif */}
         {new Date() >= new Date(question.displayDate + 'T' + question.startTime) && 
@@ -764,13 +779,18 @@ const styles = StyleSheet.create({
     color: '#666',
   },
   videoButton: {
-    backgroundColor: '#f44336',
+    backgroundColor: '#ff0000', // YouTube kırmızısı
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     padding: 16,
     borderRadius: 8,
     margin: 16,
+    shadowColor: '#ff0000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
   },
   videoButtonText: {
     color: '#fff',

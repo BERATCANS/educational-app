@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { SimpleDrawing } from '../components/SimpleDrawing';
 import { AnswerOptions } from '../components/AnswerOptions';
 import { DrawingToolbar } from '../components/DrawingToolbar';
+import { VideoPlayer } from '../components/VideoPlayer';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { Book, Topic, Test, Question, TestSubmissionRequest, TestResult, OptionLetter } from '../types';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -51,6 +52,7 @@ export const TestScreen: React.FC = () => {
   const [testStartTime] = useState(Date.now()); // Test başlangıç zamanı
   const [showDrawingCanvas, setShowDrawingCanvas] = useState(false);
   const [showDrawingToolbar, setShowDrawingToolbar] = useState(true);
+  const [showVideo, setShowVideo] = useState(false);
   const [currentTool, setCurrentTool] = useState<'pen' | 'eraser' | 'line' | 'triangle' | 'circle' | 'rectangle' | 'square' | 'highlighter'>('pen');
   const [currentColor, setCurrentColor] = useState('#000000');
   const [currentThickness, setCurrentThickness] = useState(2);
@@ -68,7 +70,7 @@ export const TestScreen: React.FC = () => {
   const [drawingsByQuestion, setDrawingsByQuestion] = useState<{[questionId: number]: Array<{id: string, path: string, color: string, thickness: number}>}>({});
   const [flaggedQuestions, setFlaggedQuestions] = useState<Set<number>>(new Set());
   const [previousTestResult, setPreviousTestResult] = useState<TestResult | null>(null);
-  
+
   // Hint modal state
   const [showHintModal, setShowHintModal] = useState(false);
   const [currentHintLevel, setCurrentHintLevel] = useState(0); // 0, 1, 2, 3
@@ -333,7 +335,7 @@ export const TestScreen: React.FC = () => {
       // Test result cache'ini invalidate et - yeni test result'ı çekilsin
       queryClient.invalidateQueries({ queryKey: ['testResult', test.id] });
       console.log('🔄 Test result cache invalidated for test:', test.id);
-      
+
     } catch (error) {
       console.error('❌ Test sonuçları kayıt hatası:', error);
     }
@@ -352,7 +354,7 @@ export const TestScreen: React.FC = () => {
     await saveTestResults();
     
     // Test tamamlandı, direkt geri dön
-    navigation.goBack();
+            navigation.goBack();
   };
 
   const goBack = async () => {
@@ -774,7 +776,7 @@ export const TestScreen: React.FC = () => {
     
     return (
       <Modal transparent visible={showHintModal} animationType="fade">
-        <TouchableOpacity 
+      <TouchableOpacity
           style={styles.hintOverlay} 
           activeOpacity={1} 
           onPress={handleHintClose}
@@ -786,8 +788,8 @@ export const TestScreen: React.FC = () => {
               </Text>
               <TouchableOpacity onPress={handleHintClose}>
                 <Ionicons name="close" size={24} color="#666" />
-              </TouchableOpacity>
-            </View>
+      </TouchableOpacity>
+    </View>
             
             <ScrollView 
               style={styles.hintContent}
@@ -1001,10 +1003,16 @@ export const TestScreen: React.FC = () => {
                 <Text style={styles.toolButtonText}>Çözüm</Text>
               </TouchableOpacity>
               
-              <TouchableOpacity style={styles.toolButton} activeOpacity={0.7}>
-                <Ionicons name="play-circle-outline" size={14} color="#3b82f6" />
-                <Text style={styles.toolButtonText}>Video</Text>
-              </TouchableOpacity>
+              {currentQuestion?.videoUrl && (
+                <TouchableOpacity 
+                  style={styles.toolButton} 
+                  activeOpacity={0.7}
+                  onPress={() => setShowVideo(true)}
+                >
+                  <Ionicons name="play-circle-outline" size={14} color="#3b82f6" />
+                  <Text style={styles.toolButtonText}>Video</Text>
+                </TouchableOpacity>
+              )}
               
               <TouchableOpacity 
                 style={[styles.toolButton, showDrawingCanvas && styles.activeToolButton]} 
@@ -1049,10 +1057,19 @@ export const TestScreen: React.FC = () => {
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
-          {renderQuestionContent()}
-        </ScrollView>
+          {renderQuestionContent(        )}
+      </ScrollView>
 
-        {/* Combined Answer Options & Navigation */}
+      {/* Video Player */}
+      {currentQuestion?.videoUrl && (
+        <VideoPlayer 
+          videoUrl={currentQuestion.videoUrl}
+          visible={showVideo}
+          onClose={() => setShowVideo(false)}
+        />
+      )}
+
+      {/* Combined Answer Options & Navigation */}
         {!isTestCompleted && currentQuestion && (
           <View style={styles.combinedFooter}>
             {/* Answer Options */}
