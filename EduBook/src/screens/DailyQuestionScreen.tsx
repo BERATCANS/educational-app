@@ -41,6 +41,7 @@ export const DailyQuestionScreen: React.FC = () => {
   const [selectedAnswer, setSelectedAnswer] = useState<OptionLetter | null>(null);
   const [showDrawingCanvas, setShowDrawingCanvas] = useState(false);
   const [showVideo, setShowVideo] = useState(false);
+  const [isVideoFullScreen, setIsVideoFullScreen] = useState(false);
   const [showDrawingToolbar, setShowDrawingToolbar] = useState(true);
   const [currentTool, setCurrentTool] = useState<'pen' | 'eraser' | 'line' | 'triangle' | 'circle' | 'rectangle' | 'square' | 'highlighter'>('pen');
   const [currentColor, setCurrentColor] = useState('#000000');
@@ -490,18 +491,25 @@ export const DailyQuestionScreen: React.FC = () => {
       </ScrollView>
 
       {/* Video Player */}
-      <VideoPlayer 
-        videoUrl={question.videoUrl || ''}
-        visible={showVideo}
-        onClose={() => setShowVideo(false)}
-      />
+      {showVideo && (
+        <View style={styles.videoContainer}>
+          <VideoPlayer 
+            videoUrl={question.videoUrl || ''}
+            visible={true}
+            onClose={() => setShowVideo(false)}
+            isFullScreen={isVideoFullScreen}
+            onFullScreenToggle={() => setIsVideoFullScreen(!isVideoFullScreen)}
+            style={styles.inlineVideo}
+          />
+        </View>
+      )}
 
       {/* Soru aktif */}
         {new Date() >= new Date(question.displayDate + 'T' + question.startTime) && 
          new Date() <= new Date(question.displayDate + 'T' + question.endTime) && (
           <>
             {/* Combined Answer Options & Navigation */}
-            {!question.hasUserAnswered && (
+            {!question.hasUserAnswered && !showVideo && (
               <View style={styles.combinedFooter}>
                 {/* Answer Options */}
                 <AnswerOptions
@@ -823,5 +831,17 @@ const styles = StyleSheet.create({
   },
   placeholder: {
     flex: 1,
+  },
+  videoContainer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 200,
+    backgroundColor: '#000',
+    zIndex: 10,
+  },
+  inlineVideo: {
+    height: 200,
   },
 });
