@@ -1,13 +1,19 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
+import { View } from 'react-native';
 import { DashboardScreen } from './DashboardScreen';
 import { LibraryScreen } from './LibraryScreen';
 import { ProfileScreen } from './ProfileScreen';
+import { BookStoreScreen } from './BookStoreScreen';
+import { CartScreen } from './CartScreen';
+import { CartBadge } from '../components/CartBadge';
+import { useCartStore } from '../store/cartStore';
 
 const Tab = createBottomTabNavigator();
 
 export const MainTabsScreen: React.FC = () => {
+  const itemCount = useCartStore(state => state.itemCount);
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
@@ -18,6 +24,10 @@ export const MainTabsScreen: React.FC = () => {
             iconName = focused ? 'home' : 'home-outline';
           } else if (route.name === 'Library') {
             iconName = focused ? 'library' : 'library-outline';
+          } else if (route.name === 'BookStore') {
+            iconName = focused ? 'book' : 'book-outline';
+          } else if (route.name === 'Cart') {
+            iconName = focused ? 'cart' : 'cart-outline';
           } else if (route.name === 'Profile') {
             iconName = focused ? 'person' : 'person-outline';
           } else {
@@ -53,6 +63,32 @@ export const MainTabsScreen: React.FC = () => {
         options={{
           title: 'Kütüphane',
           tabBarLabel: 'Kütüphane',
+        }}
+      />
+      <Tab.Screen 
+        name="BookStore" 
+        component={BookStoreScreen}
+        options={{
+          title: 'Kitaplar',
+          tabBarLabel: 'Kitaplar',
+        }}
+      />
+      <Tab.Screen 
+        name="Cart" 
+        component={CartScreen}
+        options={{
+          title: 'Sepetim',
+          tabBarLabel: 'Sepetim',
+          tabBarIcon: ({ focused, color, size }) => (
+            <View>
+              <Ionicons 
+                name={focused ? 'cart' : 'cart-outline'} 
+                size={size} 
+                color={color} 
+              />
+              <CartBadge count={itemCount} />
+            </View>
+          ),
         }}
       />
       <Tab.Screen 

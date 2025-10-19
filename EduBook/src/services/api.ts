@@ -14,7 +14,11 @@ import {
   DailyQuestion,
   DailyQuestionAnswerRequest,
   GetCurrentQuestionResponse,
-  SubmitAnswerResponse
+  SubmitAnswerResponse,
+  BookStoreResponse,
+  Cart,
+  CartItem,
+  Purchase
 } from '../types';
 const API_BASE_URL = 'http://10.235.179.220:8080/api'; // Backend URL - local development
 const BASE_URL = 'http://10.235.179.220:8080'; // Base URL for file access
@@ -218,7 +222,12 @@ class ApiService {
         title: book.title,
         publisher: book.publisher,
         coverImageUrl: book.coverImageUrl ? `${BASE_URL}/${book.coverImageUrl}` : '',
-        paid: book.paid, // Backend'den gelen paid değeri
+        paid: book.paid,
+        price: book.price,
+        description: book.description,
+        numberOfTopics: book.numberOfTopics,
+        numberOfTests: book.numberOfTests,
+        numberOfQuestions: book.numberOfQuestions
       }));
       
       console.log('🔄 Mapped books:', books);
@@ -527,6 +536,166 @@ class ApiService {
       return response;
     } catch (error) {
       console.error('❌ Error submitting answer:', error);
+      throw error;
+    }
+  }
+
+  // Cart endpoints
+  async getCart(): Promise<Cart> {
+    console.log('🛒 Fetching cart');
+    try {
+      const response = await this.request<any>('/cart');
+      console.log('✅ Cart response:', response);
+      return {
+        id: response.id,
+        items: response.items.map((item: any) => ({
+          id: item.id,
+          bookId: item.bookId,
+          bookTitle: item.bookTitle,
+          bookPublisher: item.bookPublisher,
+          bookCoverImageUrl: item.bookCoverImageUrl ? `${BASE_URL}/${item.bookCoverImageUrl}` : '',
+          priceAtAdd: item.priceAtAdd,
+          currentPrice: item.currentPrice,
+          addedAt: item.addedAt,
+          isPriceChanged: item.priceChanged || false
+        })),
+        totalAmount: response.totalPrice || 0,
+        itemCount: response.itemCount || response.items.length
+      };
+    } catch (error) {
+      console.error('❌ Error fetching cart:', error);
+      throw error;
+    }
+  }
+
+  async addToCart(bookId: number): Promise<{ success: boolean; cart?: Cart; warning?: string; error?: string }> {
+    console.log('🛍️ Adding book to cart:', bookId);
+    try {
+      const response = await this.request<any>('/cart/add', {
+        method: 'POST',
+        body: JSON.stringify({ bookId })
+      });
+      console.log('✅ Add to cart response:', response);
+      
+      // Backend'den gelen infoMessage'ı kontrol et
+      if (response.infoMessage) {
+        return {
+          success: false,
+          warning: response.infoMessage
+        };
+      }
+      
+      return {
+        success: true,
+        cart: {
+          id: response.id,
+          items: response.items.map((item: any) => ({
+            id: item.id,
+            bookId: item.bookId,
+            bookTitle: item.bookTitle,
+            bookPublisher: item.bookPublisher,
+            bookCoverImageUrl: item.bookCoverImageUrl ? `${BASE_URL}/${item.bookCoverImageUrl}` : '',
+            priceAtAdd: item.priceAtAdd,
+            currentPrice: item.currentPrice,
+            addedAt: item.addedAt,
+            isPriceChanged: item.isPriceChanged || false
+          })),
+          totalAmount: response.totalPrice || 0,
+          itemCount: response.itemCount || response.items.length
+        }
+      };
+    } catch (error: any) {
+      console.error('❌ Error adding to cart:', error);
+      return {
+        success: false,
+        error: error.message || 'Kitap sepete eklenemedi'
+      };
+    }
+  }
+
+  async removeFromCart(cartItemId: number): Promise<Cart> {
+    console.log('🗑️ Removing item from cart:', cartItemId);
+    try {
+      const response = await this.request<any>(`/cart/items/${cartItemId}`, {
+        method: 'DELETE'
+      });
+      console.log('✅ Remove from cart response:', response);
+      return {
+        id: response.id,
+        items: response.items.map((item: any) => ({
+          id: item.id,
+          bookId: item.bookId,
+          bookTitle: item.bookTitle,
+          bookPublisher: item.bookPublisher,
+          bookCoverImageUrl: item.bookCoverImageUrl ? `${BASE_URL}/${item.bookCoverImageUrl}` : '',
+          priceAtAdd: item.priceAtAdd,
+          currentPrice: item.currentPrice,
+          addedAt: item.addedAt,
+          isPriceChanged: item.priceChanged || false
+        })),
+        totalAmount: response.totalPrice || 0,
+        itemCount: response.itemCount || response.items.length
+      };
+    } catch (error) {
+      console.error('❌ Error removing from cart:', error);
+      throw error;
+    }
+  }
+
+  async clearCart(): Promise<void> {
+    console.log('🧹 Clearing cart');
+    try {
+      await this.request('/cart/clear', {
+        method: 'DELETE'
+      });
+      console.log('✅ Cart cleared');
+    } catch (error) {
+      console.error('❌ Error clearing cart:', error);
+      throw error;
+    }
+  }
+
+  async getCartItemCount(): Promise<number> {
+    console.log('🔢 Fetching cart item count');
+    try {
+      const response = await this.request<{ count: number }>('/cart/count');
+      console.log('✅ Cart count:', response.count);
+      return response.count;
+    } catch (error) {
+      console.error('❌ Error fetching cart count:', error);
+      throw error;
+    }
+  }
+
+  async checkout(): Promise<Purchase[]> {
+    console.log('💳 Processing checkout');
+    try {
+      const response = await this.request<{ message: string; purchases: Purchase[] }>('/cart/checkout', {
+        method: 'POST'
+      });
+      console.log('✅ Checkout response:', response);
+      return response.purchases;
+    } catch (error) {
+      console.error('❌ Error during checkout:', error);
+      throw error;
+    }
+  }
+
+  // Book store endpoints
+  async getBookStore(): Promise<BookStoreResponse[]> {
+    console.log('🏪 Fetching book store');
+    try {
+      const response = await this.request<BookStoreResponse[]>('/books/store');
+      console.log('✅ Book store response:', response);
+      
+      const books = response.map(book => ({
+        ...book,
+        coverImageUrl: book.coverImageUrl ? `${BASE_URL}/${book.coverImageUrl}` : ''
+      }));
+      
+      return books;
+    } catch (error) {
+      console.error('❌ Error fetching book store:', error);
       throw error;
     }
   }

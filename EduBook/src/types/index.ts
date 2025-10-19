@@ -18,8 +18,13 @@ export interface Book {
   title: string;
   publisher: string;
   coverImageUrl: string;
-  paid?: boolean; // Backend'de yok, frontend'de varsayılan true
-  topics?: Topic[]; // Backend'de yok, frontend'de boş array
+  paid: boolean;
+  price?: number;
+  description?: string;
+  numberOfTopics?: number;
+  numberOfTests?: number;
+  numberOfQuestions?: number;
+  topics?: Topic[];
 }
 
 // Topic entity
@@ -205,3 +210,51 @@ export interface GetCurrentQuestionResponse {
 }
 
 export type SubmitAnswerResponse = GetCurrentQuestionResponse;
+
+// Cart Types
+export interface CartItem {
+  id: number;
+  bookId: number;
+  bookTitle: string;
+  bookPublisher: string;
+  bookCoverImageUrl: string;
+  priceAtAdd: number;
+  currentPrice: number;
+  addedAt: string;
+  isPriceChanged: boolean;
+}
+
+export interface Cart {
+  id: number;
+  items: CartItem[];
+  totalAmount: number;
+  itemCount: number;
+}
+
+// Purchase Types
+export interface Purchase {
+  id: number;
+  bookId: number;
+  bookTitle: string;
+  price: number;
+  purchaseDate: string;
+  status: 'COMPLETED' | 'PENDING' | 'FAILED' | 'REFUNDED';
+  transactionId?: string;
+}
+
+export interface BookStoreResponse {
+  id: number;
+  title: string;
+  publisher: string;
+  coverImageUrl: string;
+  paid: boolean;
+  price: number;
+  description?: string;
+  numberOfTopics?: number;
+  numberOfTests?: number;
+  numberOfQuestions?: number;
+  gradeLevel: string;
+  fieldType: string;
+  examType: string;
+  lessonType: string;
+}
