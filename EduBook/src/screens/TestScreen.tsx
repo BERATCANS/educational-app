@@ -53,6 +53,7 @@ export const TestScreen: React.FC = () => {
   const [showDrawingCanvas, setShowDrawingCanvas] = useState(false);
   const [showDrawingToolbar, setShowDrawingToolbar] = useState(true);
   const [showVideo, setShowVideo] = useState(false);
+  const [isVideoFullScreen, setIsVideoFullScreen] = useState(false);
   const [currentTool, setCurrentTool] = useState<'pen' | 'eraser' | 'line' | 'triangle' | 'circle' | 'rectangle' | 'square' | 'highlighter'>('pen');
   const [currentColor, setCurrentColor] = useState('#000000');
   const [currentThickness, setCurrentThickness] = useState(2);
@@ -1061,16 +1062,21 @@ export const TestScreen: React.FC = () => {
       </ScrollView>
 
       {/* Video Player */}
-      {currentQuestion?.videoUrl && (
-        <VideoPlayer 
-          videoUrl={currentQuestion.videoUrl}
-          visible={showVideo}
-          onClose={() => setShowVideo(false)}
-        />
+      {showVideo && currentQuestion?.videoUrl && (
+        <View style={styles.videoContainer}>
+          <VideoPlayer 
+            videoUrl={currentQuestion.videoUrl}
+            visible={true}
+            onClose={() => setShowVideo(false)}
+            isFullScreen={isVideoFullScreen}
+            onFullScreenToggle={() => setIsVideoFullScreen(!isVideoFullScreen)}
+            style={styles.inlineVideo}
+          />
+        </View>
       )}
 
       {/* Combined Answer Options & Navigation */}
-        {!isTestCompleted && currentQuestion && (
+        {!isTestCompleted && currentQuestion && !showVideo && (
           <View style={styles.combinedFooter}>
             {/* Answer Options */}
             <AnswerOptions
@@ -1567,5 +1573,17 @@ const styles = StyleSheet.create({
     color: '#374151',
     flex: 1,
     lineHeight: 24,
+  },
+  videoContainer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 200,
+    backgroundColor: '#000',
+    zIndex: 10,
+  },
+  inlineVideo: {
+    height: 200,
   },
 });

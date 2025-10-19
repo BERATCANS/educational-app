@@ -8,12 +8,18 @@ interface VideoPlayerProps {
   videoUrl: string;
   visible: boolean;
   onClose: () => void;
+  isFullScreen?: boolean;
+  onFullScreenToggle?: () => void;
+  style?: any;
 }
 
 export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   videoUrl,
   visible,
-  onClose
+  onClose,
+  isFullScreen = false,
+  onFullScreenToggle,
+  style
 }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
@@ -48,72 +54,88 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
   if (!visible) return null;
 
-  return (
-    <Modal 
-      visible={visible} 
-      animationType="slide" 
-      presentationStyle="fullScreen"
-      onRequestClose={onClose}
-    >
-      <View style={styles.container}>
-        {isLoading && (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#ff0000" />
-            <Text style={styles.loadingText}>Video yükleniyor...</Text>
-          </View>
-        )}
+  const renderVideo = () => (
+    <View style={[styles.container, !isFullScreen && style]}>
+      {isLoading && (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#ff0000" />
+          <Text style={styles.loadingText}>Video yükleniyor...</Text>
+        </View>
+      )}
 
-        {hasError ? (
-          <View style={styles.errorContainer}>
-            <Ionicons name="alert-circle" size={48} color="#ff6b6b" />
-            <Text style={styles.errorTitle}>Video Yüklenemedi</Text>
-            <Text style={styles.errorText}>
-              Video oynatılırken bir hata oluştu. Lütfen tekrar deneyin.
-            </Text>
-            <TouchableOpacity style={styles.retryButton} onPress={() => {
-              setHasError(false);
-              setIsLoading(true);
-            }}>
-              <Text style={styles.retryButtonText}>Tekrar Dene</Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <WebView
-            source={{ uri: getEmbedUrl(videoUrl) }}
-            style={styles.video}
-            onLoad={handleVideoLoad}
-            onError={handleVideoError}
-            allowsFullscreenVideo={true}
-            mediaPlaybackRequiresUserAction={false}
-            javaScriptEnabled={true}
-            domStorageEnabled={true}
-            startInLoadingState={true}
-            scrollEnabled={false}
-            bounces={false}
-            showsHorizontalScrollIndicator={false}
-            showsVerticalScrollIndicator={false}
-            androidLayerType="hardware"
-            renderLoading={() => (
-              <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color="#ff0000" />
-                <Text style={styles.loadingText}>Video yükleniyor...</Text>
-              </View>
-            )}
-          />
+      {hasError ? (
+        <View style={styles.errorContainer}>
+          <Ionicons name="alert-circle" size={48} color="#ff6b6b" />
+          <Text style={styles.errorTitle}>Video Yüklenemedi</Text>
+          <Text style={styles.errorText}>
+            Video oynatılırken bir hata oluştu. Lütfen tekrar deneyin.
+          </Text>
+          <TouchableOpacity style={styles.retryButton} onPress={() => {
+            setHasError(false);
+            setIsLoading(true);
+          }}>
+            <Text style={styles.retryButtonText}>Tekrar Dene</Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <WebView
+          source={{ uri: getEmbedUrl(videoUrl) }}
+          style={styles.video}
+          onLoad={handleVideoLoad}
+          onError={handleVideoError}
+          allowsFullscreenVideo={true}
+          mediaPlaybackRequiresUserAction={false}
+          javaScriptEnabled={true}
+          domStorageEnabled={true}
+          startInLoadingState={true}
+          scrollEnabled={false}
+          bounces={false}
+          showsHorizontalScrollIndicator={false}
+          showsVerticalScrollIndicator={false}
+          androidLayerType="hardware"
+          renderLoading={() => (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color="#ff0000" />
+              <Text style={styles.loadingText}>Video yükleniyor...</Text>
+            </View>
+          )}
+        />
+      )}
+      
+      <View style={styles.controls}>
+        {onFullScreenToggle && (
+          <TouchableOpacity style={styles.fullScreenButton} onPress={onFullScreenToggle}>
+            <Ionicons name={isFullScreen ? "contract" : "expand"} size={24} color="#fff" />
+          </TouchableOpacity>
         )}
-        
         <TouchableOpacity style={styles.closeButton} onPress={onClose}>
           <Ionicons name="close" size={24} color="#fff" />
         </TouchableOpacity>
       </View>
-    </Modal>
+    </View>
   );
+
+  if (isFullScreen) {
+    return (
+      <Modal 
+        visible={visible} 
+        animationType="slide" 
+        presentationStyle="fullScreen"
+        onRequestClose={onClose}
+      >
+        {renderVideo()}
+      </Modal>
+    );
+  }
+
+  return renderVideo();
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#000',
+    position: 'relative',
   },
   video: {
     flex: 1,
@@ -171,13 +193,23 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
-  closeButton: {
+  controls: {
     position: 'absolute',
-    top: 50,
-    right: 20,
+    top: 16,
+    right: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    zIndex: 2,
+  },
+  closeButton: {
     backgroundColor: 'rgba(0,0,0,0.7)',
     borderRadius: 20,
     padding: 10,
-    zIndex: 2,
+  },
+  fullScreenButton: {
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    borderRadius: 20,
+    padding: 10,
   },
 });
