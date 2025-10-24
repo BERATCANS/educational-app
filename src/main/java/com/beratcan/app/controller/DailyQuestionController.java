@@ -11,6 +11,8 @@ import com.beratcan.app.service.DailyQuestionService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -21,6 +23,7 @@ public class DailyQuestionController {
 
     private final DailyQuestionService dailyQuestionService;
 
+    @PreAuthorize("hasRole('ADMIN')")
     @PostMapping("/create")
     public ResponseEntity<?> createDailyQuestion(
             @RequestParam("image") MultipartFile image,
@@ -52,36 +55,38 @@ public class DailyQuestionController {
     }
 
     @GetMapping("/current")
-    public ResponseEntity<DailyQuestionResponse> getCurrentQuestion(@RequestParam Long userId) {
+    public ResponseEntity<DailyQuestionResponse> getCurrentQuestion(Authentication authentication) {
         try {
+            Long userId = Long.parseLong(authentication.getName());
             DailyQuestionResponse response = dailyQuestionService.getCurrentQuestion(userId);
             return ResponseEntity.ok(response);
         } catch (RuntimeException e) {
             return ResponseEntity
-                .status(HttpStatus.NOT_FOUND)
-                .body(new DailyQuestionResponse(null, e.getMessage()));
+                    .status(HttpStatus.NOT_FOUND)
+                    .body(new DailyQuestionResponse(null, e.getMessage()));
         } catch (Exception e) {
             return ResponseEntity
-                .status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(new DailyQuestionResponse(null, "Günün sorusu alınırken bir hata oluştu"));
+                    .status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new DailyQuestionResponse(null, "Günün sorusu alınırken bir hata oluştu"));
         }
     }
 
     @PostMapping("/answer")
     public ResponseEntity<DailyQuestionResponse> submitAnswer(
-            @RequestParam Long userId,
-            @RequestBody DailyQuestionAnswerRequest request) {
+            @RequestBody DailyQuestionAnswerRequest request,
+            Authentication authentication) {
         try {
+            Long userId = Long.parseLong(authentication.getName());
             DailyQuestionResponse response = dailyQuestionService.submitAnswer(userId, request);
             return ResponseEntity.ok(response);
         } catch (RuntimeException e) {
             return ResponseEntity
-                .status(HttpStatus.BAD_REQUEST)
-                .body(new DailyQuestionResponse(null, e.getMessage()));
+                    .status(HttpStatus.BAD_REQUEST)
+                    .body(new DailyQuestionResponse(null, e.getMessage()));
         } catch (Exception e) {
             return ResponseEntity
-                .status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(new DailyQuestionResponse(null, "Cevap gönderilirken bir hata oluştu"));
+                    .status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new DailyQuestionResponse(null, "Cevap gönderilirken bir hata oluştu"));
         }
     }
 }

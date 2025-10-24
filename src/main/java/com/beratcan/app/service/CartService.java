@@ -11,6 +11,7 @@ import com.beratcan.app.repository.CartItemRepository;
 import com.beratcan.app.repository.CartRepository;
 import com.beratcan.app.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,6 +21,7 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class CartService {
 
     private final CartRepository cartRepository;
@@ -47,12 +49,17 @@ public class CartService {
      */
     @Transactional
     public CartResponse addToCart(Long userId, Long bookId) {
+        log.info("Adding book to cart: userId={}, bookId={}", userId, bookId);
+
         // Kullanıcının sepetini getir veya oluştur
         Cart cart = getOrCreateCart(userId);
 
         // Kitabı getir
         Book book = bookRepository.findById(bookId)
-                .orElseThrow(() -> new RuntimeException("Kitap bulunamadı"));
+                .orElseThrow(() -> {
+                    log.error("Book not found for cart: bookId={}", bookId);
+                    return new RuntimeException("Kitap bulunamadı");
+                });
 
         // Kitap paralı mı kontrol et
         if (!book.isPaid()) {
@@ -69,6 +76,8 @@ public class CartService {
         boolean alreadyOwned = user.getOwnedBooks().stream()
                 .anyMatch(b -> b.getId().equals(bookId));
         if (alreadyOwned) {
+            log.info("Book already owned, not added to cart: userId={}, bookId={}, bookTitle={}",
+                    userId, bookId, book.getTitle());
             // ✅ Exception değil, bilgi mesajı olarak dön
             CartResponse response = mapToResponse(cart);
             response.setInfoMessage("'" + book.getTitle() + "' zaten kütüphanenizde mevcut. Sepete eklenmedi.");
@@ -77,6 +86,8 @@ public class CartService {
 
         // Sepette zaten var mı kontrol et
         if (cartItemRepository.existsByCartIdAndBookId(cart.getId(), bookId)) {
+            log.info("Book already in cart: userId={}, bookId={}, bookTitle={}",
+                    userId, bookId, book.getTitle());
             // ✅ Exception değil, bilgi mesajı olarak dön
             CartResponse response = mapToResponse(cart);
             response.setInfoMessage("'" + book.getTitle() + "' zaten sepetinizde mevcut.");
@@ -92,6 +103,9 @@ public class CartService {
         cart.addItem(cartItem);
         cartItemRepository.save(cartItem);
 
+        log.info("Book added to cart successfully: userId={}, bookId={}, bookTitle={}, price={}, cartItemCount={}",
+                userId, bookId, book.getTitle(), book.getPrice(), cart.getItems().size());
+
         CartResponse response = mapToResponse(cart);
         response.setInfoMessage("'" + book.getTitle() + "' sepete eklendi.");
         return response;
@@ -102,6 +116,8 @@ public class CartService {
      */
     @Transactional
     public CartResponse removeFromCart(Long userId, Long cartItemId) {
+        log.info("Removing item from cart: userId={}, cartItemId={}", userId, cartItemId);
+
         Cart cart = cartRepository.findByUserId(userId)
                 .orElseThrow(() -> new RuntimeException("Sepet bulunamadı"));
 
@@ -110,11 +126,17 @@ public class CartService {
 
         // Bu öğe bu kullanıcının sepetine ait mi kontrol et
         if (!cartItem.getCart().getId().equals(cart.getId())) {
+            log.warn("Unauthorized cart item removal attempt: userId={}, cartItemId={}, actualCartId={}",
+                    userId, cartItemId, cartItem.getCart().getId());
             throw new RuntimeException("Bu ürün sizin sepetinizde değil");
         }
 
+        String bookTitle = cartItem.getBook().getTitle();
         cart.removeItem(cartItem);
         cartItemRepository.delete(cartItem);
+
+        log.info("Item removed from cart successfully: userId={}, cartItemId={}, bookTitle={}, remainingItems={}",
+                userId, cartItemId, bookTitle, cart.getItems().size());
 
         return mapToResponse(cart);
     }
@@ -134,11 +156,16 @@ public class CartService {
      */
     @Transactional
     public void clearCart(Long userId) {
+        log.info("Clearing cart: userId={}", userId);
+
         Cart cart = cartRepository.findByUserId(userId)
                 .orElseThrow(() -> new RuntimeException("Sepet bulunamadı"));
 
+        int itemCount = cart.getItems().size();
         cart.getItems().clear();
         cartRepository.save(cart);
+
+        log.info("Cart cleared successfully: userId={}, itemsRemoved={}", userId, itemCount);
     }
 
     /**

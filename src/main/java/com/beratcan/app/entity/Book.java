@@ -60,6 +60,14 @@ public class Book {
     @ManyToMany(mappedBy = "ownedBooks")
     private Set<User> owners = new HashSet<>(); // Kitabı sahiplenen kullanıcılar
 
+    // ✅ CartItem ile bidirectional ilişki (Sepetlerdeki bu kitap)
+    @OneToMany(mappedBy = "book", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    private List<CartItem> cartItems = new ArrayList<>();
+
+    // ✅ Purchase ile bidirectional ilişki (Bu kitabın satın alma geçmişi)
+    @OneToMany(mappedBy = "book", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    private List<Purchase> purchases = new ArrayList<>();
+
     private Integer numberOfTopics;
 
     private Integer numberOfTests;

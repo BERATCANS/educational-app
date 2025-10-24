@@ -21,4 +21,5 @@ public class BookRequest {
     private ExamType examType;
     private LessonType lessonType;
     private BigDecimal price;
+    private String description;
 }

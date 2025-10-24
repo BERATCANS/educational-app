@@ -4,13 +4,9 @@ import com.beratcan.app.entity.enums.ExamType;
 import com.beratcan.app.entity.enums.FieldType;
 import com.beratcan.app.entity.enums.GradeLevel;
 import com.beratcan.app.entity.enums.LessonType;
-import lombok.Data;
 import lombok.Getter;
 import lombok.Setter;
 
-import java.math.BigDecimal;
-
-@Data
 @Getter
 @Setter
 public class BookResponse {
@@ -26,5 +22,4 @@ public class BookResponse {
     private FieldType fieldType;
     private ExamType examType;
     private LessonType lessonType;
-    private BigDecimal price;
 }

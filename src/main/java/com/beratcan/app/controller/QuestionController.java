@@ -4,6 +4,7 @@ import com.beratcan.app.dto.request.QuestionRequest;
 import com.beratcan.app.dto.response.QuestionResponse;
 import com.beratcan.app.service.QuestionService;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -19,6 +20,7 @@ public class QuestionController {
     }
 
     // CREATE
+    @PreAuthorize("hasRole('ADMIN')")
     @PostMapping("/add")
     public QuestionResponse addQuestion(@RequestParam Long testId, @RequestBody QuestionRequest request) {
         return questionService.addQuestion(testId, request);
@@ -35,12 +37,14 @@ public class QuestionController {
         return questionService.getQuestionById(questionId);
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     @GetMapping("/flagged")
     public List<QuestionResponse> getFlaggedQuestions() {
         return questionService.getFlaggedQuestions();
     }
 
     // UPDATE
+    @PreAuthorize("hasRole('ADMIN')")
     @PutMapping("/{questionId}")
     public QuestionResponse updateQuestion(@PathVariable Long questionId,
             @RequestBody QuestionRequest request) {
@@ -48,6 +52,7 @@ public class QuestionController {
     }
 
     // DELETE
+    @PreAuthorize("hasRole('ADMIN')")
     @DeleteMapping("/{questionId}")
     public void deleteQuestion(@PathVariable Long questionId) {
         questionService.deleteQuestion(questionId);

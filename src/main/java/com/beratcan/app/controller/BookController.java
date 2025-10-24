@@ -6,6 +6,8 @@ import com.beratcan.app.dto.response.BookStoreResponse;
 import com.beratcan.app.entity.Book;
 import com.beratcan.app.service.BookService;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -21,6 +23,7 @@ public class BookController {
         this.bookService = bookService;
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     @PostMapping("/add")
     public Book addBook(@RequestBody BookRequest request) {
         Book book = new Book();
@@ -39,8 +42,11 @@ public class BookController {
     }
 
     @PostMapping("/use-code")
-    public ResponseEntity<?> useCode(@RequestParam Long userId, @RequestParam String code) {
+    public ResponseEntity<?> useCode(
+            @RequestParam String code,
+            Authentication authentication) {
         try {
+            Long userId = Long.parseLong(authentication.getName());
             String result = bookService.useCode(userId, code);
             return ResponseEntity.ok().body(Map.of("message", result));
         } catch (Exception e) {
@@ -48,8 +54,11 @@ public class BookController {
         }
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     @PostMapping("/add-codes")
-    public ResponseEntity<?> addCodes(@RequestParam Long bookId, @RequestBody List<String> codes) {
+    public ResponseEntity<?> addCodes(
+            @RequestParam Long bookId,
+            @RequestBody List<String> codes) {
         try {
             String result = bookService.addCodes(bookId, codes);
             return ResponseEntity.ok(Map.of("message", result));
@@ -64,6 +73,7 @@ public class BookController {
     }
 
     // 📌 PUT - Kitap güncelleme
+    @PreAuthorize("hasRole('ADMIN')")
     @PutMapping("/{bookId}")
     public ResponseEntity<Book> updateBook(
             @PathVariable Long bookId,
@@ -74,6 +84,7 @@ public class BookController {
     }
 
     // 📌 DELETE - Kitap silme
+    @PreAuthorize("hasRole('ADMIN')")
     @DeleteMapping("/{bookId}")
     public ResponseEntity<String> deleteBook(@PathVariable Long bookId) {
         bookService.deleteBook(bookId);
@@ -81,6 +92,7 @@ public class BookController {
     }
 
     // 📊 COUNT - Kitap verilerini say ve güncelle
+    @PreAuthorize("hasRole('ADMIN')")
     @PostMapping("/{bookId}/count")
     public ResponseEntity<String> countBookData(@PathVariable Long bookId) {
         try {

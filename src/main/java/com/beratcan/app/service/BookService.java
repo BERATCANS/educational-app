@@ -196,7 +196,6 @@ public class BookService {
         response.setFieldType(book.getFieldType());
         response.setExamType(book.getExamType());
         response.setLessonType(book.getLessonType());
-        response.setPrice(book.getPrice());
         return response;
     }
 
@@ -316,6 +315,7 @@ public class BookService {
         response.setExamType(book.getExamType());
         response.setLessonType(book.getLessonType());
         response.setPrice(book.getPrice());
+        response.setDescription(book.getDescription());
         return response;
     }
 }

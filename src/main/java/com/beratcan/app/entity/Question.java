@@ -13,7 +13,6 @@ import java.util.List;
 @Getter
 @Setter
 @Table(name = "questions")
-// email verify ekle
 public class Question {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

@@ -8,6 +8,7 @@ import com.beratcan.app.entity.User;
 import com.beratcan.app.repository.QuestionRepository;
 import com.beratcan.app.repository.UserRepository;
 import com.beratcan.app.security.JwtUtil;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -16,6 +17,7 @@ import java.util.Set;
 import java.util.regex.Pattern;
 
 @Service
+@Slf4j
 public class UserService {
 
     private final UserRepository userRepository;
@@ -24,26 +26,35 @@ public class UserService {
 
     private static final Pattern PHONE_PATTERN = Pattern.compile("^\\+?[0-9]{10,13}$");
 
-    public UserService(UserRepository userRepository, QuestionRepository questionRepository) {
+    public UserService(UserRepository userRepository,
+            QuestionRepository questionRepository,
+            BCryptPasswordEncoder passwordEncoder) { // ✅ Inject edildi
         this.userRepository = userRepository;
-        this.passwordEncoder = new BCryptPasswordEncoder();
+        this.passwordEncoder = passwordEncoder; // ✅ new yapma
         this.questionRepository = questionRepository;
     }
 
     public User registerUser(UserRequest dto) {
+        log.info("User registration started: username={}, email={}, role={}",
+                dto.getUsername(), dto.getEmail(), dto.getRole());
+
         // Telefon doğrulama
         if (!PHONE_PATTERN.matcher(dto.getPhoneNumber()).matches()) {
+            log.warn("Invalid phone number format: username={}, phone={}", dto.getUsername(), dto.getPhoneNumber());
             throw new IllegalArgumentException("Geçersiz telefon numarası.");
         }
 
         // Benzersizlik kontrolleri
         if (userRepository.existsByEmail(dto.getEmail())) {
+            log.warn("Registration failed - email already exists: email={}", dto.getEmail());
             throw new IllegalArgumentException("Bu email zaten kayıtlı.");
         }
         if (userRepository.existsByPhoneNumber(dto.getPhoneNumber())) {
+            log.warn("Registration failed - phone number already exists: phone={}", dto.getPhoneNumber());
             throw new IllegalArgumentException("Bu telefon numarası zaten kayıtlı.");
         }
         if (userRepository.existsByUsername(dto.getUsername())) {
+            log.warn("Registration failed - username already exists: username={}", dto.getUsername());
             throw new IllegalArgumentException("Bu kullanıcı adı zaten kayıtlı.");
         }
 
@@ -89,10 +100,17 @@ public class UserService {
 
         user.setGender(dto.getGender() != null ? Gender.valueOf(dto.getGender()) : Gender.DIGER);
         user.setCity(dto.getCity() != null ? City.valueOf(dto.getCity()) : City.Diğer);
-        return userRepository.save(user);
+
+        User savedUser = userRepository.save(user);
+        log.info("User registered successfully: userId={}, username={}, email={}, role={}",
+                savedUser.getId(), savedUser.getUsername(), savedUser.getEmail(), savedUser.getRole());
+
+        return savedUser;
     }
 
     public User login(LoginRequest request, JwtUtil jwtUtil) {
+        log.info("Login attempt: identifier={}", request.getIdentifier());
+
         Optional<User> userOpt;
 
         if (request.getIdentifier().contains("@")) {
@@ -101,14 +119,20 @@ public class UserService {
             userOpt = userRepository.findByUsername(request.getIdentifier());
         }
 
-        User user = userOpt.orElseThrow(() -> new IllegalArgumentException("Kullanıcı bulunamadı."));
+        User user = userOpt.orElseThrow(() -> {
+            log.warn("Login failed - user not found: identifier={}", request.getIdentifier());
+            return new IllegalArgumentException("Kullanıcı bulunamadı.");
+        });
 
         if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
+            log.warn("Login failed - invalid password: userId={}, username={}", user.getId(), user.getUsername());
             throw new IllegalArgumentException("Geçersiz şifre.");
         }
 
         // JWT token üret
         String token = jwtUtil.generateToken(user.getUsername(), user.getId());
+
+        log.info("Login successful: userId={}, username={}, role={}", user.getId(), user.getUsername(), user.getRole());
 
         // Login başarılı → JWT döndür
         return user;
@@ -117,31 +141,58 @@ public class UserService {
     // Soru flagleme
     public void flagQuestion(Long userId, Long questionId) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> {
+                    RuntimeException ex = new RuntimeException("User not found");
+                    log.error("User not found for flagging question: userId={}, questionId={}", userId, questionId, ex);
+                    return ex;
+                });
 
         Question question = questionRepository.findById(questionId)
-                .orElseThrow(() -> new RuntimeException("Question not found"));
+                .orElseThrow(() -> {
+                    RuntimeException ex = new RuntimeException("Question not found");
+                    log.error("Question not found for flagging: questionId={}, userId={}", questionId, userId, ex);
+                    return ex;
+                });
 
         user.getFlaggedQuestions().add(question);
         userRepository.save(user);
+
+        log.info("Question flagged: userId={}, questionId={}, totalFlagged={}",
+                userId, questionId, user.getFlaggedQuestions().size());
     }
 
     // Flag kaldırma
     public void unflagQuestion(Long userId, Long questionId) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> {
+                    RuntimeException ex = new RuntimeException("User not found");
+                    log.error("User not found for unflagging question: userId={}, questionId={}", userId, questionId,
+                            ex);
+                    return ex;
+                });
 
         Question question = questionRepository.findById(questionId)
-                .orElseThrow(() -> new RuntimeException("Question not found"));
+                .orElseThrow(() -> {
+                    RuntimeException ex = new RuntimeException("Question not found");
+                    log.error("Question not found for unflagging: questionId={}, userId={}", questionId, userId, ex);
+                    return ex;
+                });
 
         user.getFlaggedQuestions().remove(question);
         userRepository.save(user);
+
+        log.info("Question unflagged: userId={}, questionId={}, totalFlagged={}",
+                userId, questionId, user.getFlaggedQuestions().size());
     }
 
     // Kullanıcının flagged questions listesi
     public Set<Question> getFlaggedQuestions(Long userId) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> {
+                    RuntimeException ex = new RuntimeException("User not found");
+                    log.error("User not found for getting flagged questions: userId={}", userId, ex);
+                    return ex;
+                });
 
         return user.getFlaggedQuestions();
     }
@@ -149,13 +200,21 @@ public class UserService {
     // Kullanıcı bilgilerini getir
     public User getUserById(Long userId) {
         return userRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> {
+                    RuntimeException ex = new RuntimeException("User not found");
+                    log.error("User not found: userId={}", userId, ex);
+                    return ex;
+                });
     }
 
     // Question bilgisini getir (FlaggedResponse için)
     public Question getQuestionById(Long questionId) {
         return questionRepository.findById(questionId)
-                .orElseThrow(() -> new RuntimeException("Question not found"));
+                .orElseThrow(() -> {
+                    RuntimeException ex = new RuntimeException("Question not found");
+                    log.error("Question not found: questionId={}", questionId, ex);
+                    return ex;
+                });
     }
 
 }

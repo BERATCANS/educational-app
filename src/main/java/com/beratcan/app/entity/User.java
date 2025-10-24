@@ -74,4 +74,12 @@ public class User {
 
         @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
         private List<TestResult> testResults = new ArrayList<>();
+
+        // ✅ Cart ile bidirectional ilişki (Her kullanıcının bir sepeti var)
+        @OneToOne(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+        private Cart cart;
+
+        // ✅ Purchase ile bidirectional ilişki (Kullanıcının satın alma geçmişi)
+        @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+        private List<Purchase> purchases = new ArrayList<>();
 }

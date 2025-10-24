@@ -29,4 +29,5 @@ public class BookStoreResponse {
     private ExamType examType;
     private LessonType lessonType;
     private BigDecimal price;
+    private String description;
 }

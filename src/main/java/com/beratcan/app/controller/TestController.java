@@ -3,6 +3,7 @@ package com.beratcan.app.controller;
 import com.beratcan.app.dto.request.TestRequest;
 import com.beratcan.app.dto.response.TestResponse;
 import com.beratcan.app.service.TestService;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -18,6 +19,7 @@ public class TestController {
     }
 
     // CREATE
+    @PreAuthorize("hasRole('ADMIN')")
     @PostMapping("/add")
     public TestResponse addTest(@RequestParam Long topicId, @RequestBody TestRequest request) {
         return testService.addTest(topicId, request);
@@ -35,12 +37,14 @@ public class TestController {
     }
 
     // UPDATE
+    @PreAuthorize("hasRole('ADMIN')")
     @PutMapping("/update/{testId}")
     public TestResponse updateTest(@PathVariable Long testId, @RequestBody TestRequest request) {
         return testService.updateTest(testId, request);
     }
 
     // DELETE
+    @PreAuthorize("hasRole('ADMIN')")
     @DeleteMapping("/delete/{testId}")
     public void deleteTest(@PathVariable Long testId) {
         testService.deleteTest(testId);

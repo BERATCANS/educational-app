@@ -5,6 +5,7 @@ import com.beratcan.app.dto.response.TestResultResponse;
 import com.beratcan.app.entity.TestResult;
 import com.beratcan.app.service.TestResultService;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
@@ -23,32 +24,46 @@ public class TestResultController {
 
     // Test sonucunu kaydet
     @PostMapping("/submit")
-    public ResponseEntity<TestResult> submitTest(@RequestBody TestSubmissionRequest request) {
+    public ResponseEntity<TestResult> submitTest(
+            @RequestBody TestSubmissionRequest request,
+            Authentication authentication) {
+        Long userId = Long.parseLong(authentication.getName());
         TestResult result = testResultService.saveTestResult(
-                request.getUserId(),
+                userId, // Authentication'dan alınan userId
                 request.getTestId(),
                 request.getUserAnswers(),
                 request.getTotalTimeSeconds());
         return ResponseEntity.ok(result);
     }
 
-    // Kullanıcının test sonuçları
-    @GetMapping("/user/{userId}")
-    public ResponseEntity<List<TestResult>> getUserTestResults(@PathVariable Long userId) {
+    // Kullanıcının kendi test sonuçları
+    @GetMapping("/my-results")
+    public ResponseEntity<List<TestResult>> getMyTestResults(Authentication authentication) {
+        Long userId = Long.parseLong(authentication.getName());
         List<TestResult> results = testResultService.getUserTestResults(userId);
         return ResponseEntity.ok(results);
     }
 
-    // Belirli test sonucu detayı
+    // Belirli test sonucu detayı (sadece kendi sonucuna erişebilir)
     @GetMapping("/{testResultId}")
-    public ResponseEntity<TestResult> getTestResult(@PathVariable Long testResultId) {
+    public ResponseEntity<TestResult> getTestResult(
+            @PathVariable Long testResultId,
+            Authentication authentication) {
+        Long userId = Long.parseLong(authentication.getName());
         TestResult result = testResultService.getTestResultById(testResultId);
+
+        // Sadece kendi test sonucunu görebilir
+        if (!result.getUser().getId().equals(userId)) {
+            return ResponseEntity.status(403).body(null);
+        }
+
         return ResponseEntity.ok(result);
     }
 
-    // Kullanıcı istatistikleri
-    @GetMapping("/user/{userId}/stats")
-    public ResponseEntity<Map<String, Object>> getUserStats(@PathVariable Long userId) {
+    // Kullanıcının kendi istatistikleri
+    @GetMapping("/my-stats")
+    public ResponseEntity<Map<String, Object>> getMyStats(Authentication authentication) {
+        Long userId = Long.parseLong(authentication.getName());
         Double avgSuccessRate = testResultService.getUserAverageSuccessRate(userId);
         Long totalTests = testResultService.getUserTotalTestCount(userId);
 
@@ -60,11 +75,14 @@ public class TestResultController {
         return ResponseEntity.ok(stats);
     }
 
-    // Kullanıcının belirli bir test için sonucu
-    @GetMapping("/user/{userId}/test/{testId}")
-    public ResponseEntity<Map<String, Object>> getUserTestResult(@PathVariable Long userId, @PathVariable Long testId) {
+    // Kullanıcının belirli bir test için kendi sonucu
+    @GetMapping("/test/{testId}")
+    public ResponseEntity<Map<String, Object>> getMyTestResult(
+            @PathVariable Long testId,
+            Authentication authentication) {
+        Long userId = Long.parseLong(authentication.getName());
         TestResult result = testResultService.getUserTestResultByTestId(userId, testId);
-        
+
         Map<String, Object> response = new HashMap<>();
         if (result != null) {
             response.put("found", true);
@@ -73,15 +91,17 @@ public class TestResultController {
             response.put("found", false);
             response.put("message", "No test result found for this test");
         }
-        
+
         return ResponseEntity.ok(response);
     }
 
-    // Kullanıcının belirli bir kitaptaki tüm test sonuçları
-    @GetMapping("/user/{userId}/book/{bookId}")
-    public ResponseEntity<List<TestResultResponse>> getUserTestResultsByBookId(@PathVariable Long userId,
-            @PathVariable Long bookId) {
+    // Kullanıcının belirli bir kitaptaki kendi test sonuçları
+    @GetMapping("/book/{bookId}")
+    public ResponseEntity<List<TestResultResponse>> getMyTestResultsByBook(
+            @PathVariable Long bookId,
+            Authentication authentication) {
         try {
+            Long userId = Long.parseLong(authentication.getName());
             List<TestResultResponse> results = testResultService.getUserTestResultsByBookId(userId, bookId);
             return ResponseEntity.ok(results);
         } catch (Exception e) {
