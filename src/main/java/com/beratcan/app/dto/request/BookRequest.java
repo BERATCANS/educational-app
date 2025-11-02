@@ -1,7 +1,6 @@
 package com.beratcan.app.dto.request;
 
 import com.beratcan.app.entity.enums.ExamType;
-import com.beratcan.app.entity.enums.FieldType;
 import com.beratcan.app.entity.enums.GradeLevel;
 import com.beratcan.app.entity.enums.LessonType;
 import java.math.BigDecimal;
@@ -17,7 +16,6 @@ public class BookRequest {
     private boolean paid;
     private List<String> topics;
     private GradeLevel gradeLevel;
-    private FieldType fieldType;
     private ExamType examType;
     private LessonType lessonType;
     private BigDecimal price;

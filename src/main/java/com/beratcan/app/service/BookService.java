@@ -30,11 +30,10 @@ import java.util.Optional;
 public class BookService {
 
     private final BookRepository bookRepository;
-    private final BookCodeRepository codeRepository;
+    private final BookCodeRepository bookCodeRepository;
     private final UserRepository userRepository;
     private final TopicRepository topicRepository;
     private final TestRepository testRepository;
-    private final BookCodeRepository bookCodeRepository;
     private final TestResultRepository testResultRepository;
 
     public Book addBook(Book book, List<String> topics) {
@@ -68,7 +67,7 @@ public class BookService {
 
         User user = userOpt.get();
 
-        Optional<BookCode> codeOpt = codeRepository.findByCodeAndUsedFalse(codeValue);
+        Optional<BookCode> codeOpt = bookCodeRepository.findByCodeAndUsedFalse(codeValue);
         if (codeOpt.isEmpty())
             return "Kod geçersiz veya zaten kullanıldı";
 
@@ -85,7 +84,7 @@ public class BookService {
 
         code.setUsed(true);
         code.setUsedBy(user);
-        codeRepository.save(code);
+        bookCodeRepository.save(code);
 
         // Kullanıcıya kitabı ekle
         user.getOwnedBooks().add(book);
@@ -94,33 +93,48 @@ public class BookService {
         return "Kod başarıyla kullanıldı, kitap erişimi açıldı: " + book.getTitle();
     }
 
+    // Ücretsiz kitap ekleme
+    @Transactional
+    public String addFreeBookToLibrary(Long userId, Long bookId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        Book book = bookRepository.findById(bookId)
+                .orElseThrow(() -> new RuntimeException("Book not found"));
+
+        // Kitap ücretsiz mi kontrol et
+        if (book.isPaid()) {
+            return "Bu kitap ücretsiz değil";
+        }
+
+        // Kullanıcının bu kitabı zaten kütüphanesinde var mı kontrol et
+        boolean alreadyOwns = user.getOwnedBooks().stream()
+                .anyMatch(b -> b.getId().equals(bookId));
+
+        if (alreadyOwns) {
+            return "Bu kitap zaten kütüphanenizde";
+        }
+
+        // Kütüphaneye ekle
+        user.getOwnedBooks().add(book);
+        userRepository.save(user);
+
+        return "Kitap kütüphanenize eklendi: " + book.getTitle();
+    }
+
     public List<BookResponse> getBooksForUser(Long userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        // Paralı kitaplar (sahip olduğu) - skorlama ile sıralı
-        List<Book> paidBooks = user.getOwnedBooks().stream()
-                .filter(Book::isPaid)
+        // Sahip olduğu tüm kitapları dön - skorlama ile sıralı
+        List<BookResponse> allBooks = user.getOwnedBooks().stream()
                 .sorted((b1, b2) -> {
                     double score1 = calculateBookUsageScore(userId, b1.getId());
                     double score2 = calculateBookUsageScore(userId, b2.getId());
                     return Double.compare(score2, score1); // Yüksekten düşüğe
                 })
+                .map(this::toBookResponse)
                 .toList();
-
-        // Ücretsiz kitaplar - skorlama ile sıralı
-        List<Book> freeBooks = bookRepository.findByPaidFalse().stream()
-                .sorted((b1, b2) -> {
-                    double score1 = calculateBookUsageScore(userId, b1.getId());
-                    double score2 = calculateBookUsageScore(userId, b2.getId());
-                    return Double.compare(score2, score1); // Yüksekten düşüğe
-                })
-                .toList();
-
-        // Önce paralı sonra ücretsiz kitaplar
-        List<BookResponse> allBooks = new ArrayList<>();
-        allBooks.addAll(paidBooks.stream().map(this::toBookResponse).toList());
-        allBooks.addAll(freeBooks.stream().map(this::toBookResponse).toList());
 
         return allBooks;
     }
@@ -168,8 +182,12 @@ public class BookService {
         book.setPublisher(request.getPublisher());
         book.setCoverImageUrl(request.getCoverImageUrl());
         book.setPaid(request.isPaid());
+        book.setGradeLevel(request.getGradeLevel());
+        book.setExamType(request.getExamType());
+        book.setLessonType(request.getLessonType());
+        book.setPrice(request.getPrice());
+        book.setDescription(request.getDescription());
 
-        // Kod güncellemesi gerekiyorsa buraya eklenebilir
         return bookRepository.save(book);
     }
 
@@ -350,10 +368,58 @@ public class BookService {
         return PageResponse.of(pageContent, page, size, totalElements);
     }
 
-    // Backward compatibility için eski metod
-    public List<BookStoreResponse> getBookStore(Long userId) {
-        PageResponse<BookStoreResponse> page = getBookStore(userId, 0, 20);
-        return page.getContent();
+    public PageResponse<BookStoreResponse> searchBookStore(String query, Long userId, int page, int size) {
+        // Boş query ise normal store'u dön
+        if (query == null || query.trim().isEmpty()) {
+            return getBookStore(userId, page, size);
+        }
+
+        // Arama yap
+        List<Book> allBooks = bookRepository.searchByTitleOrPublisher(query);
+        List<Long> ownedBookIds;
+
+        if (userId == null) {
+            ownedBookIds = new ArrayList<>();
+        } else {
+            User user = userRepository.findById(userId)
+                    .orElseThrow(() -> new RuntimeException("User not found"));
+
+            ownedBookIds = user.getOwnedBooks().stream()
+                    .map(Book::getId)
+                    .toList();
+
+            // Kişiselleştirilmiş önerilere göre sırala
+            allBooks = sortBooksByRecommendation(allBooks, user);
+        }
+
+        // Sahip olunan kitapları sona taşı
+        List<Book> sortedBooks = new ArrayList<>();
+        List<Book> ownedBooks = new ArrayList<>();
+
+        for (Book book : allBooks) {
+            if (userId != null && ownedBookIds.contains(book.getId())) {
+                ownedBooks.add(book);
+            } else {
+                sortedBooks.add(book);
+            }
+        }
+
+        // Sahip olunan kitapları sona ekle
+        sortedBooks.addAll(ownedBooks);
+
+        // BookStoreResponse'a çevir
+        List<BookStoreResponse> allResponses = sortedBooks.stream()
+                .map(book -> toBookStoreResponse(book, ownedBookIds.contains(book.getId())))
+                .toList();
+
+        // Pagination uygula
+        int totalElements = allResponses.size();
+        int start = page * size;
+        int end = Math.min(start + size, totalElements);
+
+        List<BookStoreResponse> pageContent = allResponses.subList(Math.max(0, start), end);
+
+        return PageResponse.of(pageContent, page, size, totalElements);
     }
 
     /**

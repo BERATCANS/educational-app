@@ -36,6 +36,7 @@ public class BookController {
         book.setExamType(request.getExamType());
         book.setLessonType(request.getLessonType());
         book.setPrice(request.getPrice());
+        book.setDescription(request.getDescription());
 
         // topics BookService'e paslanacak
         return bookService.addBook(book, request.getTopics());
@@ -48,6 +49,19 @@ public class BookController {
         try {
             Long userId = Long.parseLong(authentication.getName());
             String result = bookService.useCode(userId, code);
+            return ResponseEntity.ok().body(Map.of("message", result));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @PostMapping("/add-free-book/{bookId}")
+    public ResponseEntity<?> addFreeBookToLibrary(
+            @PathVariable Long bookId,
+            Authentication authentication) {
+        try {
+            Long userId = Long.parseLong(authentication.getName());
+            String result = bookService.addFreeBookToLibrary(userId, bookId);
             return ResponseEntity.ok().body(Map.of("message", result));
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
@@ -119,5 +133,24 @@ public class BookController {
         }
         // Giriş yapmamış kullanıcılar için tüm kitapları dön
         return bookService.getBookStore(null, page, size);
+    }
+
+    @GetMapping("/store/search")
+    public PageResponse<BookStoreResponse> searchBookStore(
+            @RequestParam String query,
+            Authentication authentication,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        if (authentication != null && authentication.isAuthenticated()) {
+            try {
+                Long userId = Long.parseLong(authentication.getName());
+                return bookService.searchBookStore(query, userId, page, size);
+            } catch (Exception e) {
+                // Kullanıcı ID'si parse edilemezse, tüm kitapları dön
+                return bookService.searchBookStore(query, null, page, size);
+            }
+        }
+        // Giriş yapmamış kullanıcılar için tüm kitapları dön
+        return bookService.searchBookStore(query, null, page, size);
     }
 }
