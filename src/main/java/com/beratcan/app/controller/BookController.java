@@ -119,38 +119,27 @@ public class BookController {
 
     @GetMapping("/store")
     public PageResponse<BookStoreResponse> getBookStore(
+            @RequestParam(required = false) String query,
+            @RequestParam(required = false) com.beratcan.app.entity.enums.ExamType examType,
+            @RequestParam(required = false) com.beratcan.app.entity.enums.GradeLevel gradeLevel,
+            @RequestParam(required = false) com.beratcan.app.entity.enums.LessonType lessonType,
+            @RequestParam(required = false) java.math.BigDecimal minPrice,
+            @RequestParam(required = false) java.math.BigDecimal maxPrice,
             Authentication authentication,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
         if (authentication != null && authentication.isAuthenticated()) {
             try {
                 Long userId = Long.parseLong(authentication.getName());
-                return bookService.getBookStore(userId, page, size);
+                return bookService.getBookStore(query, examType, gradeLevel, lessonType, minPrice, maxPrice, userId,
+                        page, size);
             } catch (Exception e) {
                 // Kullanıcı ID'si parse edilemezse, tüm kitapları dön
-                return bookService.getBookStore(null, page, size);
+                return bookService.getBookStore(query, examType, gradeLevel, lessonType, minPrice, maxPrice, null, page,
+                        size);
             }
         }
         // Giriş yapmamış kullanıcılar için tüm kitapları dön
-        return bookService.getBookStore(null, page, size);
-    }
-
-    @GetMapping("/store/search")
-    public PageResponse<BookStoreResponse> searchBookStore(
-            @RequestParam String query,
-            Authentication authentication,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size) {
-        if (authentication != null && authentication.isAuthenticated()) {
-            try {
-                Long userId = Long.parseLong(authentication.getName());
-                return bookService.searchBookStore(query, userId, page, size);
-            } catch (Exception e) {
-                // Kullanıcı ID'si parse edilemezse, tüm kitapları dön
-                return bookService.searchBookStore(query, null, page, size);
-            }
-        }
-        // Giriş yapmamış kullanıcılar için tüm kitapları dön
-        return bookService.searchBookStore(query, null, page, size);
+        return bookService.getBookStore(query, examType, gradeLevel, lessonType, minPrice, maxPrice, null, page, size);
     }
 }

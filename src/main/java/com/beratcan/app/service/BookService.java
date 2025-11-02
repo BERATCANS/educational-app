@@ -24,6 +24,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.ArrayList;
 import java.util.Optional;
+import java.math.BigDecimal;
 
 @Service
 @RequiredArgsConstructor
@@ -313,28 +314,42 @@ public class BookService {
         bookRepository.save(book);
     }
 
-    public PageResponse<BookStoreResponse> getBookStore(Long userId, int page, int size) {
-        // Eğer userId null ise, tüm kitapları dön (eski davranış)
+    public PageResponse<BookStoreResponse> getBookStore(String query,
+            com.beratcan.app.entity.enums.ExamType examType,
+            com.beratcan.app.entity.enums.GradeLevel gradeLevel,
+            com.beratcan.app.entity.enums.LessonType lessonType,
+            BigDecimal minPrice,
+            BigDecimal maxPrice,
+            Long userId, int page, int size) {
         List<Book> allBooks;
         List<Long> ownedBookIds;
+        User user = null;
 
-        if (userId == null) {
-            allBooks = bookRepository.findAll();
-            ownedBookIds = new ArrayList<>();
-        } else {
+        if (userId != null) {
             // Kullanıcıyı bul
-            User user = userRepository.findById(userId)
+            user = userRepository.findById(userId)
                     .orElseThrow(() -> new RuntimeException("User not found"));
-
-            // Tüm kitapları al
-            allBooks = bookRepository.findAll();
 
             // Sahip olunan kitaplar
             ownedBookIds = user.getOwnedBooks().stream()
                     .map(Book::getId)
                     .toList();
+        } else {
+            ownedBookIds = new ArrayList<>();
+        }
 
-            // Kişiselleştirilmiş önerilere göre kitapları sırala
+        // Query varsa arama yap, yoksa tüm kitapları getir
+        if (query != null && !query.trim().isEmpty()) {
+            allBooks = bookRepository.searchByTitleOrPublisher(query);
+        } else {
+            allBooks = bookRepository.findAll();
+        }
+
+        // Filtreleri uygula
+        allBooks = applyFilters(allBooks, examType, gradeLevel, lessonType, minPrice, maxPrice);
+
+        // Kişiselleştirilmiş önerilere göre sırala (kullanıcı varsa)
+        if (user != null) {
             allBooks = sortBooksByRecommendation(allBooks, user);
         }
 
@@ -368,58 +383,25 @@ public class BookService {
         return PageResponse.of(pageContent, page, size, totalElements);
     }
 
-    public PageResponse<BookStoreResponse> searchBookStore(String query, Long userId, int page, int size) {
-        // Boş query ise normal store'u dön
-        if (query == null || query.trim().isEmpty()) {
-            return getBookStore(userId, page, size);
-        }
+    /**
+     * Filtreleri uygular
+     */
+    private List<Book> applyFilters(List<Book> books,
+            com.beratcan.app.entity.enums.ExamType examType,
+            com.beratcan.app.entity.enums.GradeLevel gradeLevel,
+            com.beratcan.app.entity.enums.LessonType lessonType,
+            BigDecimal minPrice,
+            BigDecimal maxPrice) {
 
-        // Arama yap
-        List<Book> allBooks = bookRepository.searchByTitleOrPublisher(query);
-        List<Long> ownedBookIds;
-
-        if (userId == null) {
-            ownedBookIds = new ArrayList<>();
-        } else {
-            User user = userRepository.findById(userId)
-                    .orElseThrow(() -> new RuntimeException("User not found"));
-
-            ownedBookIds = user.getOwnedBooks().stream()
-                    .map(Book::getId)
-                    .toList();
-
-            // Kişiselleştirilmiş önerilere göre sırala
-            allBooks = sortBooksByRecommendation(allBooks, user);
-        }
-
-        // Sahip olunan kitapları sona taşı
-        List<Book> sortedBooks = new ArrayList<>();
-        List<Book> ownedBooks = new ArrayList<>();
-
-        for (Book book : allBooks) {
-            if (userId != null && ownedBookIds.contains(book.getId())) {
-                ownedBooks.add(book);
-            } else {
-                sortedBooks.add(book);
-            }
-        }
-
-        // Sahip olunan kitapları sona ekle
-        sortedBooks.addAll(ownedBooks);
-
-        // BookStoreResponse'a çevir
-        List<BookStoreResponse> allResponses = sortedBooks.stream()
-                .map(book -> toBookStoreResponse(book, ownedBookIds.contains(book.getId())))
+        return books.stream()
+                .filter(book -> examType == null || book.getExamType() == examType)
+                .filter(book -> gradeLevel == null || book.getGradeLevel() == gradeLevel)
+                .filter(book -> lessonType == null || book.getLessonType() == lessonType)
+                .filter(book -> minPrice == null
+                        || (book.getPrice() != null && book.getPrice().compareTo(minPrice) >= 0))
+                .filter(book -> maxPrice == null
+                        || (book.getPrice() != null && book.getPrice().compareTo(maxPrice) <= 0))
                 .toList();
-
-        // Pagination uygula
-        int totalElements = allResponses.size();
-        int start = page * size;
-        int end = Math.min(start + size, totalElements);
-
-        List<BookStoreResponse> pageContent = allResponses.subList(Math.max(0, start), end);
-
-        return PageResponse.of(pageContent, page, size, totalElements);
     }
 
     /**
