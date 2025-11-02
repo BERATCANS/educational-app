@@ -338,15 +338,8 @@ public class BookService {
             ownedBookIds = new ArrayList<>();
         }
 
-        // Query varsa arama yap, yoksa tüm kitapları getir
-        if (query != null && !query.trim().isEmpty()) {
-            allBooks = bookRepository.searchByTitleOrPublisher(query);
-        } else {
-            allBooks = bookRepository.findAll();
-        }
-
-        // Filtreleri uygula
-        allBooks = applyFilters(allBooks, examType, gradeLevel, lessonType, minPrice, maxPrice);
+        // Arama ve filtrelemeyi repository'de yap
+        allBooks = bookRepository.searchAndFilterBooks(query, examType, gradeLevel, lessonType, minPrice, maxPrice);
 
         // Kişiselleştirilmiş önerilere göre sırala (kullanıcı varsa)
         if (user != null) {
@@ -381,27 +374,6 @@ public class BookService {
         List<BookStoreResponse> pageContent = allResponses.subList(Math.max(0, start), end);
 
         return PageResponse.of(pageContent, page, size, totalElements);
-    }
-
-    /**
-     * Filtreleri uygular
-     */
-    private List<Book> applyFilters(List<Book> books,
-            com.beratcan.app.entity.enums.ExamType examType,
-            com.beratcan.app.entity.enums.GradeLevel gradeLevel,
-            com.beratcan.app.entity.enums.LessonType lessonType,
-            BigDecimal minPrice,
-            BigDecimal maxPrice) {
-
-        return books.stream()
-                .filter(book -> examType == null || book.getExamType() == examType)
-                .filter(book -> gradeLevel == null || book.getGradeLevel() == gradeLevel)
-                .filter(book -> lessonType == null || book.getLessonType() == lessonType)
-                .filter(book -> minPrice == null
-                        || (book.getPrice() != null && book.getPrice().compareTo(minPrice) >= 0))
-                .filter(book -> maxPrice == null
-                        || (book.getPrice() != null && book.getPrice().compareTo(maxPrice) <= 0))
-                .toList();
     }
 
     /**
