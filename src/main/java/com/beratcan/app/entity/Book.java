@@ -1,7 +1,6 @@
 package com.beratcan.app.entity;
 
 import com.beratcan.app.entity.enums.ExamType;
-import com.beratcan.app.entity.enums.FieldType;
 import com.beratcan.app.entity.enums.GradeLevel;
 import com.beratcan.app.entity.enums.LessonType;
 import com.fasterxml.jackson.annotation.JsonManagedReference;
@@ -33,9 +32,6 @@ public class Book {
 
     @Enumerated(EnumType.STRING)
     private GradeLevel gradeLevel; // Kitap hangi sınıf için?
-
-    @Enumerated(EnumType.STRING)
-    private FieldType fieldType; // Kitap hangi alan için?
 
     @Enumerated(EnumType.STRING)
     private ExamType examType; // Kitap hangi sınav için?

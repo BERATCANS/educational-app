@@ -3,6 +3,7 @@ package com.beratcan.app.controller;
 import com.beratcan.app.dto.request.BookRequest;
 import com.beratcan.app.dto.response.BookResponse;
 import com.beratcan.app.dto.response.BookStoreResponse;
+import com.beratcan.app.dto.response.PageResponse;
 import com.beratcan.app.entity.Book;
 import com.beratcan.app.service.BookService;
 import org.springframework.http.ResponseEntity;
@@ -32,7 +33,6 @@ public class BookController {
         book.setCoverImageUrl(request.getCoverImageUrl());
         book.setPaid(request.isPaid());
         book.setGradeLevel(request.getGradeLevel());
-        book.setFieldType(request.getFieldType());
         book.setExamType(request.getExamType());
         book.setLessonType(request.getLessonType());
         book.setPrice(request.getPrice());
@@ -104,17 +104,20 @@ public class BookController {
     }
 
     @GetMapping("/store")
-    public List<BookStoreResponse> getBookStore(Authentication authentication) {
+    public PageResponse<BookStoreResponse> getBookStore(
+            Authentication authentication,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
         if (authentication != null && authentication.isAuthenticated()) {
             try {
                 Long userId = Long.parseLong(authentication.getName());
-                return bookService.getBookStore(userId);
+                return bookService.getBookStore(userId, page, size);
             } catch (Exception e) {
                 // Kullanıcı ID'si parse edilemezse, tüm kitapları dön
-                return bookService.getBookStore(null);
+                return bookService.getBookStore(null, page, size);
             }
         }
         // Giriş yapmamış kullanıcılar için tüm kitapları dön
-        return bookService.getBookStore(null);
+        return bookService.getBookStore(null, page, size);
     }
 }

@@ -5,5 +5,4 @@ public enum FieldType { // sadece YKS için geçerli
     SOZEL,
     ESIT_AGIRLIK,
     DIL,
-    TYT
 }
