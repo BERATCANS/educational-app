@@ -376,9 +376,113 @@ public class BookService {
             }
         }
 
+        // YKS için fieldType'a göre özel sıralama
+        if (user.getExamType() == com.beratcan.app.entity.enums.ExamType.YKS) {
+            recommendedBooks = sortYKSRecommendedBooks(recommendedBooks, user.getGradeLevel(), user.getFieldType());
+        }
+
         // Önce önerilen kitaplar, sonra diğerleri
         recommendedBooks.addAll(otherBooks);
         return recommendedBooks;
+    }
+
+    /**
+     * YKS kitaplarını fieldType ve sınıfına göre sıralar
+     * 9-10. sınıf için: kendi sınıf -> diğer sınıf -> TYT -> fieldType -> diğer
+     * 11-12. sınıf için: kendi sınıf -> fieldType -> TYT -> diğer
+     */
+    private List<Book> sortYKSRecommendedBooks(List<Book> books,
+            com.beratcan.app.entity.enums.GradeLevel userGradeLevel,
+            com.beratcan.app.entity.enums.FieldType userFieldType) {
+
+        // 9-10. sınıf için sıralama
+        if (userGradeLevel == com.beratcan.app.entity.enums.GradeLevel.G9 ||
+                userGradeLevel == com.beratcan.app.entity.enums.GradeLevel.G10) {
+
+            List<Book> sameGradeBooks = new ArrayList<>();
+            List<Book> otherGradeBooks = new ArrayList<>();
+            List<Book> tytBooks = new ArrayList<>();
+            List<Book> matchingFieldBooks = new ArrayList<>();
+            List<Book> otherYKSBooks = new ArrayList<>();
+
+            com.beratcan.app.entity.enums.GradeLevel otherGrade = userGradeLevel == com.beratcan.app.entity.enums.GradeLevel.G9
+                    ? com.beratcan.app.entity.enums.GradeLevel.G10
+                    : com.beratcan.app.entity.enums.GradeLevel.G9;
+
+            for (Book book : books) {
+                // Kendi sınıfı
+                if (book.getGradeLevel() == userGradeLevel) {
+                    sameGradeBooks.add(book);
+                }
+                // Diğer sınıf (9 ise 10, 10 ise 9)
+                else if (book.getGradeLevel() == otherGrade) {
+                    otherGradeBooks.add(book);
+                }
+                // TYT kitapları
+                else if (book.getFieldType() == null ||
+                        book.getFieldType() == com.beratcan.app.entity.enums.FieldType.TYT) {
+                    tytBooks.add(book);
+                }
+                // FieldType'a uygun kitaplar
+                else if (userFieldType != null && book.getFieldType() == userFieldType) {
+                    matchingFieldBooks.add(book);
+                }
+                // Diğer YKS kitapları
+                else {
+                    otherYKSBooks.add(book);
+                }
+            }
+
+            // Sıralamayı birleştir: kendi sınıf -> diğer sınıf -> TYT -> fieldType -> diğer
+            List<Book> sortedBooks = new ArrayList<>();
+            sortedBooks.addAll(sameGradeBooks);
+            sortedBooks.addAll(otherGradeBooks);
+            sortedBooks.addAll(tytBooks);
+            sortedBooks.addAll(matchingFieldBooks);
+            sortedBooks.addAll(otherYKSBooks);
+            return sortedBooks;
+        }
+
+        // 11-12. sınıf için sıralama
+        else if (userGradeLevel == com.beratcan.app.entity.enums.GradeLevel.G11 ||
+                userGradeLevel == com.beratcan.app.entity.enums.GradeLevel.G12) {
+
+            List<Book> sameGradeBooks = new ArrayList<>();
+            List<Book> matchingFieldBooks = new ArrayList<>();
+            List<Book> tytBooks = new ArrayList<>();
+            List<Book> otherYKSBooks = new ArrayList<>();
+
+            for (Book book : books) {
+                // Kendi sınıfı
+                if (book.getGradeLevel() == userGradeLevel) {
+                    sameGradeBooks.add(book);
+                }
+                // FieldType'a uygun kitaplar
+                else if (userFieldType != null && book.getFieldType() == userFieldType) {
+                    matchingFieldBooks.add(book);
+                }
+                // TYT kitapları
+                else if (book.getFieldType() == null ||
+                        book.getFieldType() == com.beratcan.app.entity.enums.FieldType.TYT) {
+                    tytBooks.add(book);
+                }
+                // Diğer YKS kitapları
+                else {
+                    otherYKSBooks.add(book);
+                }
+            }
+
+            // Sıralamayı birleştir: kendi sınıf -> fieldType -> TYT -> diğer
+            List<Book> sortedBooks = new ArrayList<>();
+            sortedBooks.addAll(sameGradeBooks);
+            sortedBooks.addAll(matchingFieldBooks);
+            sortedBooks.addAll(tytBooks);
+            sortedBooks.addAll(otherYKSBooks);
+            return sortedBooks;
+        }
+
+        // Diğer durumlar için orijinal sırayı koru
+        return books;
     }
 
     /**
