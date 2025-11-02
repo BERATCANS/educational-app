@@ -295,12 +295,162 @@ public class BookService {
         bookRepository.save(book);
     }
 
-    public List<BookStoreResponse> getBookStore() {
-        List<Book> books = bookRepository.findAll();
-        return books.stream().map(this::toBookStoreResponse).toList();
+    public List<BookStoreResponse> getBookStore(Long userId) {
+        // Eğer userId null ise, tüm kitapları dön (eski davranış)
+        if (userId == null) {
+            List<Book> books = bookRepository.findAll();
+            return books.stream()
+                    .map(book -> toBookStoreResponse(book, null))
+                    .toList();
+        }
+
+        // Kullanıcıyı bul
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        // Tüm kitapları al
+        List<Book> allBooks = bookRepository.findAll();
+
+        // Sahip olunan kitaplar
+        List<Long> ownedBookIds = user.getOwnedBooks().stream()
+                .map(Book::getId)
+                .toList();
+
+        // Kişiselleştirilmiş önerilere göre kitapları sırala
+        List<Book> recommendedBooks = sortBooksByRecommendation(allBooks, user);
+
+        // Sahip olunan kitapları sona taşı
+        List<Book> sortedBooks = new ArrayList<>();
+        List<Book> ownedBooks = new ArrayList<>();
+
+        for (Book book : recommendedBooks) {
+            if (ownedBookIds.contains(book.getId())) {
+                ownedBooks.add(book);
+            } else {
+                sortedBooks.add(book);
+            }
+        }
+
+        // Sahip olunan kitapları sona ekle
+        sortedBooks.addAll(ownedBooks);
+
+        // BookStoreResponse'a çevir
+        return sortedBooks.stream()
+                .map(book -> toBookStoreResponse(book, ownedBookIds.contains(book.getId())))
+                .toList();
     }
 
-    private BookStoreResponse toBookStoreResponse(Book book) {
+    /**
+     * Kullanıcının sınav tipine, sınıfına ve alanına göre kitapları sıralar
+     */
+    private List<Book> sortBooksByRecommendation(List<Book> books, User user) {
+        // Sınav tipi veya sınıf yoksa, tüm kitapları olduğu gibi dön
+        if (user.getExamType() == null && user.getGradeLevel() == null) {
+            return books;
+        }
+
+        List<Book> recommendedBooks = new ArrayList<>();
+        List<Book> otherBooks = new ArrayList<>();
+
+        for (Book book : books) {
+            boolean isRecommended = false;
+
+            // LGS için özel mantık
+            if (user.getExamType() == com.beratcan.app.entity.enums.ExamType.LGS) {
+                isRecommended = isRecommendedForLGS(book, user.getGradeLevel());
+            }
+            // YKS için özel mantık
+            else if (user.getExamType() == com.beratcan.app.entity.enums.ExamType.YKS) {
+                isRecommended = isRecommendedForYKS(book, user.getGradeLevel(), user.getFieldType());
+            }
+            // KPSS veya diğer sınavlar için
+            else if (user.getExamType() == com.beratcan.app.entity.enums.ExamType.KPSS ||
+                    user.getExamType() == com.beratcan.app.entity.enums.ExamType.DIGER) {
+                isRecommended = book.getExamType() == user.getExamType();
+            }
+
+            if (isRecommended) {
+                recommendedBooks.add(book);
+            } else {
+                otherBooks.add(book);
+            }
+        }
+
+        // Önce önerilen kitaplar, sonra diğerleri
+        recommendedBooks.addAll(otherBooks);
+        return recommendedBooks;
+    }
+
+    /**
+     * LGS için öneri mantığı
+     * - 5-6-7. sınıf: Sınıfına uygun kitaplar öncelikli
+     * - 8. sınıf: Önce LGS kitapları, sonra 5-6-7. sınıf kitapları
+     */
+    private boolean isRecommendedForLGS(Book book, com.beratcan.app.entity.enums.GradeLevel userGradeLevel) {
+        if (userGradeLevel == null) {
+            return book.getExamType() == com.beratcan.app.entity.enums.ExamType.LGS;
+        }
+
+        // 5-6-7. sınıf: Sınıfına uygun kitaplar
+        if (userGradeLevel == com.beratcan.app.entity.enums.GradeLevel.G5 ||
+                userGradeLevel == com.beratcan.app.entity.enums.GradeLevel.G6 ||
+                userGradeLevel == com.beratcan.app.entity.enums.GradeLevel.G7) {
+            return book.getGradeLevel() == userGradeLevel;
+        }
+
+        // 8. sınıf: LGS kitapları öncelikli
+        if (userGradeLevel == com.beratcan.app.entity.enums.GradeLevel.G8) {
+            // LGS kitapları
+            if (book.getExamType() == com.beratcan.app.entity.enums.ExamType.LGS) {
+                return true;
+            }
+            // 5-6-7. sınıf kitapları da göster
+            if (book.getGradeLevel() == com.beratcan.app.entity.enums.GradeLevel.G5 ||
+                    book.getGradeLevel() == com.beratcan.app.entity.enums.GradeLevel.G6 ||
+                    book.getGradeLevel() == com.beratcan.app.entity.enums.GradeLevel.G7) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * YKS için öneri mantığı
+     * - 9-10. sınıf: Sınıfına uygun ve TYT kitapları öncelikli
+     * - 11-12. sınıf: TYT, AYT ve sınıfına uygun kitaplar karışık
+     */
+    private boolean isRecommendedForYKS(Book book, com.beratcan.app.entity.enums.GradeLevel userGradeLevel,
+            com.beratcan.app.entity.enums.FieldType userFieldType) {
+        // YKS kitapları her zaman önerilir
+        if (book.getExamType() == com.beratcan.app.entity.enums.ExamType.YKS) {
+            return true;
+        }
+
+        if (userGradeLevel == null) {
+            return false;
+        }
+
+        // 9-10. sınıf: Sınıfına uygun kitaplar
+        if (userGradeLevel == com.beratcan.app.entity.enums.GradeLevel.G9 ||
+                userGradeLevel == com.beratcan.app.entity.enums.GradeLevel.G10) {
+            if (book.getGradeLevel() == userGradeLevel) {
+                return true;
+            }
+        }
+
+        // 11-12. sınıf: Sınıfına uygun kitaplar
+        if (userGradeLevel == com.beratcan.app.entity.enums.GradeLevel.G11 ||
+                userGradeLevel == com.beratcan.app.entity.enums.GradeLevel.G12) {
+            if (book.getGradeLevel() == userGradeLevel) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private BookStoreResponse toBookStoreResponse(Book book, Boolean isOwned) {
         BookStoreResponse response = new BookStoreResponse();
         response.setId(book.getId());
         response.setTitle(book.getTitle());
@@ -316,6 +466,7 @@ public class BookService {
         response.setLessonType(book.getLessonType());
         response.setPrice(book.getPrice());
         response.setDescription(book.getDescription());
+        response.setOwned(isOwned != null && isOwned);
         return response;
     }
 }

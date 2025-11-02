@@ -30,4 +30,5 @@ public class BookStoreResponse {
     private LessonType lessonType;
     private BigDecimal price;
     private String description;
+    private boolean isOwned;
 }

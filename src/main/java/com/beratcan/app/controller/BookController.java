@@ -104,7 +104,17 @@ public class BookController {
     }
 
     @GetMapping("/store")
-    public List<BookStoreResponse> getBookStore() {
-        return bookService.getBookStore();
+    public List<BookStoreResponse> getBookStore(Authentication authentication) {
+        if (authentication != null && authentication.isAuthenticated()) {
+            try {
+                Long userId = Long.parseLong(authentication.getName());
+                return bookService.getBookStore(userId);
+            } catch (Exception e) {
+                // Kullanıcı ID'si parse edilemezse, tüm kitapları dön
+                return bookService.getBookStore(null);
+            }
+        }
+        // Giriş yapmamış kullanıcılar için tüm kitapları dön
+        return bookService.getBookStore(null);
     }
 }
