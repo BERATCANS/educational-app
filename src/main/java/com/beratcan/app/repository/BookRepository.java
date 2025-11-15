@@ -14,26 +14,26 @@ import java.util.List;
 
 @Repository
 public interface BookRepository extends JpaRepository<Book, Long> {
-    List<Book> findByPaidFalse(); // Ücretsiz kitaplar
+        List<Book> findByPaidFalse(); // Ücretsiz kitaplar
 
-    @Query("SELECT b FROM Book b WHERE " +
-            "LOWER(b.title) LIKE LOWER(CONCAT('%', :query, '%')) OR " +
-            "LOWER(b.publisher) LIKE LOWER(CONCAT('%', :query, '%'))")
-    List<Book> searchByTitleOrPublisher(@Param("query") String query);
+        @Query("SELECT b FROM Book b WHERE " +
+                        "LOWER(b.title) LIKE LOWER(CONCAT('%', :query, '%')) OR " +
+                        "LOWER(b.publisher) LIKE LOWER(CONCAT('%', :query, '%'))")
+        List<Book> searchByTitleOrPublisher(@Param("query") String query);
 
-    @Query("SELECT b FROM Book b WHERE " +
-            "(:query IS NULL OR :query = '' OR LOWER(b.title) LIKE LOWER(CONCAT('%', :query, '%')) OR LOWER(b.publisher) LIKE LOWER(CONCAT('%', :query, '%'))) AND "
-            +
-            "(:examType IS NULL OR b.examType = :examType) AND " +
-            "(:gradeLevel IS NULL OR b.gradeLevel = :gradeLevel) AND " +
-            "(:lessonType IS NULL OR b.lessonType = :lessonType) AND " +
-            "(:minPrice IS NULL OR b.price >= :minPrice) AND " +
-            "(:maxPrice IS NULL OR b.price <= :maxPrice)")
-    List<Book> searchAndFilterBooks(
-            @Param("query") String query,
-            @Param("examType") ExamType examType,
-            @Param("gradeLevel") GradeLevel gradeLevel,
-            @Param("lessonType") LessonType lessonType,
-            @Param("minPrice") BigDecimal minPrice,
-            @Param("maxPrice") BigDecimal maxPrice);
+        @Query("SELECT b FROM Book b WHERE " +
+                        "(:query IS NULL OR :query = '' OR LOWER(b.title) LIKE LOWER(CONCAT('%', :query, '%')) OR LOWER(b.publisher) LIKE LOWER(CONCAT('%', :query, '%'))) AND "
+                        +
+                        "(:examTypes IS NULL OR b.examType IN :examTypes) AND " +
+                        "(:gradeLevels IS NULL OR b.gradeLevel IN :gradeLevels) AND " +
+                        "(:lessonTypes IS NULL OR b.lessonType IN :lessonTypes) AND " +
+                        "(:minPrice IS NULL OR b.price >= :minPrice) AND " +
+                        "(:maxPrice IS NULL OR b.price <= :maxPrice)")
+        List<Book> searchAndFilterBooks(
+                        @Param("query") String query,
+                        @Param("examTypes") List<ExamType> examTypes,
+                        @Param("gradeLevels") List<GradeLevel> gradeLevels,
+                        @Param("lessonTypes") List<LessonType> lessonTypes,
+                        @Param("minPrice") BigDecimal minPrice,
+                        @Param("maxPrice") BigDecimal maxPrice);
 }

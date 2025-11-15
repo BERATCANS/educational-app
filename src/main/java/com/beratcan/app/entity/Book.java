@@ -64,6 +64,9 @@ public class Book {
     @OneToMany(mappedBy = "book", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private List<Purchase> purchases = new ArrayList<>();
 
+    @OneToMany(mappedBy = "book", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<BookReview> reviews = new ArrayList<>();
+
     private Integer numberOfTopics;
 
     private Integer numberOfTests;

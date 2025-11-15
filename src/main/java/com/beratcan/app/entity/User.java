@@ -82,4 +82,7 @@ public class User {
         // ✅ Purchase ile bidirectional ilişki (Kullanıcının satın alma geçmişi)
         @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
         private List<Purchase> purchases = new ArrayList<>();
+
+        @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
+        private List<BookReview> bookReviews = new ArrayList<>();
 }

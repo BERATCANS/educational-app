@@ -1,16 +1,23 @@
 package com.beratcan.app.controller;
 
 import com.beratcan.app.dto.request.BookRequest;
+import com.beratcan.app.dto.request.BookReviewRequest;
 import com.beratcan.app.dto.response.BookResponse;
+import com.beratcan.app.dto.response.BookReviewResponse;
 import com.beratcan.app.dto.response.BookStoreResponse;
 import com.beratcan.app.dto.response.PageResponse;
 import com.beratcan.app.entity.Book;
+import com.beratcan.app.entity.enums.ExamType;
+import com.beratcan.app.entity.enums.GradeLevel;
+import com.beratcan.app.entity.enums.LessonType;
 import com.beratcan.app.service.BookService;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 
@@ -120,26 +127,51 @@ public class BookController {
     @GetMapping("/store")
     public PageResponse<BookStoreResponse> getBookStore(
             @RequestParam(required = false) String query,
-            @RequestParam(required = false) com.beratcan.app.entity.enums.ExamType examType,
-            @RequestParam(required = false) com.beratcan.app.entity.enums.GradeLevel gradeLevel,
-            @RequestParam(required = false) com.beratcan.app.entity.enums.LessonType lessonType,
-            @RequestParam(required = false) java.math.BigDecimal minPrice,
-            @RequestParam(required = false) java.math.BigDecimal maxPrice,
+            @RequestParam(required = false) List<ExamType> examTypes,
+            @RequestParam(required = false) List<GradeLevel> gradeLevels,
+            @RequestParam(required = false) List<LessonType> lessonTypes,
+            @RequestParam(required = false) BigDecimal minPrice,
+            @RequestParam(required = false) BigDecimal maxPrice,
             Authentication authentication,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
         if (authentication != null && authentication.isAuthenticated()) {
             try {
                 Long userId = Long.parseLong(authentication.getName());
-                return bookService.getBookStore(query, examType, gradeLevel, lessonType, minPrice, maxPrice, userId,
+                return bookService.getBookStore(query, examTypes, gradeLevels, lessonTypes, minPrice, maxPrice, userId,
                         page, size);
             } catch (Exception e) {
                 // Kullanıcı ID'si parse edilemezse, tüm kitapları dön
-                return bookService.getBookStore(query, examType, gradeLevel, lessonType, minPrice, maxPrice, null, page,
-                        size);
+                return bookService.getBookStore(query, examTypes, gradeLevels, lessonTypes, minPrice, maxPrice, null,
+                        page, size);
             }
         }
         // Giriş yapmamış kullanıcılar için tüm kitapları dön
-        return bookService.getBookStore(query, examType, gradeLevel, lessonType, minPrice, maxPrice, null, page, size);
+        return bookService.getBookStore(query, examTypes, gradeLevels, lessonTypes, minPrice, maxPrice, null, page,
+                size);
+    }
+
+    @PostMapping("/{bookId}/reviews")
+    public ResponseEntity<?> addOrUpdateReview(
+            @PathVariable Long bookId,
+            @RequestBody BookReviewRequest request,
+            Authentication authentication) {
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(Map.of("error", "Yorum eklemek için giriş yapmalısınız."));
+        }
+
+        try {
+            Long userId = Long.parseLong(authentication.getName());
+            String message = bookService.addOrUpdateReview(userId, bookId, request);
+            return ResponseEntity.ok(Map.of("message", message));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @GetMapping("/{bookId}/reviews")
+    public List<BookReviewResponse> getBookReviews(@PathVariable Long bookId) {
+        return bookService.getBookReviews(bookId);
     }
 }

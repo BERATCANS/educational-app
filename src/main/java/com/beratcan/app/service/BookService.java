@@ -1,16 +1,23 @@
 package com.beratcan.app.service;
 
 import com.beratcan.app.dto.request.BookRequest;
+import com.beratcan.app.dto.request.BookReviewRequest;
+import com.beratcan.app.dto.response.BookResponse;
+import com.beratcan.app.dto.response.BookReviewResponse;
+import com.beratcan.app.dto.response.BookStoreResponse;
+import com.beratcan.app.dto.response.PageResponse;
 import com.beratcan.app.entity.Book;
 import com.beratcan.app.entity.BookCode;
+import com.beratcan.app.entity.BookReview;
 import com.beratcan.app.entity.Test;
 import com.beratcan.app.entity.Topic;
 import com.beratcan.app.entity.User;
-import com.beratcan.app.dto.response.BookResponse;
-import com.beratcan.app.dto.response.BookStoreResponse;
-import com.beratcan.app.dto.response.PageResponse;
+import com.beratcan.app.entity.enums.ExamType;
+import com.beratcan.app.entity.enums.GradeLevel;
+import com.beratcan.app.entity.enums.LessonType;
 import com.beratcan.app.repository.BookCodeRepository;
 import com.beratcan.app.repository.BookRepository;
+import com.beratcan.app.repository.BookReviewRepository;
 import com.beratcan.app.repository.TestRepository;
 import com.beratcan.app.repository.TestResultRepository;
 import com.beratcan.app.repository.TopicRepository;
@@ -19,12 +26,15 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
-import java.util.List;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
-import java.math.BigDecimal;
 
 @Service
 @RequiredArgsConstructor
@@ -36,6 +46,7 @@ public class BookService {
     private final TopicRepository topicRepository;
     private final TestRepository testRepository;
     private final TestResultRepository testResultRepository;
+    private final BookReviewRepository bookReviewRepository;
 
     public Book addBook(Book book, List<String> topics) {
 
@@ -127,17 +138,19 @@ public class BookService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        // Sahip olduğu tüm kitapları dön - skorlama ile sıralı
-        List<BookResponse> allBooks = user.getOwnedBooks().stream()
+        List<Book> sortedOwnedBooks = user.getOwnedBooks().stream()
                 .sorted((b1, b2) -> {
                     double score1 = calculateBookUsageScore(userId, b1.getId());
                     double score2 = calculateBookUsageScore(userId, b2.getId());
-                    return Double.compare(score2, score1); // Yüksekten düşüğe
+                    return Double.compare(score2, score1);
                 })
-                .map(this::toBookResponse)
                 .toList();
 
-        return allBooks;
+        Map<Long, RatingStats> ratingStats = getRatingStats(sortedOwnedBooks);
+
+        return sortedOwnedBooks.stream()
+                .map(book -> toBookResponse(book, ratingStats.get(book.getId())))
+                .toList();
     }
 
     /**
@@ -200,7 +213,7 @@ public class BookService {
         bookRepository.deleteById(bookId);
     }
 
-    private BookResponse toBookResponse(Book book) {
+    private BookResponse toBookResponse(Book book, RatingStats ratingStats) {
         BookResponse response = new BookResponse();
         response.setId(book.getId());
         response.setTitle(book.getTitle());
@@ -315,9 +328,9 @@ public class BookService {
     }
 
     public PageResponse<BookStoreResponse> getBookStore(String query,
-            com.beratcan.app.entity.enums.ExamType examType,
-            com.beratcan.app.entity.enums.GradeLevel gradeLevel,
-            com.beratcan.app.entity.enums.LessonType lessonType,
+            List<ExamType> examTypes,
+            List<GradeLevel> gradeLevels,
+            List<LessonType> lessonTypes,
             BigDecimal minPrice,
             BigDecimal maxPrice,
             Long userId, int page, int size) {
@@ -338,8 +351,18 @@ public class BookService {
             ownedBookIds = new ArrayList<>();
         }
 
+        List<ExamType> normalizedExamTypes = normalizeList(examTypes);
+        List<GradeLevel> normalizedGradeLevels = normalizeList(gradeLevels);
+        List<LessonType> normalizedLessonTypes = normalizeList(lessonTypes);
+
         // Arama ve filtrelemeyi repository'de yap
-        allBooks = bookRepository.searchAndFilterBooks(query, examType, gradeLevel, lessonType, minPrice, maxPrice);
+        allBooks = bookRepository.searchAndFilterBooks(
+                query,
+                normalizedExamTypes,
+                normalizedGradeLevels,
+                normalizedLessonTypes,
+                minPrice,
+                maxPrice);
 
         // Kişiselleştirilmiş önerilere göre sırala (kullanıcı varsa)
         if (user != null) {
@@ -361,9 +384,12 @@ public class BookService {
         // Sahip olunan kitapları sona ekle
         sortedBooks.addAll(ownedBooks);
 
+        Map<Long, RatingStats> ratingStats = getRatingStats(sortedBooks);
+
         // BookStoreResponse'a çevir
         List<BookStoreResponse> allResponses = sortedBooks.stream()
-                .map(book -> toBookStoreResponse(book, ownedBookIds.contains(book.getId())))
+                .map(book -> toBookStoreResponse(book, ownedBookIds.contains(book.getId()),
+                        ratingStats.get(book.getId())))
                 .toList();
 
         // Pagination uygula
@@ -374,6 +400,60 @@ public class BookService {
         List<BookStoreResponse> pageContent = allResponses.subList(Math.max(0, start), end);
 
         return PageResponse.of(pageContent, page, size, totalElements);
+    }
+
+    @Transactional
+    public String addOrUpdateReview(Long userId, Long bookId, BookReviewRequest request) {
+        if (request == null) {
+            throw new IllegalArgumentException("Yorum bilgisi eksik.");
+        }
+
+        int rating = request.getRating();
+        if (rating < 1 || rating > 5) {
+            throw new IllegalArgumentException("Puan 1 ile 5 arasında olmalıdır.");
+        }
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        Book book = bookRepository.findById(bookId)
+                .orElseThrow(() -> new RuntimeException("Book not found"));
+
+        boolean ownsBook = user.getOwnedBooks().stream()
+                .anyMatch(ownedBook -> ownedBook.getId().equals(bookId));
+
+        if (!ownsBook) {
+            throw new IllegalArgumentException("Sadece sahip olduğunuz kitaplar için yorum yapabilirsiniz.");
+        }
+
+        Optional<BookReview> existingReviewOpt = bookReviewRepository.findByBookIdAndUserId(bookId, userId);
+        BookReview review = existingReviewOpt.orElseGet(BookReview::new);
+        boolean isNew = review.getId() == null;
+        LocalDateTime now = LocalDateTime.now();
+
+        review.setBook(book);
+        review.setUser(user);
+        if (isNew) {
+            review.setCreatedAt(now);
+        }
+        review.setRating(rating);
+        review.setComment(request.getComment());
+        review.setUpdatedAt(now);
+
+        bookReviewRepository.save(review);
+
+        return isNew ? "Yorum kaydedildi." : "Yorum güncellendi.";
+    }
+
+    @Transactional(readOnly = true)
+    public List<BookReviewResponse> getBookReviews(Long bookId) {
+        if (!bookRepository.existsById(bookId)) {
+            throw new IllegalArgumentException("Kitap bulunamadı: " + bookId);
+        }
+
+        return bookReviewRepository.findByBookIdOrderByCreatedAtDesc(bookId).stream()
+                .map(this::toBookReviewResponse)
+                .toList();
     }
 
     /**
@@ -581,7 +661,7 @@ public class BookService {
         return false;
     }
 
-    private BookStoreResponse toBookStoreResponse(Book book, Boolean isOwned) {
+    private BookStoreResponse toBookStoreResponse(Book book, Boolean isOwned, RatingStats ratingStats) {
         BookStoreResponse response = new BookStoreResponse();
         response.setId(book.getId());
         response.setTitle(book.getTitle());
@@ -597,6 +677,59 @@ public class BookService {
         response.setPrice(book.getPrice());
         response.setDescription(book.getDescription());
         response.setOwned(isOwned != null && isOwned);
+        if (ratingStats != null) {
+            response.setAverageRating(ratingStats.averageRating());
+            response.setReviewCount(ratingStats.reviewCount());
+        } else {
+            response.setAverageRating(0.0);
+            response.setReviewCount(0L);
+        }
         return response;
+    }
+
+    private BookReviewResponse toBookReviewResponse(BookReview review) {
+        User reviewUser = review.getUser();
+        String userName = reviewUser != null
+                ? (reviewUser.getFirstName() + " " + reviewUser.getLastName()).trim()
+                : "Anonim";
+
+        return new BookReviewResponse(
+                review.getId(),
+                reviewUser != null ? reviewUser.getId() : null,
+                userName,
+                review.getRating(),
+                review.getComment(),
+                review.getCreatedAt(),
+                review.getUpdatedAt());
+    }
+
+    private Map<Long, RatingStats> getRatingStats(List<Book> books) {
+        if (books == null || books.isEmpty()) {
+            return Collections.emptyMap();
+        }
+
+        List<Long> bookIds = books.stream()
+                .map(Book::getId)
+                .toList();
+
+        Map<Long, RatingStats> statsMap = new HashMap<>();
+
+        bookReviewRepository.findRatingStatsByBookIds(bookIds)
+                .forEach(stat -> statsMap.put(stat.getBookId(),
+                        new RatingStats(
+                                stat.getAverageRating() != null ? stat.getAverageRating() : 0.0,
+                                stat.getReviewCount() != null ? stat.getReviewCount() : 0L)));
+
+        return statsMap;
+    }
+
+    private record RatingStats(double averageRating, long reviewCount) {
+    }
+
+    private <T> List<T> normalizeList(List<T> list) {
+        if (list == null || list.isEmpty()) {
+            return null;
+        }
+        return list;
     }
 }

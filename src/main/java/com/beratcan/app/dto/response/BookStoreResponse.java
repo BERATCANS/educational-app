@@ -29,4 +29,6 @@ public class BookStoreResponse {
     private BigDecimal price;
     private String description;
     private boolean isOwned;
+    private Double averageRating;
+    private Long reviewCount;
 }
