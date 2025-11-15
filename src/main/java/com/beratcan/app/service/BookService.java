@@ -48,25 +48,38 @@ public class BookService {
     private final TestResultRepository testResultRepository;
     private final BookReviewRepository bookReviewRepository;
 
-    public Book addBook(Book book, List<String> topics) {
+    public Book addBook(BookRequest request) {
+        if (request == null) {
+            throw new IllegalArgumentException("BookRequest cannot be null");
+        }
 
-        // book’u önce kaydet
+        Book book = new Book();
+        book.setTitle(request.getTitle());
+        book.setPublisher(request.getPublisher());
+        book.setCoverImageUrl(request.getCoverImageUrl());
+        book.setPaid(request.isPaid());
+        book.setGradeLevel(request.getGradeLevel());
+        book.setExamType(request.getExamType());
+        book.setLessonType(request.getLessonType());
+        book.setPrice(request.getPrice());
+        book.setDescription(request.getDescription());
+
         Book savedBook = bookRepository.save(book);
 
-        if (topics != null) {
+        List<String> topics = request.getTopics();
+        if (topics != null && !topics.isEmpty()) {
             for (String topicName : topics) {
                 Topic topic = new Topic();
                 topic.setTitle(topicName);
                 topic.setBook(savedBook);
                 topic = topicRepository.save(topic);
                 savedBook.getTopics().add(topic);
-
             }
 
             savedBook = bookRepository.save(savedBook);
         }
-        countBookData(savedBook.getId());
 
+        countBookData(savedBook.getId());
         return savedBook;
     }
 

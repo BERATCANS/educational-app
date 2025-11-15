@@ -6,11 +6,13 @@ import com.beratcan.app.dto.response.BookResponse;
 import com.beratcan.app.dto.response.BookReviewResponse;
 import com.beratcan.app.dto.response.BookStoreResponse;
 import com.beratcan.app.dto.response.PageResponse;
+import com.beratcan.app.dto.response.FilterOptionResponse;
 import com.beratcan.app.entity.Book;
 import com.beratcan.app.entity.enums.ExamType;
 import com.beratcan.app.entity.enums.GradeLevel;
 import com.beratcan.app.entity.enums.LessonType;
 import com.beratcan.app.service.BookService;
+import com.beratcan.app.service.FilterLabelService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -18,6 +20,8 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
+import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -26,27 +30,17 @@ import java.util.Map;
 public class BookController {
 
     private final BookService bookService;
+    private final FilterLabelService filterLabelService;
 
-    public BookController(BookService bookService) {
+    public BookController(BookService bookService, FilterLabelService filterLabelService) {
         this.bookService = bookService;
+        this.filterLabelService = filterLabelService;
     }
 
     @PreAuthorize("hasRole('ADMIN')")
     @PostMapping("/add")
     public Book addBook(@RequestBody BookRequest request) {
-        Book book = new Book();
-        book.setTitle(request.getTitle());
-        book.setPublisher(request.getPublisher());
-        book.setCoverImageUrl(request.getCoverImageUrl());
-        book.setPaid(request.isPaid());
-        book.setGradeLevel(request.getGradeLevel());
-        book.setExamType(request.getExamType());
-        book.setLessonType(request.getLessonType());
-        book.setPrice(request.getPrice());
-        book.setDescription(request.getDescription());
-
-        // topics BookService'e paslanacak
-        return bookService.addBook(book, request.getTopics());
+        return bookService.addBook(request);
     }
 
     @PostMapping("/use-code")
@@ -149,6 +143,25 @@ public class BookController {
         // Giriş yapmamış kullanıcılar için tüm kitapları dön
         return bookService.getBookStore(query, examTypes, gradeLevels, lessonTypes, minPrice, maxPrice, null, page,
                 size);
+    }
+
+    @GetMapping("/filters")
+    public Map<String, List<FilterOptionResponse>> getBookFilters() {
+        Map<String, List<FilterOptionResponse>> filters = new HashMap<>();
+        filters.put("gradeLevels",
+                Arrays.stream(GradeLevel.values())
+                        .map(level -> new FilterOptionResponse(level.name(), filterLabelService.getGradeLabel(level)))
+                        .toList());
+        filters.put("examTypes",
+                Arrays.stream(ExamType.values())
+                        .map(exam -> new FilterOptionResponse(exam.name(), filterLabelService.getExamLabel(exam)))
+                        .toList());
+        filters.put("lessonTypes",
+                Arrays.stream(LessonType.values())
+                        .map(lesson -> new FilterOptionResponse(lesson.name(),
+                                filterLabelService.getLessonLabel(lesson)))
+                        .toList());
+        return filters;
     }
 
     @PostMapping("/{bookId}/reviews")
