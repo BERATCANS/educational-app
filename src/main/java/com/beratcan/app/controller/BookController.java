@@ -2,6 +2,7 @@ package com.beratcan.app.controller;
 
 import com.beratcan.app.dto.request.BookRequest;
 import com.beratcan.app.dto.request.BookReviewRequest;
+import com.beratcan.app.dto.response.BookDetailResponse;
 import com.beratcan.app.dto.response.BookResponse;
 import com.beratcan.app.dto.response.BookReviewResponse;
 import com.beratcan.app.dto.response.BookStoreResponse;
@@ -85,6 +86,22 @@ public class BookController {
     @GetMapping("/for-user/{userId}")
     public List<BookResponse> getBooksForUser(@PathVariable Long userId) {
         return bookService.getBooksForUser(userId);
+    }
+
+    @GetMapping("/{bookId}")
+    public ResponseEntity<BookDetailResponse> getBookDetail(
+            @PathVariable Long bookId,
+            Authentication authentication) {
+        Long userId = null;
+        if (authentication != null && authentication.isAuthenticated()) {
+            try {
+                userId = Long.parseLong(authentication.getName());
+            } catch (Exception e) {
+                // Kullanıcı ID'si parse edilemezse null bırak
+            }
+        }
+        BookDetailResponse response = bookService.getBookDetail(bookId, userId);
+        return ResponseEntity.ok(response);
     }
 
     // 📌 PUT - Kitap güncelleme
@@ -186,5 +203,20 @@ public class BookController {
     @GetMapping("/{bookId}/reviews")
     public List<BookReviewResponse> getBookReviews(@PathVariable Long bookId) {
         return bookService.getBookReviews(bookId);
+    }
+
+    @DeleteMapping("/{bookId}/reviews/{reviewId}")
+    public ResponseEntity<?> deleteReview(
+            @PathVariable Long bookId,
+            @PathVariable Long reviewId,
+            Authentication authentication) {
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(Map.of("error", "Yorum silmek için giriş yapmalısınız."));
+        }
+
+        Long userId = Long.parseLong(authentication.getName());
+        String message = bookService.deleteReview(userId, bookId, reviewId);
+        return ResponseEntity.ok(Map.of("message", message));
     }
 }

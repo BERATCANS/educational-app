@@ -2,6 +2,7 @@ package com.beratcan.app.service;
 
 import com.beratcan.app.dto.request.BookRequest;
 import com.beratcan.app.dto.request.BookReviewRequest;
+import com.beratcan.app.dto.response.BookDetailResponse;
 import com.beratcan.app.dto.response.BookResponse;
 import com.beratcan.app.dto.response.BookReviewResponse;
 import com.beratcan.app.dto.response.BookStoreResponse;
@@ -30,10 +31,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 
 @Service
@@ -61,8 +59,14 @@ public class BookService {
         book.setGradeLevel(request.getGradeLevel());
         book.setExamType(request.getExamType());
         book.setLessonType(request.getLessonType());
-        book.setPrice(request.getPrice());
         book.setDescription(request.getDescription());
+
+        // paid false ise price'ı otomatik 0 yap
+        if (!request.isPaid()) {
+            book.setPrice(BigDecimal.ZERO);
+        } else {
+            book.setPrice(request.getPrice());
+        }
 
         Book savedBook = bookRepository.save(book);
 
@@ -159,10 +163,8 @@ public class BookService {
                 })
                 .toList();
 
-        Map<Long, RatingStats> ratingStats = getRatingStats(sortedOwnedBooks);
-
         return sortedOwnedBooks.stream()
-                .map(book -> toBookResponse(book, ratingStats.get(book.getId())))
+                .map(this::toBookResponse)
                 .toList();
     }
 
@@ -226,7 +228,7 @@ public class BookService {
         bookRepository.deleteById(bookId);
     }
 
-    private BookResponse toBookResponse(Book book, RatingStats ratingStats) {
+    private BookResponse toBookResponse(Book book) {
         BookResponse response = new BookResponse();
         response.setId(book.getId());
         response.setTitle(book.getTitle());
@@ -237,10 +239,6 @@ public class BookService {
         response.setNumberOfTopics(book.getNumberOfTopics());
         response.setNumberOfTests(book.getNumberOfTests());
         response.setNumberOfQuestions(book.getNumberOfQuestions());
-        // Enum alanları
-        response.setGradeLevel(book.getGradeLevel());
-        response.setExamType(book.getExamType());
-        response.setLessonType(book.getLessonType());
         return response;
     }
 
@@ -397,12 +395,9 @@ public class BookService {
         // Sahip olunan kitapları sona ekle
         sortedBooks.addAll(ownedBooks);
 
-        Map<Long, RatingStats> ratingStats = getRatingStats(sortedBooks);
-
-        // BookStoreResponse'a çevir
+        // BookStoreResponse'a çevir (rating bilgileri entity'den okunuyor)
         List<BookStoreResponse> allResponses = sortedBooks.stream()
-                .map(book -> toBookStoreResponse(book, ownedBookIds.contains(book.getId()),
-                        ratingStats.get(book.getId())))
+                .map(book -> toBookStoreResponse(book, ownedBookIds.contains(book.getId())))
                 .toList();
 
         // Pagination uygula
@@ -432,6 +427,7 @@ public class BookService {
         Book book = bookRepository.findById(bookId)
                 .orElseThrow(() -> new RuntimeException("Book not found"));
 
+        // Kontrol 1: Kullanıcı bu kitaba sahip mi?
         boolean ownsBook = user.getOwnedBooks().stream()
                 .anyMatch(ownedBook -> ownedBook.getId().equals(bookId));
 
@@ -439,9 +435,13 @@ public class BookService {
             throw new IllegalArgumentException("Sadece sahip olduğunuz kitaplar için yorum yapabilirsiniz.");
         }
 
+        // Kontrol 2: Bu kullanıcının bu kitap için yorumu var mı?
         Optional<BookReview> existingReviewOpt = bookReviewRepository.findByBookIdAndUserId(bookId, userId);
+        boolean hasExistingReview = existingReviewOpt.isPresent();
+
+        // Yorum varsa güncelle, yoksa yeni oluştur
         BookReview review = existingReviewOpt.orElseGet(BookReview::new);
-        boolean isNew = review.getId() == null;
+        boolean isNew = !hasExistingReview;
         LocalDateTime now = LocalDateTime.now();
 
         review.setBook(book);
@@ -455,6 +455,9 @@ public class BookService {
 
         bookReviewRepository.save(review);
 
+        // Rating istatistiklerini güncelle
+        updateBookRatingStats(book);
+
         return isNew ? "Yorum kaydedildi." : "Yorum güncellendi.";
     }
 
@@ -467,6 +470,43 @@ public class BookService {
         return bookReviewRepository.findByBookIdOrderByCreatedAtDesc(bookId).stream()
                 .map(this::toBookReviewResponse)
                 .toList();
+    }
+
+    /**
+     * Yorum silme işlemi
+     * Sadece yorum sahibi veya admin silebilir
+     */
+    @Transactional
+    public String deleteReview(Long userId, Long bookId, Long reviewId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        Book book = bookRepository.findById(bookId)
+                .orElseThrow(() -> new RuntimeException("Book not found"));
+
+        BookReview review = bookReviewRepository.findById(reviewId)
+                .orElseThrow(() -> new RuntimeException("Yorum bulunamadı"));
+
+        // Yorumun bu kitaba ait olduğunu kontrol et
+        if (!review.getBook().getId().equals(bookId)) {
+            throw new IllegalArgumentException("Bu yorum bu kitaba ait değil");
+        }
+
+        // Kullanıcı yorum sahibi mi veya admin mi kontrol et
+        boolean isOwner = review.getUser().getId().equals(userId);
+        boolean isAdmin = user.getRole() == com.beratcan.app.entity.enums.Role.ADMIN;
+
+        if (!isOwner && !isAdmin) {
+            throw new IllegalArgumentException("Bu yorumu silemezsiniz. Sadece yorum sahibi veya admin silebilir.");
+        }
+
+        // Yorumu sil
+        bookReviewRepository.delete(review);
+
+        // Rating istatistiklerini güncelle
+        updateBookRatingStats(book);
+
+        return "Yorum başarıyla silindi.";
     }
 
     /**
@@ -674,12 +714,45 @@ public class BookService {
         return false;
     }
 
-    private BookStoreResponse toBookStoreResponse(Book book, Boolean isOwned, RatingStats ratingStats) {
+    private BookStoreResponse toBookStoreResponse(Book book, Boolean isOwned) {
         BookStoreResponse response = new BookStoreResponse();
+        response.setId(book.getId());
+        response.setCoverImageUrl(book.getCoverImageUrl());
+        response.setPublisher(book.getPublisher());
+        response.setPaid(book.isPaid());
+        response.setPrice(book.getPrice());
+        response.setOwned(isOwned != null && isOwned);
+        response.setAverageRating(book.getAverageRating() != null ? book.getAverageRating() : 0.0);
+        response.setReviewCount(book.getReviewCount() != null ? book.getReviewCount() : 0L);
+        return response;
+    }
+
+    @Transactional(readOnly = true)
+    public BookDetailResponse getBookDetail(Long bookId, Long userId) {
+        Book book = bookRepository.findById(bookId)
+                .orElseThrow(() -> new RuntimeException("Book not found"));
+
+        // Kullanıcının kitabı sahip olup olmadığını kontrol et
+        boolean isOwned = false;
+        if (userId != null) {
+            User user = userRepository.findById(userId)
+                    .orElse(null);
+            if (user != null) {
+                isOwned = user.getOwnedBooks().stream()
+                        .anyMatch(ownedBook -> ownedBook.getId().equals(bookId));
+            }
+        }
+
+        // Yorumları lazy fetch ile al (sadece bu metod çağrıldığında DB'den çekilir)
+        List<BookReviewResponse> reviews = bookReviewRepository.findByBookIdOrderByCreatedAtDesc(bookId)
+                .stream()
+                .map(this::toBookReviewResponse)
+                .toList();
+
+        BookDetailResponse response = new BookDetailResponse();
         response.setId(book.getId());
         response.setTitle(book.getTitle());
         response.setPublisher(book.getPublisher());
-        response.setCoverImageUrl(book.getCoverImageUrl());
         response.setPaid(book.isPaid());
         response.setNumberOfTopics(book.getNumberOfTopics());
         response.setNumberOfTests(book.getNumberOfTests());
@@ -689,14 +762,11 @@ public class BookService {
         response.setLessonType(book.getLessonType());
         response.setPrice(book.getPrice());
         response.setDescription(book.getDescription());
-        response.setOwned(isOwned != null && isOwned);
-        if (ratingStats != null) {
-            response.setAverageRating(ratingStats.averageRating());
-            response.setReviewCount(ratingStats.reviewCount());
-        } else {
-            response.setAverageRating(0.0);
-            response.setReviewCount(0L);
-        }
+        response.setOwned(isOwned);
+        response.setAverageRating(book.getAverageRating() != null ? book.getAverageRating() : 0.0);
+        response.setReviewCount(book.getReviewCount() != null ? book.getReviewCount() : 0L);
+        response.setReviews(reviews);
+
         return response;
     }
 
@@ -716,27 +786,26 @@ public class BookService {
                 review.getUpdatedAt());
     }
 
-    private Map<Long, RatingStats> getRatingStats(List<Book> books) {
-        if (books == null || books.isEmpty()) {
-            return Collections.emptyMap();
+    /**
+     * Kitabın rating istatistiklerini hesaplar ve Book entity'sine kaydeder
+     * Bu metod yorum eklendiğinde/güncellendiğinde çağrılır
+     */
+    private void updateBookRatingStats(Book book) {
+        List<BookReview> reviews = bookReviewRepository.findByBookIdOrderByCreatedAtDesc(book.getId());
+
+        if (reviews == null || reviews.isEmpty()) {
+            book.setAverageRating(0.0);
+            book.setReviewCount(0L);
+        } else {
+            double totalRating = reviews.stream()
+                    .mapToInt(BookReview::getRating)
+                    .sum();
+            double average = totalRating / reviews.size();
+            book.setAverageRating(Math.round(average * 10.0) / 10.0); // 1 ondalık basamak
+            book.setReviewCount((long) reviews.size());
         }
 
-        List<Long> bookIds = books.stream()
-                .map(Book::getId)
-                .toList();
-
-        Map<Long, RatingStats> statsMap = new HashMap<>();
-
-        bookReviewRepository.findRatingStatsByBookIds(bookIds)
-                .forEach(stat -> statsMap.put(stat.getBookId(),
-                        new RatingStats(
-                                stat.getAverageRating() != null ? stat.getAverageRating() : 0.0,
-                                stat.getReviewCount() != null ? stat.getReviewCount() : 0L)));
-
-        return statsMap;
-    }
-
-    private record RatingStats(double averageRating, long reviewCount) {
+        bookRepository.save(book);
     }
 
     private <T> List<T> normalizeList(List<T> list) {

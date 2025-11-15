@@ -1,8 +1,5 @@
 package com.beratcan.app.dto.response;
 
-import com.beratcan.app.entity.enums.ExamType;
-import com.beratcan.app.entity.enums.GradeLevel;
-import com.beratcan.app.entity.enums.LessonType;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -17,7 +14,4 @@ public class BookResponse {
     private Integer numberOfTopics;
     private Integer numberOfTests;
     private Integer numberOfQuestions;
-    private GradeLevel gradeLevel;
-    private ExamType examType;
-    private LessonType lessonType;
 }
