@@ -19,4 +19,5 @@ public class BookReviewResponse {
     private String comment;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    private boolean isMyReview; // Kullanıcının kendi yorumu mu?
 }

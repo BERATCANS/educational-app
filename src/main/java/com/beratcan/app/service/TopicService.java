@@ -21,7 +21,7 @@ public class TopicService {
     private final TopicRepository topicRepository;
     private final BookRepository bookRepository;
     private final TestRepository testRepository;
-    private final BookService bookService;
+    private final BookCatalogService bookCatalogService;
 
     // Helper: Topic -> TopicResponse
     private TopicResponse toTopicResponse(Topic topic) {
@@ -84,7 +84,7 @@ public class TopicService {
             }
         }
         Topic saved = topicRepository.save(topic);
-        bookService.countBookData(saved.getBook().getId());
+        bookCatalogService.countBookData(saved.getBook().getId());
         return toTopicResponse(saved);
     }
 
@@ -107,7 +107,7 @@ public class TopicService {
         }
 
         Topic updated = topicRepository.save(topic);
-        bookService.countBookData(updated.getBook().getId());
+        bookCatalogService.countBookData(updated.getBook().getId());
         return toTopicResponse(updated);
     }
 
@@ -115,7 +115,7 @@ public class TopicService {
         Topic topic = topicRepository.findById(topicId)
                 .orElseThrow(() -> new RuntimeException("Topic not found"));
         topicRepository.delete(topic);
-        bookService.countBookData(topic.getBook().getId());
+        bookCatalogService.countBookData(topic.getBook().getId());
     }
 
     public List<TopicResponse> getTopicsByBook(Long bookId) {

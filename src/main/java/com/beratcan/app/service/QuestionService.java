@@ -21,7 +21,7 @@ public class QuestionService {
 
     private final QuestionRepository questionRepository;
     private final TestRepository testRepository;
-    private final BookService bookService;
+    private final BookCatalogService bookCatalogService;
 
     // CREATE
     public QuestionResponse addQuestion(Long testId, QuestionRequest request) {
@@ -40,7 +40,7 @@ public class QuestionService {
         question.setSequenceNumber(sequenceNumber);
 
         question = questionRepository.save(question);
-        bookService.countBookData(test.getTopic().getBook().getId());
+        bookCatalogService.countBookData(test.getTopic().getBook().getId());
         return toQuestionResponse(question);
     }
 
@@ -85,7 +85,7 @@ public class QuestionService {
         Question question = questionRepository.findById(questionId)
                 .orElseThrow(() -> new IllegalArgumentException("Question not found with ID: " + questionId));
         questionRepository.delete(question);
-        bookService.countBookData(question.getTest().getTopic().getBook().getId());
+        bookCatalogService.countBookData(question.getTest().getTopic().getBook().getId());
     }
 
     @Transactional
