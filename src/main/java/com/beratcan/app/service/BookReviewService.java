@@ -123,16 +123,22 @@ public class BookReviewService {
 
         // Kullanıcının kendi yorumunu bul (sadece ilk sayfada göstermek için)
         BookReviewResponse ownedReview = null;
+        boolean hasOwnedReview = false;
         if (currentUserId != null && page == 0) {
             Optional<BookReview> ownedReviewOpt = bookReviewRepository.findByBookIdAndUserId(bookId, currentUserId);
             if (ownedReviewOpt.isPresent()) {
                 ownedReview = toBookReviewResponse(ownedReviewOpt.get());
+                hasOwnedReview = true;
             }
         }
 
+        // İlk sayfada ve kullanıcının yorumu varsa, size'ı 1 azalt
+        // Böylece toplam 10 yorum gösterilir (ownedReview + 9 diğer yorum)
+        int adjustedSize = (page == 0 && hasOwnedReview) ? size - 1 : size;
+
         // Repository'den direkt pagination ile yorumları al (kullanıcının yorumunu
         // hariç tutarak)
-        Pageable pageable = PageRequest.of(page, size);
+        Pageable pageable = PageRequest.of(page, adjustedSize);
         Page<BookReview> reviewPage = bookReviewRepository.findByBookIdExcludingUserId(
                 bookId, currentUserId, pageable);
 
@@ -148,7 +154,7 @@ public class BookReviewService {
                 ownedReviewToShow,
                 pageContent,
                 page,
-                size,
+                size, // Response'da orijinal size'ı göster
                 reviewPage.getTotalElements());
     }
 
