@@ -320,6 +320,7 @@ public class BookCatalogService {
     private BookStoreResponse toBookStoreResponse(Book book, Boolean isOwned) {
         BookStoreResponse response = new BookStoreResponse();
         response.setId(book.getId());
+        response.setTitle(book.getTitle());
         response.setCoverImageUrl(book.getCoverImageUrl());
         response.setPublisher(book.getPublisher());
         response.setPaid(book.isPaid());

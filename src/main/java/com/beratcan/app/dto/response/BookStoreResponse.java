@@ -13,6 +13,7 @@ import java.math.BigDecimal;
 @NoArgsConstructor
 public class BookStoreResponse {
     private Long id;
+    private String title;
     private String coverImageUrl;
     private String publisher;
     private boolean paid;
