@@ -39,10 +39,6 @@ public interface BookReviewRepository extends JpaRepository<BookReview, Long> {
             @Param("bookId") Long bookId,
             @Param("excludeUserId") Long excludeUserId);
 
-    @Query("SELECT br.book.id AS bookId, AVG(br.rating) AS averageRating, COUNT(br.id) AS reviewCount " +
-            "FROM BookReview br WHERE br.book.id IN :bookIds GROUP BY br.book.id")
-    List<BookRatingAggregate> findRatingStatsByBookIds(@Param("bookIds") List<Long> bookIds);
-
     interface BookRatingAggregate {
         Long getBookId();
 

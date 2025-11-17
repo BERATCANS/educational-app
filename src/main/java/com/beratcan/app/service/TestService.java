@@ -21,7 +21,7 @@ public class TestService {
     private final TestRepository testRepository;
     private final TopicRepository topicRepository;
     private final QuestionRepository questionRepository;
-    private final BookCatalogService bookCatalogService;
+    private final BookAdminService bookAdminService;
 
     // CREATE
     public TestResponse addTest(Long topicId, TestRequest request) {
@@ -51,7 +51,7 @@ public class TestService {
             }
             test = testRepository.save(test);
         }
-        bookCatalogService.countBookData(test.getTopic().getBook().getId());
+        bookAdminService.countBookData(test.getTopic().getBook().getId());
         return toTestResponse(test);
     }
 
@@ -92,7 +92,7 @@ public class TestService {
         }
 
         test = testRepository.save(test);
-        bookCatalogService.countBookData(test.getTopic().getBook().getId());
+        bookAdminService.countBookData(test.getTopic().getBook().getId());
         return toTestResponse(test);
     }
 
@@ -101,7 +101,7 @@ public class TestService {
         Test test = testRepository.findById(testId)
                 .orElseThrow(() -> new RuntimeException("Test not found"));
         testRepository.delete(test);
-        bookCatalogService.countBookData(test.getTopic().getBook().getId());
+        bookAdminService.countBookData(test.getTopic().getBook().getId());
     }
 
     // --- HELPER METHOD ---

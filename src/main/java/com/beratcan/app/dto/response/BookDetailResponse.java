@@ -1,8 +1,5 @@
 package com.beratcan.app.dto.response;
 
-import com.beratcan.app.entity.enums.ExamType;
-import com.beratcan.app.entity.enums.GradeLevel;
-import com.beratcan.app.entity.enums.LessonType;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -24,9 +21,9 @@ public class BookDetailResponse {
     private Integer numberOfTopics;
     private Integer numberOfTests;
     private Integer numberOfQuestions;
-    private GradeLevel gradeLevel;
-    private ExamType examType;
-    private LessonType lessonType;
+    private String gradeLevelLabel;
+    private String examTypeLabel;
+    private String lessonTypeLabel;
     private BigDecimal price;
     private String description;
     private boolean isOwned;
