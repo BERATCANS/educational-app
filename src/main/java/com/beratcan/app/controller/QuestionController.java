@@ -3,8 +3,10 @@ package com.beratcan.app.controller;
 import com.beratcan.app.dto.request.QuestionRequest;
 import com.beratcan.app.dto.response.QuestionResponse;
 import com.beratcan.app.service.QuestionService;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -63,7 +65,12 @@ public class QuestionController {
     public ResponseEntity<String> voteHint(
             @PathVariable Long questionId,
             @PathVariable int hintIndex,
-            @RequestParam boolean like) {
+            @RequestParam boolean like,
+            Authentication authentication) {
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body("You must be authenticated to vote");
+        }
         questionService.voteHint(questionId, hintIndex, like);
         return ResponseEntity.ok("Vote recorded for hint");
     }
@@ -72,7 +79,12 @@ public class QuestionController {
     @PostMapping("/{questionId}/explanation/vote")
     public ResponseEntity<String> voteExplanation(
             @PathVariable Long questionId,
-            @RequestParam boolean like) {
+            @RequestParam boolean like,
+            Authentication authentication) {
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body("You must be authenticated to vote");
+        }
         questionService.voteExplanation(questionId, like);
         return ResponseEntity.ok("Vote recorded for explanation");
     }

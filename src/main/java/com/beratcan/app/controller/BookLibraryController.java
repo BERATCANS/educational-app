@@ -31,13 +31,9 @@ public class BookLibraryController {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(Map.of("error", "Kod kullanmak için giriş yapmalısınız."));
         }
-        try {
-            Long userId = Long.parseLong(authentication.getName());
-            String result = userLibraryService.useCode(userId, code);
-            return ResponseEntity.ok().body(Map.of("message", result));
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
+        Long userId = Long.parseLong(authentication.getName());
+        String result = userLibraryService.useCode(userId, code);
+        return ResponseEntity.ok().body(Map.of("message", result));
     }
 
     @PostMapping("/add-free-book/{bookId}")
@@ -48,12 +44,8 @@ public class BookLibraryController {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(Map.of("error", "Ücretsiz kitap eklemek için giriş yapmalısınız."));
         }
-        try {
-            Long userId = Long.parseLong(authentication.getName());
-            String result = userLibraryService.addFreeBookToLibrary(userId, bookId);
-            return ResponseEntity.ok().body(Map.of("message", result));
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
+        Long userId = Long.parseLong(authentication.getName());
+        String result = userLibraryService.addFreeBookToLibrary(userId, bookId);
+        return ResponseEntity.ok().body(Map.of("message", result));
     }
 }

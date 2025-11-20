@@ -7,6 +7,12 @@ import com.beratcan.app.entity.DailyQuestion;
 import com.beratcan.app.entity.DailyQuestionAnswer;
 import com.beratcan.app.entity.User;
 import com.beratcan.app.entity.enums.OptionLetter;
+import com.beratcan.app.exception.BadRequestException;
+import com.beratcan.app.exception.ConflictException;
+import com.beratcan.app.exception.FileStorageException;
+import com.beratcan.app.exception.ResourceNotFoundException;
+import com.beratcan.app.exception.UnauthorizedOperationException;
+import com.beratcan.app.exception.UserNotFoundException;
 import com.beratcan.app.repository.DailyQuestionRepository;
 import com.beratcan.app.repository.DailyQuestionAnswerRepository;
 import com.beratcan.app.repository.UserRepository;
@@ -39,16 +45,16 @@ public class DailyQuestionService {
 
     public DailyQuestionResponse getCurrentQuestion(Long userId) {
         if (userId == null) {
-            throw new RuntimeException("Kullanıcı ID'si gerekli");
+            throw new UnauthorizedOperationException("Kullanıcı ID'si gerekli");
         }
 
         // Kullanıcı kontrolü (gerekli değil ama tutarlılık için)
         userRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("Kullanıcı bulunamadı"));
+                .orElseThrow(() -> new UserNotFoundException(userId));
 
         DailyQuestion question = dailyQuestionRepository.findByDisplayDate(LocalDate.now())
                 .orElse(null);
-        
+
         if (question == null) {
             DailyQuestionResponse response = new DailyQuestionResponse();
             response.setErrorMessage("Aktif günlük soru bulunamadı");
@@ -62,41 +68,41 @@ public class DailyQuestionService {
     public DailyQuestionResponse submitAnswer(Long userId, DailyQuestionAnswerRequest request) {
         // Input validasyonu
         if (userId == null) {
-            throw new RuntimeException("Kullanıcı ID'si gerekli");
+            throw new UnauthorizedOperationException("Kullanıcı ID'si gerekli");
         }
         if (request == null) {
-            throw new RuntimeException("Cevap bilgisi gerekli");
+            throw new BadRequestException("Cevap bilgisi gerekli");
         }
         if (request.getDailyQuestionId() == null) {
-            throw new RuntimeException("Soru ID'si gerekli");
+            throw new BadRequestException("Soru ID'si gerekli");
         }
         if (request.getSelectedAnswer() == null) {
-            throw new RuntimeException("Seçilen cevap gerekli");
+            throw new BadRequestException("Seçilen cevap gerekli");
         }
 
         // Kullanıcı kontrolü
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("Kullanıcı bulunamadı"));
+                .orElseThrow(() -> new UserNotFoundException(userId));
 
         // Soru kontrolü
         DailyQuestion question = dailyQuestionRepository.findById(request.getDailyQuestionId())
-                .orElseThrow(() -> new RuntimeException("Soru bulunamadı"));
+                .orElseThrow(() -> new ResourceNotFoundException("Soru bulunamadı"));
 
         // Zaman kontrolü
         LocalDateTime now = LocalDateTime.now();
         LocalDateTime startTime = LocalDateTime.of(question.getDisplayDate(), question.getStartTime());
         LocalDateTime endTime = LocalDateTime.of(question.getDisplayDate(), question.getEndTime());
-        
+
         if (now.isBefore(startTime)) {
-            throw new RuntimeException("Soru henüz başlamadı");
+            throw new BadRequestException("Soru henüz başlamadı");
         }
         if (now.isAfter(endTime)) {
-            throw new RuntimeException("Soru süresi sona erdi");
+            throw new BadRequestException("Soru süresi sona erdi");
         }
 
         // Daha önce cevaplanmış mı kontrolü
         if (answerRepository.existsByDailyQuestionIdAndUserId(question.getId(), userId)) {
-            throw new RuntimeException("Bu soruyu daha önce cevapladınız");
+            throw new ConflictException("Bu soruyu daha önce cevapladınız");
         }
 
         // Cevabı kaydet
@@ -110,12 +116,16 @@ public class DailyQuestionService {
     }
 
     @Transactional
-    public DailyQuestion createDailyQuestion(CreateDailyQuestionRequest request) throws IOException {
+    public DailyQuestion createDailyQuestion(CreateDailyQuestionRequest request) {
         // Resmi kaydet
         String filename = System.currentTimeMillis() + "_" + request.getImage().getOriginalFilename();
         Path filePath = Paths.get(uploadDir, filename);
-        Files.createDirectories(filePath.getParent());
-        Files.write(filePath, request.getImage().getBytes());
+        try {
+            Files.createDirectories(filePath.getParent());
+            Files.write(filePath, request.getImage().getBytes());
+        } catch (IOException e) {
+            throw new FileStorageException("Günlük soru görseli kaydedilemedi.", e);
+        }
         String imageUrl = "/api/files/" + filename;
 
         // Yeni soru oluştur
@@ -164,7 +174,7 @@ public class DailyQuestionService {
             // İstatistikler
             DailyQuestionResponse.AnswerStatistics statistics = new DailyQuestionResponse.AnswerStatistics();
             statistics.setTotalAnswers(answerRepository.countAnswersByQuestionId(question.getId()));
-            
+
             // Answer distribution'ı manuel olarak oluştur
             Map<OptionLetter, Long> distribution = new HashMap<>();
             List<Object[]> distributionData = answerRepository.getAnswerDistribution(question.getId());

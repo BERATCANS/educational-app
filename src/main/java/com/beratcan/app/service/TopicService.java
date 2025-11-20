@@ -5,13 +5,16 @@ import com.beratcan.app.dto.response.TopicResponse;
 import com.beratcan.app.entity.Book;
 import com.beratcan.app.entity.Test;
 import com.beratcan.app.entity.Topic;
+import com.beratcan.app.exception.BadRequestException;
+import com.beratcan.app.exception.BookNotFoundException;
+import com.beratcan.app.exception.ConflictException;
+import com.beratcan.app.exception.TopicNotFoundException;
 import com.beratcan.app.repository.BookRepository;
 import com.beratcan.app.repository.TestRepository;
 import com.beratcan.app.repository.TopicRepository;
 import org.springframework.stereotype.Service;
 import lombok.RequiredArgsConstructor;
 import java.util.List;
-import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
@@ -39,8 +42,11 @@ public class TopicService {
         if (requestedSequenceNumber != null) {
             // Eğer belirli bir sequence number isteniyorsa, o numaranın kullanılıp
             // kullanılmadığını kontrol et
+            if (requestedSequenceNumber < 1) {
+                throw new BadRequestException("Sequence number must be greater than 0");
+            }
             if (topicRepository.existsByBookIdAndSequenceNumber(bookId, requestedSequenceNumber)) {
-                throw new RuntimeException("Sequence number " + requestedSequenceNumber
+                throw new ConflictException("Sequence number " + requestedSequenceNumber
                         + " is already in use. Please delete the existing topic with this sequence number first.");
             }
             return requestedSequenceNumber;
@@ -62,13 +68,19 @@ public class TopicService {
     }
 
     public TopicResponse addTopic(Long bookId, TopicRequest request) {
-        Optional<Book> bookOpt = bookRepository.findById(bookId);
-        if (bookOpt.isEmpty())
-            throw new RuntimeException("Book not found");
+        if (request == null) {
+            throw new BadRequestException("Topic request cannot be null");
+        }
+        if (request.getTitle() == null || request.getTitle().trim().isEmpty()) {
+            throw new BadRequestException("Topic title cannot be null or empty");
+        }
+
+        Book book = bookRepository.findById(bookId)
+                .orElseThrow(() -> new BookNotFoundException(bookId));
 
         Topic topic = new Topic();
         topic.setTitle(request.getTitle());
-        topic.setBook(bookOpt.get());
+        topic.setBook(book);
 
         // Sequence number atama
         Integer sequenceNumber = getNextSequenceNumber(bookId, request.getSequenceNumber());
@@ -76,11 +88,13 @@ public class TopicService {
 
         if (request.getTests() != null) {
             for (String testTitle : request.getTests()) {
-                Test test = new Test();
-                test.setTitle(testTitle);
-                test.setTopic(topic);
-                testRepository.save(test);
-                topic.getTests().add(test);
+                if (testTitle != null && !testTitle.trim().isEmpty()) {
+                    Test test = new Test();
+                    test.setTitle(testTitle);
+                    test.setTopic(topic);
+                    testRepository.save(test);
+                    topic.getTests().add(test);
+                }
             }
         }
         Topic saved = topicRepository.save(topic);
@@ -89,20 +103,26 @@ public class TopicService {
     }
 
     public TopicResponse updateTopic(Long topicId, TopicRequest request) {
-        Topic topic = topicRepository.findById(topicId)
-                .orElseThrow(() -> new RuntimeException("Topic not found"));
+        if (request == null) {
+            throw new BadRequestException("Topic request cannot be null");
+        }
 
-        if (request.getTitle() != null && !request.getTitle().isBlank()) {
+        Topic topic = topicRepository.findById(topicId)
+                .orElseThrow(() -> new TopicNotFoundException(topicId));
+
+        if (request.getTitle() != null && !request.getTitle().trim().isEmpty()) {
             topic.setTitle(request.getTitle());
         }
 
         if (request.getTests() != null) {
             for (String testTitle : request.getTests()) {
-                Test test = new Test();
-                test.setTitle(testTitle);
-                test.setTopic(topic);
-                testRepository.save(test);
-                topic.getTests().add(test);
+                if (testTitle != null && !testTitle.trim().isEmpty()) {
+                    Test test = new Test();
+                    test.setTitle(testTitle);
+                    test.setTopic(topic);
+                    testRepository.save(test);
+                    topic.getTests().add(test);
+                }
             }
         }
 
@@ -113,12 +133,20 @@ public class TopicService {
 
     public void deleteTopic(Long topicId) {
         Topic topic = topicRepository.findById(topicId)
-                .orElseThrow(() -> new RuntimeException("Topic not found"));
+                .orElseThrow(() -> new TopicNotFoundException(topicId));
         topicRepository.delete(topic);
         bookAdminService.countBookData(topic.getBook().getId());
     }
 
     public List<TopicResponse> getTopicsByBook(Long bookId) {
+        if (bookId == null) {
+            throw new BadRequestException("Book ID cannot be null");
+        }
+
+        // Kitabın var olup olmadığını kontrol et
+        bookRepository.findById(bookId)
+                .orElseThrow(() -> new BookNotFoundException(bookId));
+
         return topicRepository.findByBookIdOrderBySequenceNumberAsc(bookId)
                 .stream()
                 .map(this::toTopicResponse)

@@ -30,13 +30,9 @@ public class CartController {
     public ResponseEntity<?> addToCart(
             @RequestBody AddToCartRequest request,
             Authentication authentication) {
-        try {
-            Long userId = Long.parseLong(authentication.getName());
-            CartResponse response = cartService.addToCart(userId, request.getBookId());
-            return ResponseEntity.ok(response);
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
+        Long userId = Long.parseLong(authentication.getName());
+        CartResponse response = cartService.addToCart(userId, request.getBookId());
+        return ResponseEntity.ok(response);
     }
 
     /**
@@ -47,13 +43,9 @@ public class CartController {
     public ResponseEntity<?> removeFromCart(
             @PathVariable Long cartItemId,
             Authentication authentication) {
-        try {
-            Long userId = Long.parseLong(authentication.getName());
-            CartResponse response = cartService.removeFromCart(userId, cartItemId);
-            return ResponseEntity.ok(response);
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
+        Long userId = Long.parseLong(authentication.getName());
+        CartResponse response = cartService.removeFromCart(userId, cartItemId);
+        return ResponseEntity.ok(response);
     }
 
     /**
@@ -73,13 +65,9 @@ public class CartController {
      */
     @DeleteMapping("/clear")
     public ResponseEntity<?> clearCart(Authentication authentication) {
-        try {
-            Long userId = Long.parseLong(authentication.getName());
-            cartService.clearCart(userId);
-            return ResponseEntity.ok(Map.of("message", "Sepet başarıyla temizlendi"));
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
+        Long userId = Long.parseLong(authentication.getName());
+        cartService.clearCart(userId);
+        return ResponseEntity.ok(Map.of("message", "Sepet başarıyla temizlendi"));
     }
 
     /**
@@ -99,15 +87,11 @@ public class CartController {
      */
     @PostMapping("/checkout")
     public ResponseEntity<?> checkout(Authentication authentication) {
-        try {
-            Long userId = Long.parseLong(authentication.getName());
-            List<PurchaseResponse> purchases = purchaseService.checkoutCart(userId);
-            return ResponseEntity.status(HttpStatus.CREATED).body(Map.of(
-                    "message", "Sepetteki tüm kitaplar başarıyla satın alındı",
-                    "purchases", purchases,
-                    "totalItems", purchases.size()));
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
+        Long userId = Long.parseLong(authentication.getName());
+        List<PurchaseResponse> purchases = purchaseService.checkoutCart(userId);
+        return ResponseEntity.status(HttpStatus.CREATED).body(Map.of(
+                "message", "Sepetteki tüm kitaplar başarıyla satın alındı",
+                "purchases", purchases,
+                "totalItems", purchases.size()));
     }
 }

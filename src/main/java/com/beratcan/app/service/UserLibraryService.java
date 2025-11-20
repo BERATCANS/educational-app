@@ -4,6 +4,10 @@ import com.beratcan.app.dto.response.BookResponse;
 import com.beratcan.app.entity.Book;
 import com.beratcan.app.entity.BookCode;
 import com.beratcan.app.entity.User;
+import com.beratcan.app.exception.BadRequestException;
+import com.beratcan.app.exception.BookNotFoundException;
+import com.beratcan.app.exception.ConflictException;
+import com.beratcan.app.exception.UserNotFoundException;
 import com.beratcan.app.repository.BookCodeRepository;
 import com.beratcan.app.repository.BookRepository;
 import com.beratcan.app.repository.TestResultRepository;
@@ -15,7 +19,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
-import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -31,17 +34,11 @@ public class UserLibraryService {
      */
     @Transactional
     public String useCode(Long userId, String codeValue) {
-        Optional<User> userOpt = userRepository.findById(userId);
-        if (userOpt.isEmpty())
-            return "Kullanıcı bulunamadı";
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new UserNotFoundException(userId));
 
-        User user = userOpt.get();
-
-        Optional<BookCode> codeOpt = bookCodeRepository.findByCodeAndUsedFalse(codeValue);
-        if (codeOpt.isEmpty())
-            return "Kod geçersiz veya zaten kullanıldı";
-
-        BookCode code = codeOpt.get();
+        BookCode code = bookCodeRepository.findByCodeAndUsedFalse(codeValue)
+                .orElseThrow(() -> new BadRequestException("Kod geçersiz veya zaten kullanıldı"));
         Book book = code.getBook();
 
         // Kullanıcının bu kitabı zaten sahip olup olmadığını kontrol et
@@ -49,7 +46,7 @@ public class UserLibraryService {
                 .anyMatch(ownedBook -> ownedBook.getId().equals(book.getId()));
 
         if (alreadyOwns) {
-            return "Bu kitabı zaten sahipsiniz";
+            throw new ConflictException("Bu kitabı zaten sahipsiniz");
         }
 
         code.setUsed(true);
@@ -69,14 +66,14 @@ public class UserLibraryService {
     @Transactional
     public String addFreeBookToLibrary(Long userId, Long bookId) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new UserNotFoundException(userId));
 
         Book book = bookRepository.findById(bookId)
-                .orElseThrow(() -> new RuntimeException("Book not found"));
+                .orElseThrow(() -> new BookNotFoundException(bookId));
 
         // Kitap ücretsiz mi kontrol et
         if (book.isPaid()) {
-            return "Bu kitap ücretsiz değil";
+            throw new BadRequestException("Bu kitap ücretsiz değil");
         }
 
         // Kullanıcının bu kitabı zaten kütüphanesinde var mı kontrol et
@@ -84,7 +81,7 @@ public class UserLibraryService {
                 .anyMatch(b -> b.getId().equals(bookId));
 
         if (alreadyOwns) {
-            return "Bu kitap zaten kütüphanenizde";
+            throw new ConflictException("Bu kitap zaten kütüphanenizde");
         }
 
         // Kütüphaneye ekle
@@ -100,7 +97,7 @@ public class UserLibraryService {
     @Transactional(readOnly = true)
     public List<BookResponse> getBooksForUser(Long userId) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new UserNotFoundException(userId));
 
         List<Book> sortedOwnedBooks = user.getOwnedBooks().stream()
                 .sorted((b1, b2) -> {

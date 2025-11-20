@@ -39,37 +39,20 @@ public class BookStoreController {
             Authentication authentication,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        if (authentication != null && authentication.isAuthenticated()) {
-            try {
-                Long userId = Long.parseLong(authentication.getName());
-                return bookCatalogService.getBookStore(query, examTypes, gradeLevels, lessonTypes, minPrice, maxPrice,
-                        userId,
-                        page, size);
-            } catch (Exception e) {
-                // Kullanıcı ID'si parse edilemezse, tüm kitapları dön
-                return bookCatalogService.getBookStore(query, examTypes, gradeLevels, lessonTypes, minPrice, maxPrice,
-                        null,
-                        page, size);
-            }
-        }
-        // Giriş yapmamış kullanıcılar için tüm kitapları dön
-        return bookCatalogService.getBookStore(query, examTypes, gradeLevels, lessonTypes, minPrice, maxPrice, null,
-                page,
-                size);
+        Long userId = (authentication != null && authentication.isAuthenticated())
+                ? Long.parseLong(authentication.getName())
+                : null;
+        return bookCatalogService.getBookStore(
+                query, examTypes, gradeLevels, lessonTypes, minPrice, maxPrice, userId, page, size);
     }
 
     @GetMapping("/{bookId}")
     public ResponseEntity<BookDetailResponse> getBookDetail(
             @PathVariable Long bookId,
             Authentication authentication) {
-        Long userId = null;
-        if (authentication != null && authentication.isAuthenticated()) {
-            try {
-                userId = Long.parseLong(authentication.getName());
-            } catch (Exception e) {
-                // Kullanıcı ID'si parse edilemezse null bırak
-            }
-        }
+        Long userId = (authentication != null && authentication.isAuthenticated())
+                ? Long.parseLong(authentication.getName())
+                : null;
         BookDetailResponse response = bookCatalogService.getBookDetail(bookId, userId);
         return ResponseEntity.ok(response);
     }

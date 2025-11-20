@@ -50,13 +50,7 @@ public class TestResultController {
             @PathVariable Long testResultId,
             Authentication authentication) {
         Long userId = Long.parseLong(authentication.getName());
-        TestResult result = testResultService.getTestResultById(testResultId);
-
-        // Sadece kendi test sonucunu görebilir
-        if (!result.getUser().getId().equals(userId)) {
-            return ResponseEntity.status(403).body(null);
-        }
-
+        TestResult result = testResultService.getTestResultById(testResultId, userId);
         return ResponseEntity.ok(result);
     }
 
@@ -100,12 +94,8 @@ public class TestResultController {
     public ResponseEntity<List<TestResultResponse>> getMyTestResultsByBook(
             @PathVariable Long bookId,
             Authentication authentication) {
-        try {
-            Long userId = Long.parseLong(authentication.getName());
-            List<TestResultResponse> results = testResultService.getUserTestResultsByBookId(userId, bookId);
-            return ResponseEntity.ok(results);
-        } catch (Exception e) {
-            return ResponseEntity.status(500).body(null);
-        }
+        Long userId = Long.parseLong(authentication.getName());
+        List<TestResultResponse> results = testResultService.getUserTestResultsByBookId(userId, bookId);
+        return ResponseEntity.ok(results);
     }
 }

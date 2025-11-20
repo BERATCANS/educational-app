@@ -9,6 +9,8 @@ import com.beratcan.app.entity.User;
 import com.beratcan.app.entity.enums.ExamType;
 import com.beratcan.app.entity.enums.GradeLevel;
 import com.beratcan.app.entity.enums.LessonType;
+import com.beratcan.app.exception.BookNotFoundException;
+import com.beratcan.app.exception.UserNotFoundException;
 import com.beratcan.app.repository.BookRepository;
 import com.beratcan.app.repository.BookReviewRepository;
 import com.beratcan.app.repository.UserRepository;
@@ -47,7 +49,7 @@ public class BookCatalogService {
 
         if (userId != null) {
             User user = userRepository.findById(userId)
-                    .orElseThrow(() -> new RuntimeException("User not found"));
+                    .orElseThrow(() -> new UserNotFoundException(userId));
 
             // Sahip olunan kitaplar (Set kullanarak O(1) lookup)
             ownedBookIds = user.getOwnedBooks().stream()
@@ -104,7 +106,7 @@ public class BookCatalogService {
     @Transactional(readOnly = true)
     public BookDetailResponse getBookDetail(Long bookId, Long userId) {
         Book book = bookRepository.findById(bookId)
-                .orElseThrow(() -> new RuntimeException("Book not found"));
+                .orElseThrow(() -> new BookNotFoundException(bookId));
 
         // Kullanıcının kitabı sahip olup olmadığını kontrol et
         boolean isOwned = false;

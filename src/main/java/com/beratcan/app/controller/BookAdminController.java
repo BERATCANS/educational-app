@@ -43,12 +43,8 @@ public class BookAdminController {
     @PreAuthorize("hasRole('ADMIN')")
     @PostMapping("/{bookId}/count")
     public ResponseEntity<String> countBookData(@PathVariable Long bookId) {
-        try {
-            bookAdminService.countBookData(bookId);
-            return ResponseEntity.ok("Book ID " + bookId + " sayıları başarıyla güncellendi.");
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body("Hata: " + e.getMessage());
-        }
+        bookAdminService.countBookData(bookId);
+        return ResponseEntity.ok("Book ID " + bookId + " sayıları başarıyla güncellendi.");
     }
 
     @PreAuthorize("hasRole('ADMIN')")
@@ -56,11 +52,7 @@ public class BookAdminController {
     public ResponseEntity<?> addCodes(
             @RequestParam Long bookId,
             @RequestBody List<String> codes) {
-        try {
-            String result = bookAdminService.addCodes(bookId, codes);
-            return ResponseEntity.ok(java.util.Map.of("message", result));
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body(java.util.Map.of("error", e.getMessage()));
-        }
+        String result = bookAdminService.addCodes(bookId, codes);
+        return ResponseEntity.ok(java.util.Map.of("message", result));
     }
 }

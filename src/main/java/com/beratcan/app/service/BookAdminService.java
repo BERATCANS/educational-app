@@ -5,6 +5,8 @@ import com.beratcan.app.entity.Book;
 import com.beratcan.app.entity.BookCode;
 import com.beratcan.app.entity.Test;
 import com.beratcan.app.entity.Topic;
+import com.beratcan.app.exception.BadRequestException;
+import com.beratcan.app.exception.BookNotFoundException;
 import com.beratcan.app.repository.BookCodeRepository;
 import com.beratcan.app.repository.BookRepository;
 import com.beratcan.app.repository.TestRepository;
@@ -70,7 +72,7 @@ public class BookAdminService {
     @Transactional
     public Book updateBook(Long bookId, BookRequest request) {
         Book book = bookRepository.findById(bookId)
-                .orElseThrow(() -> new RuntimeException("Book not found"));
+                .orElseThrow(() -> new BookNotFoundException(bookId));
 
         book.setTitle(request.getTitle());
         book.setPublisher(request.getPublisher());
@@ -94,7 +96,7 @@ public class BookAdminService {
     @Transactional
     public void deleteBook(Long bookId) {
         if (!bookRepository.existsById(bookId)) {
-            throw new RuntimeException("Book not found");
+            throw new BookNotFoundException(bookId);
         }
         bookRepository.deleteById(bookId);
     }
@@ -102,7 +104,7 @@ public class BookAdminService {
     @Transactional
     public void countBookData(Long bookId) {
         Book book = bookRepository.findById(bookId)
-                .orElseThrow(() -> new IllegalArgumentException("Kitap bulunamadı: " + bookId));
+                .orElseThrow(() -> new BookNotFoundException(bookId));
 
         int totalTopics = 0;
         int totalTests = 0;
@@ -147,7 +149,11 @@ public class BookAdminService {
     @Transactional
     public String addCodes(Long bookId, List<String> codes) {
         Book book = bookRepository.findById(bookId)
-                .orElseThrow(() -> new RuntimeException("Book not found"));
+                .orElseThrow(() -> new BookNotFoundException(bookId));
+
+        if (codes == null || codes.isEmpty()) {
+            throw new BadRequestException("Eklenebilecek kod bulunamadı.");
+        }
 
         // Duplicate ve yeni kodları ayır
         List<String> duplicateCodes = codes.stream()

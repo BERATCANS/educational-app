@@ -28,13 +28,9 @@ public class BookReviewController {
                     .body(Map.of("error", "Yorum eklemek için giriş yapmalısınız."));
         }
 
-        try {
-            Long userId = Long.parseLong(authentication.getName());
-            String message = bookReviewService.addReview(userId, bookId, request);
-            return ResponseEntity.ok(Map.of("message", message));
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
+        Long userId = Long.parseLong(authentication.getName());
+        String message = bookReviewService.addReview(userId, bookId, request);
+        return ResponseEntity.ok(Map.of("message", message));
     }
 
     @PutMapping("/{bookId}/reviews/{reviewId}")
@@ -48,13 +44,9 @@ public class BookReviewController {
                     .body(Map.of("error", "Yorum düzenlemek için giriş yapmalısınız."));
         }
 
-        try {
-            Long userId = Long.parseLong(authentication.getName());
-            String message = bookReviewService.updateReview(userId, bookId, reviewId, request);
-            return ResponseEntity.ok(Map.of("message", message));
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
+        Long userId = Long.parseLong(authentication.getName());
+        String message = bookReviewService.updateReview(userId, bookId, reviewId, request);
+        return ResponseEntity.ok(Map.of("message", message));
     }
 
     @GetMapping("/{bookId}/reviews")
@@ -63,14 +55,9 @@ public class BookReviewController {
             Authentication authentication,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
-        Long userId = null;
-        if (authentication != null && authentication.isAuthenticated()) {
-            try {
-                userId = Long.parseLong(authentication.getName());
-            } catch (Exception e) {
-                // Kullanıcı ID'si parse edilemezse null bırak
-            }
-        }
+        Long userId = (authentication != null && authentication.isAuthenticated())
+                ? Long.parseLong(authentication.getName())
+                : null;
         return bookReviewService.getBookReviews(bookId, userId, page, size);
     }
 

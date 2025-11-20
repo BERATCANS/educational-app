@@ -2,8 +2,19 @@ package com.beratcan.app.service;
 
 import com.beratcan.app.dto.request.PurchaseRequest;
 import com.beratcan.app.dto.response.PurchaseResponse;
-import com.beratcan.app.entity.*;
+import com.beratcan.app.entity.Book;
+import com.beratcan.app.entity.Cart;
+import com.beratcan.app.entity.CartItem;
+import com.beratcan.app.entity.Purchase;
+import com.beratcan.app.entity.User;
 import com.beratcan.app.entity.enums.PurchaseStatus;
+import com.beratcan.app.exception.BadRequestException;
+import com.beratcan.app.exception.BookNotFoundException;
+import com.beratcan.app.exception.CartNotFoundException;
+import com.beratcan.app.exception.ExternalServiceException;
+import com.beratcan.app.exception.PurchaseNotFoundException;
+import com.beratcan.app.exception.UnauthorizedOperationException;
+import com.beratcan.app.exception.UserNotFoundException;
 import com.beratcan.app.repository.BookRepository;
 import com.beratcan.app.repository.CartRepository;
 import com.beratcan.app.repository.PurchaseRepository;
@@ -38,7 +49,7 @@ public class PurchaseService {
         // Kullanıcıyı getir
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> {
-                    RuntimeException ex = new RuntimeException("Kullanıcı bulunamadı");
+                    UserNotFoundException ex = new UserNotFoundException(userId);
                     log.error("User not found for purchase: userId={}", userId, ex);
                     return ex;
                 });
@@ -46,7 +57,7 @@ public class PurchaseService {
         // Kitabı getir
         Book book = bookRepository.findById(bookId)
                 .orElseThrow(() -> {
-                    RuntimeException ex = new RuntimeException("Kitap bulunamadı");
+                    BookNotFoundException ex = new BookNotFoundException(bookId);
                     log.error("Book not found for purchase: bookId={}, userId={}", bookId, userId, ex);
                     return ex;
                 });
@@ -55,13 +66,13 @@ public class PurchaseService {
         if (!book.isPaid()) {
             log.warn("Attempted to purchase free book: userId={}, bookId={}, title={}",
                     userId, bookId, book.getTitle());
-            throw new RuntimeException("Bu kitap zaten ücretsizdir");
+            throw new BadRequestException("Bu kitap zaten ücretsizdir");
         }
 
         // Kitabın fiyatı var mı kontrol et
         if (book.getPrice() == null || book.getPrice().signum() <= 0) {
             log.error("Invalid book price: bookId={}, price={}", bookId, book.getPrice());
-            throw new RuntimeException("Kitap fiyatı geçerli değil");
+            throw new BadRequestException("Kitap fiyatı geçerli değil");
         }
 
         // Kullanıcı bu kitabı daha önce satın almış mı kontrol et
@@ -173,7 +184,7 @@ public class PurchaseService {
     public PurchaseResponse getPurchaseById(Long purchaseId, Long userId) {
         Purchase purchase = purchaseRepository.findById(purchaseId)
                 .orElseThrow(() -> {
-                    RuntimeException ex = new RuntimeException("Satın alma kaydı bulunamadı");
+                    PurchaseNotFoundException ex = new PurchaseNotFoundException(purchaseId);
                     log.error("Purchase not found: purchaseId={}, userId={}", purchaseId, userId, ex);
                     return ex;
                 });
@@ -182,7 +193,7 @@ public class PurchaseService {
         if (!purchase.getUser().getId().equals(userId)) {
             log.warn("Unauthorized purchase access attempt: purchaseId={}, requestingUserId={}, ownerUserId={}",
                     purchaseId, userId, purchase.getUser().getId());
-            throw new RuntimeException("Bu satın alma kaydına erişim yetkiniz yok");
+            throw new UnauthorizedOperationException("Bu satın alma kaydına erişim yetkiniz yok");
         }
 
         return mapToResponse(purchase);
@@ -199,7 +210,7 @@ public class PurchaseService {
         // Kullanıcıyı getir
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> {
-                    RuntimeException ex = new RuntimeException("Kullanıcı bulunamadı");
+                    UserNotFoundException ex = new UserNotFoundException(userId);
                     log.error("User not found for cart checkout: userId={}", userId, ex);
                     return ex;
                 });
@@ -207,7 +218,7 @@ public class PurchaseService {
         // Sepeti getir
         Cart cart = cartRepository.findByUserId(userId)
                 .orElseThrow(() -> {
-                    RuntimeException ex = new RuntimeException("Sepet bulunamadı");
+                    CartNotFoundException ex = new CartNotFoundException(userId);
                     log.error("Cart not found for user: userId={}", userId, ex);
                     return ex;
                 });
@@ -217,7 +228,7 @@ public class PurchaseService {
         // Sepet boş mu kontrol et
         if (cart.getItems().isEmpty()) {
             log.warn("Attempted to checkout empty cart: userId={}", userId);
-            throw new RuntimeException("Sepetiniz boş");
+            throw new BadRequestException("Sepetiniz boş");
         }
 
         // ADIM 1: Tüm kitapları validate et ve satın alınabilir olanları listele
@@ -259,7 +270,7 @@ public class PurchaseService {
         // Hiç geçerli kitap yoksa hata fırlat
         if (validBooks.isEmpty()) {
             log.error("No valid books in cart: userId={}, errors={}", userId, validationErrors);
-            throw new RuntimeException("Sepette satın alınabilir kitap yok: " +
+            throw new BadRequestException("Sepette satın alınabilir kitap yok: " +
                     String.join(", ", validationErrors));
         }
 
@@ -282,7 +293,7 @@ public class PurchaseService {
         if (!paymentSuccess) {
             log.error("Bulk payment failed: userId={}, totalAmount={}, transactionId={}",
                     userId, totalAmount, transactionId);
-            throw new RuntimeException("Ödeme işlemi başarısız oldu. Toplam tutar: " +
+            throw new ExternalServiceException("Ödeme işlemi başarısız oldu. Toplam tutar: " +
                     totalAmount + " TL. Lütfen tekrar deneyin.");
         }
 

@@ -3,6 +3,12 @@ package com.beratcan.app.service;
 import com.beratcan.app.dto.response.TestResultResponse;
 import com.beratcan.app.entity.*;
 import com.beratcan.app.entity.enums.OptionLetter;
+import com.beratcan.app.exception.BadRequestException;
+import com.beratcan.app.exception.QuestionNotFoundException;
+import com.beratcan.app.exception.TestNotFoundException;
+import com.beratcan.app.exception.TestResultNotFoundException;
+import com.beratcan.app.exception.UnauthorizedOperationException;
+import com.beratcan.app.exception.UserNotFoundException;
 import com.beratcan.app.repository.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -37,12 +43,18 @@ public class TestResultService {
     public TestResult saveTestResult(Long userId, Long testId,
             Map<Long, OptionLetter> userAnswers,
             Integer totalTimeSeconds) {
+        if (userAnswers == null || userAnswers.isEmpty()) {
+            throw new BadRequestException("User answers cannot be null or empty");
+        }
+        if (totalTimeSeconds == null || totalTimeSeconds < 0) {
+            throw new BadRequestException("Total time seconds must be a non-negative number");
+        }
 
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new UserNotFoundException(userId));
 
         Test test = testRepository.findById(testId)
-                .orElseThrow(() -> new RuntimeException("Test not found"));
+                .orElseThrow(() -> new TestNotFoundException(testId));
 
         // Önce mevcut test sonucunu kontrol et
         TestResult existingTestResult = testResultRepository
@@ -74,7 +86,7 @@ public class TestResultService {
             OptionLetter selectedAnswer = entry.getValue();
 
             Question question = questionRepository.findById(questionId)
-                    .orElseThrow(() -> new RuntimeException("Question not found"));
+                    .orElseThrow(() -> new QuestionNotFoundException(questionId));
 
             boolean isCorrect = question.getCorrectAnswer().equals(selectedAnswer);
             if (isCorrect) {
@@ -120,7 +132,18 @@ public class TestResultService {
 
     public TestResult getTestResultById(Long testResultId) {
         return testResultRepository.findById(testResultId)
-                .orElseThrow(() -> new RuntimeException("Test result not found"));
+                .orElseThrow(() -> new TestResultNotFoundException(testResultId));
+    }
+
+    public TestResult getTestResultById(Long testResultId, Long userId) {
+        TestResult testResult = testResultRepository.findById(testResultId)
+                .orElseThrow(() -> new TestResultNotFoundException(testResultId));
+
+        if (!testResult.getUser().getId().equals(userId)) {
+            throw new UnauthorizedOperationException("You can only access your own test results");
+        }
+
+        return testResult;
     }
 
     // Kullanıcı istatistikleri
@@ -140,31 +163,37 @@ public class TestResultService {
 
     // Kullanıcının belirli bir kitaptaki tüm test sonuçlarını getir
     public List<TestResultResponse> getUserTestResultsByBookId(Long userId, Long bookId) {
-        try {
-            // Önce kullanıcının tüm test sonuçlarını al
-            List<TestResult> allUserResults = testResultRepository.findByUserIdOrderByCompletedAtDesc(userId);
+        if (userId == null) {
+            throw new BadRequestException("User ID cannot be null");
+        }
+        if (bookId == null) {
+            throw new BadRequestException("Book ID cannot be null");
+        }
 
-            List<TestResultResponse> responses = new ArrayList<>();
+        // Kullanıcının var olup olmadığını kontrol et
+        userRepository.findById(userId)
+                .orElseThrow(() -> new UserNotFoundException(userId));
 
-            // Her test sonucu için, o testin kitabı kontrol et
-            for (TestResult testResult : allUserResults) {
-                Test test = testResult.getTest();
-                if (test != null && test.getTopic() != null && test.getTopic().getBook() != null) {
-                    if (test.getTopic().getBook().getId().equals(bookId)) {
-                        // Bu test sonucu istenen kitaba ait
-                        TestResultResponse response = new TestResultResponse();
-                        response.setUserId(userId);
-                        response.setTestId(test.getId());
-                        response.setSuccessRate(testResult.getSuccessRate());
-                        responses.add(response);
-                    }
+        // Önce kullanıcının tüm test sonuçlarını al
+        List<TestResult> allUserResults = testResultRepository.findByUserIdOrderByCompletedAtDesc(userId);
+
+        List<TestResultResponse> responses = new ArrayList<>();
+
+        // Her test sonucu için, o testin kitabı kontrol et
+        for (TestResult testResult : allUserResults) {
+            Test test = testResult.getTest();
+            if (test != null && test.getTopic() != null && test.getTopic().getBook() != null) {
+                if (test.getTopic().getBook().getId().equals(bookId)) {
+                    // Bu test sonucu istenen kitaba ait
+                    TestResultResponse response = new TestResultResponse();
+                    response.setUserId(userId);
+                    response.setTestId(test.getId());
+                    response.setSuccessRate(testResult.getSuccessRate());
+                    responses.add(response);
                 }
             }
-
-            return responses;
-        } catch (Exception e) {
-            e.printStackTrace();
-            return new ArrayList<>();
         }
+
+        return responses;
     }
 }

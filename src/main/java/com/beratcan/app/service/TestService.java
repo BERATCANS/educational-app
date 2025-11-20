@@ -6,11 +6,16 @@ import com.beratcan.app.dto.response.TestResponse;
 import com.beratcan.app.entity.Question;
 import com.beratcan.app.entity.Test;
 import com.beratcan.app.entity.Topic;
+import com.beratcan.app.exception.BadRequestException;
+import com.beratcan.app.exception.ConflictException;
+import com.beratcan.app.exception.TestNotFoundException;
+import com.beratcan.app.exception.TopicNotFoundException;
 import com.beratcan.app.repository.QuestionRepository;
 import com.beratcan.app.repository.TestRepository;
 import com.beratcan.app.repository.TopicRepository;
-import org.springframework.stereotype.Service;
 import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -25,8 +30,15 @@ public class TestService {
 
     // CREATE
     public TestResponse addTest(Long topicId, TestRequest request) {
+        if (request == null) {
+            throw new BadRequestException("Test request cannot be null");
+        }
+        if (request.getTitle() == null || request.getTitle().isBlank()) {
+            throw new BadRequestException("Test title cannot be empty");
+        }
+
         Topic topic = topicRepository.findById(topicId)
-                .orElseThrow(() -> new RuntimeException("Topic not found"));
+                .orElseThrow(() -> new TopicNotFoundException(topicId));
 
         Test test = new Test();
         test.setTitle(request.getTitle());
@@ -40,6 +52,9 @@ public class TestService {
 
         if (request.getQuestions() != null) {
             for (QuestionRequest qr : request.getQuestions()) {
+                if (qr == null) {
+                    continue;
+                }
                 Question question = new Question();
                 question.setTest(test);
                 question.setImageUrl(qr.getImageUrl());
@@ -65,21 +80,30 @@ public class TestService {
 
     public TestResponse getTestById(Long testId) {
         Test test = testRepository.findById(testId)
-                .orElseThrow(() -> new RuntimeException("Test not found"));
+                .orElseThrow(() -> new TestNotFoundException(testId));
         return toTestResponse(test);
     }
 
     // UPDATE
     public TestResponse updateTest(Long testId, TestRequest request) {
+        if (request == null) {
+            throw new BadRequestException("Test request cannot be null");
+        }
         Test test = testRepository.findById(testId)
-                .orElseThrow(() -> new RuntimeException("Test not found"));
+                .orElseThrow(() -> new TestNotFoundException(testId));
 
         if (request.getTitle() != null) {
+            if (request.getTitle().isBlank()) {
+                throw new BadRequestException("Test title cannot be empty");
+            }
             test.setTitle(request.getTitle());
         }
 
         if (request.getQuestions() != null) {
             for (QuestionRequest qr : request.getQuestions()) {
+                if (qr == null) {
+                    continue;
+                }
                 Question question = new Question();
                 question.setTest(test);
                 question.setImageUrl(qr.getImageUrl());
@@ -99,7 +123,7 @@ public class TestService {
     // DELETE
     public void deleteTest(Long testId) {
         Test test = testRepository.findById(testId)
-                .orElseThrow(() -> new RuntimeException("Test not found"));
+                .orElseThrow(() -> new TestNotFoundException(testId));
         testRepository.delete(test);
         bookAdminService.countBookData(test.getTopic().getBook().getId());
     }
@@ -119,8 +143,11 @@ public class TestService {
         if (requestedSequenceNumber != null) {
             // Eğer belirli bir sequence number isteniyorsa, o numaranın kullanılıp
             // kullanılmadığını kontrol et
+            if (requestedSequenceNumber < 1) {
+                throw new BadRequestException("Sequence number must be greater than 0");
+            }
             if (testRepository.existsByTopicIdAndSequenceNumber(topicId, requestedSequenceNumber)) {
-                throw new RuntimeException("Sequence number " + requestedSequenceNumber
+                throw new ConflictException("Sequence number " + requestedSequenceNumber
                         + " is already in use. Please delete the existing test with this sequence number first.");
             }
             return requestedSequenceNumber;

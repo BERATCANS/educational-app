@@ -7,6 +7,10 @@ import com.beratcan.app.entity.Explanation;
 import com.beratcan.app.entity.Hint;
 import com.beratcan.app.entity.Question;
 import com.beratcan.app.entity.Test;
+import com.beratcan.app.exception.BadRequestException;
+import com.beratcan.app.exception.ConflictException;
+import com.beratcan.app.exception.QuestionNotFoundException;
+import com.beratcan.app.exception.TestNotFoundException;
 import com.beratcan.app.repository.QuestionRepository;
 import com.beratcan.app.repository.TestRepository;
 import jakarta.transaction.Transactional;
@@ -25,8 +29,11 @@ public class QuestionService {
 
     // CREATE
     public QuestionResponse addQuestion(Long testId, QuestionRequest request) {
+        if (request == null) {
+            throw new BadRequestException("Question request cannot be null");
+        }
         Test test = testRepository.findById(testId)
-                .orElseThrow(() -> new IllegalArgumentException("Test not found with ID: " + testId));
+                .orElseThrow(() -> new TestNotFoundException(testId));
 
         Question question = new Question();
         question.setTest(test);
@@ -54,14 +61,17 @@ public class QuestionService {
 
     public QuestionResponse getQuestionById(Long questionId) {
         Question question = questionRepository.findById(questionId)
-                .orElseThrow(() -> new IllegalArgumentException("Question not found with ID: " + questionId));
+                .orElseThrow(() -> new QuestionNotFoundException(questionId));
         return toQuestionResponse(question);
     }
 
     // UPDATE
     public QuestionResponse updateQuestion(Long questionId, QuestionRequest request) {
+        if (request == null) {
+            throw new BadRequestException("Question request cannot be null");
+        }
         Question question = questionRepository.findById(questionId)
-                .orElseThrow(() -> new IllegalArgumentException("Question not found with ID: " + questionId));
+                .orElseThrow(() -> new QuestionNotFoundException(questionId));
 
         if (request.getImageUrl() != null) {
             question.setImageUrl(request.getImageUrl());
@@ -83,7 +93,7 @@ public class QuestionService {
     // DELETE
     public void deleteQuestion(Long questionId) {
         Question question = questionRepository.findById(questionId)
-                .orElseThrow(() -> new IllegalArgumentException("Question not found with ID: " + questionId));
+                .orElseThrow(() -> new QuestionNotFoundException(questionId));
         questionRepository.delete(question);
         bookAdminService.countBookData(question.getTest().getTopic().getBook().getId());
     }
@@ -91,11 +101,15 @@ public class QuestionService {
     @Transactional
     public void voteHint(Long questionId, int hintIndex, boolean like) {
         Question question = questionRepository.findById(questionId)
-                .orElseThrow(() -> new RuntimeException("Question not found"));
+                .orElseThrow(() -> new QuestionNotFoundException(questionId));
 
         List<Hint> hints = question.getHints();
+        if (hints == null || hints.isEmpty()) {
+            throw new BadRequestException("This question has no hints");
+        }
         if (hintIndex < 0 || hintIndex >= hints.size()) {
-            throw new RuntimeException("Invalid hint index");
+            throw new BadRequestException(
+                    "Invalid hint index: " + hintIndex + ". Valid range: 0 to " + (hints.size() - 1));
         }
 
         Hint hint = hints.get(hintIndex);
@@ -112,11 +126,11 @@ public class QuestionService {
     @Transactional
     public void voteExplanation(Long questionId, boolean like) {
         Question question = questionRepository.findById(questionId)
-                .orElseThrow(() -> new RuntimeException("Question not found"));
+                .orElseThrow(() -> new QuestionNotFoundException(questionId));
 
         Explanation explanation = question.getExplanation();
         if (explanation == null) {
-            throw new RuntimeException("Explanation not found for this question");
+            throw new BadRequestException("This question has no explanation");
         }
 
         if (like) {
@@ -133,8 +147,11 @@ public class QuestionService {
         if (requestedSequenceNumber != null) {
             // Eğer belirli bir sequence number isteniyorsa, o numaranın kullanılıp
             // kullanılmadığını kontrol et
+            if (requestedSequenceNumber < 1) {
+                throw new BadRequestException("Sequence number must be greater than 0");
+            }
             if (questionRepository.existsByTestIdAndSequenceNumber(testId, requestedSequenceNumber)) {
-                throw new RuntimeException("Sequence number " + requestedSequenceNumber
+                throw new ConflictException("Sequence number " + requestedSequenceNumber
                         + " is already in use. Please delete the existing question with this sequence number first.");
             }
             return requestedSequenceNumber;
@@ -204,8 +221,11 @@ public class QuestionService {
      */
     @Transactional
     public void addHint(Long questionId, String hintText) {
+        if (hintText == null || hintText.trim().isEmpty()) {
+            throw new BadRequestException("Hint text cannot be null or empty");
+        }
         Question question = questionRepository.findById(questionId)
-                .orElseThrow(() -> new IllegalArgumentException("Question not found with ID: " + questionId));
+                .orElseThrow(() -> new QuestionNotFoundException(questionId));
 
         Hint hint = new Hint();
         hint.setText(hintText);
@@ -221,8 +241,11 @@ public class QuestionService {
      */
     @Transactional
     public void addExplanation(Long questionId, String explanationText) {
+        if (explanationText == null || explanationText.trim().isEmpty()) {
+            throw new BadRequestException("Explanation text cannot be null or empty");
+        }
         Question question = questionRepository.findById(questionId)
-                .orElseThrow(() -> new IllegalArgumentException("Question not found with ID: " + questionId));
+                .orElseThrow(() -> new QuestionNotFoundException(questionId));
 
         Explanation explanation = new Explanation();
         explanation.setText(explanationText);

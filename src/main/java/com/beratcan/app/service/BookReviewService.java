@@ -7,6 +7,12 @@ import com.beratcan.app.entity.Book;
 import com.beratcan.app.entity.BookReview;
 import com.beratcan.app.entity.User;
 import com.beratcan.app.entity.enums.Role;
+import com.beratcan.app.exception.BadRequestException;
+import com.beratcan.app.exception.BookNotFoundException;
+import com.beratcan.app.exception.ConflictException;
+import com.beratcan.app.exception.ReviewNotFoundException;
+import com.beratcan.app.exception.UnauthorizedOperationException;
+import com.beratcan.app.exception.UserNotFoundException;
 import com.beratcan.app.repository.BookRepository;
 import com.beratcan.app.repository.BookReviewRepository;
 import com.beratcan.app.repository.UserRepository;
@@ -33,31 +39,31 @@ public class BookReviewService {
     @Transactional
     public String addReview(Long userId, Long bookId, BookReviewRequest request) {
         if (request == null) {
-            throw new IllegalArgumentException("Yorum bilgisi eksik.");
+            throw new BadRequestException("Yorum bilgisi eksik.");
         }
 
         int rating = request.getRating();
         if (rating < 1 || rating > 5) {
-            throw new IllegalArgumentException("Puan 1 ile 5 arasında olmalıdır.");
+            throw new BadRequestException("Puan 1 ile 5 arasında olmalıdır.");
         }
 
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new UserNotFoundException(userId));
 
         Book book = bookRepository.findById(bookId)
-                .orElseThrow(() -> new RuntimeException("Book not found"));
+                .orElseThrow(() -> new BookNotFoundException(bookId));
 
         // Kontrol 1: Kullanıcı bu kitaba sahip mi?
         boolean ownsBook = user.getOwnedBooks().stream()
                 .anyMatch(ownedBook -> ownedBook.getId().equals(bookId));
 
         if (!ownsBook) {
-            throw new IllegalArgumentException("Sadece sahip olduğunuz kitaplar için yorum yapabilirsiniz.");
+            throw new UnauthorizedOperationException("Sadece sahip olduğunuz kitaplar için yorum yapabilirsiniz.");
         }
 
         // Kontrol 2: Bu kullanıcının bu kitap için yorumu var mı?
         if (bookReviewRepository.findByBookIdAndUserId(bookId, userId).isPresent()) {
-            throw new IllegalArgumentException(
+            throw new ConflictException(
                     "Bu kitap için zaten bir yorumunuz var. Lütfen mevcut yorumunuzu düzenleyin.");
         }
 
@@ -81,26 +87,26 @@ public class BookReviewService {
     @Transactional
     public String updateReview(Long userId, Long bookId, Long reviewId, BookReviewRequest request) {
         if (request == null) {
-            throw new IllegalArgumentException("Yorum bilgisi eksik.");
+            throw new BadRequestException("Yorum bilgisi eksik.");
         }
 
         int rating = request.getRating();
         if (rating < 1 || rating > 5) {
-            throw new IllegalArgumentException("Puan 1 ile 5 arasında olmalıdır.");
+            throw new BadRequestException("Puan 1 ile 5 arasında olmalıdır.");
         }
 
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new UserNotFoundException(userId));
 
         BookReview review = bookReviewRepository.findById(reviewId)
-                .orElseThrow(() -> new RuntimeException("Yorum bulunamadı"));
+                .orElseThrow(() -> new ReviewNotFoundException(reviewId));
 
         if (!review.getBook().getId().equals(bookId)) {
-            throw new IllegalArgumentException("Bu yorum belirtilen kitaba ait değil.");
+            throw new BadRequestException("Bu yorum belirtilen kitaba ait değil.");
         }
 
         if (!review.getUser().getId().equals(user.getId())) {
-            throw new IllegalArgumentException("Yalnızca kendi yorumunuzu düzenleyebilirsiniz.");
+            throw new UnauthorizedOperationException("Yalnızca kendi yorumunuzu düzenleyebilirsiniz.");
         }
 
         review.setRating(rating);
@@ -118,7 +124,7 @@ public class BookReviewService {
     @Transactional(readOnly = true)
     public BookReviewsPageResponse getBookReviews(Long bookId, Long currentUserId, int page, int size) {
         if (!bookRepository.existsById(bookId)) {
-            throw new IllegalArgumentException("Kitap bulunamadı: " + bookId);
+            throw new BookNotFoundException(bookId);
         }
 
         // Kullanıcının kendi yorumunu bul (sadece ilk sayfada göstermek için)
@@ -165,17 +171,17 @@ public class BookReviewService {
     @Transactional
     public String deleteReview(Long userId, Long bookId, Long reviewId) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new UserNotFoundException(userId));
 
         Book book = bookRepository.findById(bookId)
-                .orElseThrow(() -> new RuntimeException("Book not found"));
+                .orElseThrow(() -> new BookNotFoundException(bookId));
 
         BookReview review = bookReviewRepository.findById(reviewId)
-                .orElseThrow(() -> new RuntimeException("Yorum bulunamadı"));
+                .orElseThrow(() -> new ReviewNotFoundException(reviewId));
 
         // Yorumun bu kitaba ait olduğunu kontrol et
         if (!review.getBook().getId().equals(bookId)) {
-            throw new IllegalArgumentException("Bu yorum bu kitaba ait değil");
+            throw new BadRequestException("Bu yorum bu kitaba ait değil");
         }
 
         // Kullanıcı yorum sahibi mi veya admin mi kontrol et
@@ -183,7 +189,8 @@ public class BookReviewService {
         boolean isAdmin = user.getRole() == Role.ADMIN;
 
         if (!isOwner && !isAdmin) {
-            throw new IllegalArgumentException("Bu yorumu silemezsiniz. Sadece yorum sahibi veya admin silebilir.");
+            throw new UnauthorizedOperationException(
+                    "Bu yorumu silemezsiniz. Sadece yorum sahibi veya admin silebilir.");
         }
 
         // Yorumu sil

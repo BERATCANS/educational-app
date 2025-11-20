@@ -27,18 +27,14 @@ public class PurchaseController {
             @PathVariable Long bookId,
             @RequestBody(required = false) PurchaseRequest request,
             Authentication authentication) {
-        try {
-            Long userId = Long.parseLong(authentication.getName());
+        Long userId = Long.parseLong(authentication.getName());
 
-            if (request == null) {
-                request = new PurchaseRequest();
-            }
-
-            PurchaseResponse response = purchaseService.buyBook(userId, bookId, request);
-            return ResponseEntity.status(HttpStatus.CREATED).body(response);
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
+        if (request == null) {
+            request = new PurchaseRequest();
         }
+
+        PurchaseResponse response = purchaseService.buyBook(userId, bookId, request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
     /**
@@ -71,12 +67,8 @@ public class PurchaseController {
     public ResponseEntity<?> getPurchaseById(
             @PathVariable Long purchaseId,
             Authentication authentication) {
-        try {
-            Long userId = Long.parseLong(authentication.getName());
-            PurchaseResponse response = purchaseService.getPurchaseById(purchaseId, userId);
-            return ResponseEntity.ok(response);
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
-        }
+        Long userId = Long.parseLong(authentication.getName());
+        PurchaseResponse response = purchaseService.getPurchaseById(purchaseId, userId);
+        return ResponseEntity.ok(response);
     }
 }
