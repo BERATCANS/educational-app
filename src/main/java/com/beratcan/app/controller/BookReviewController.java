@@ -2,7 +2,7 @@ package com.beratcan.app.controller;
 
 import com.beratcan.app.dto.request.BookReviewRequest;
 import com.beratcan.app.dto.response.BookReviewResponse;
-import com.beratcan.app.dto.response.BookReviewsPageResponse;
+import com.beratcan.app.dto.response.PageResponse;
 import com.beratcan.app.service.BookReviewService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -51,7 +51,7 @@ public class BookReviewController {
     }
 
     @GetMapping("/{bookId}/reviews")
-    public BookReviewsPageResponse getBookReviews(
+    public PageResponse<BookReviewResponse> getBookReviews(
             @PathVariable Long bookId,
             Authentication authentication,
             @RequestParam(defaultValue = "0") int page,
@@ -81,7 +81,6 @@ public class BookReviewController {
         if (myReview == null) {
             return ResponseEntity.ok(false);
         }
-
         return ResponseEntity.ok(myReview);
     }
 

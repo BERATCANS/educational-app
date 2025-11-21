@@ -7,9 +7,8 @@ import com.beratcan.app.dto.request.RefreshTokenRequest;
 import com.beratcan.app.dto.request.UserRequest;
 import com.beratcan.app.entity.User;
 import com.beratcan.app.entity.enums.City;
-import com.beratcan.app.repository.UserRepository;
+import com.beratcan.app.service.AuthService;
 import com.beratcan.app.service.UserService;
-import com.beratcan.app.security.JwtUtil;
 
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
@@ -26,8 +25,7 @@ import java.util.Map;
 public class UserController {
 
     private final UserService userService;
-    private final JwtUtil jwtUtil;
-    private final UserRepository userRepository;
+    private final AuthService authService;
 
     @PostMapping("/register")
     public ResponseEntity<User> register(@RequestBody UserRequest userRequest) {
@@ -37,24 +35,8 @@ public class UserController {
 
     @PostMapping("/login")
     public ResponseEntity<JwtResponse> login(@RequestBody LoginRequest request) {
-        User user = userService.login(request, jwtUtil);
-
-        // ✅ Hem Access hem Refresh token oluştur
-        String accessToken = jwtUtil.generateAccessToken(user.getUsername(), user.getId());
-        String refreshToken = jwtUtil.generateRefreshToken(user.getUsername(), user.getId());
-
-        // JwtResponse tüm bilgileri içeriyor
-        JwtResponse response = new JwtResponse();
-        response.setAccessToken(accessToken);
-        response.setRefreshToken(refreshToken);
-        response.setType("Bearer");
-        response.setExpiresIn(jwtUtil.getExpirationTimeInSeconds());
-        response.setUserId(user.getId());
-        response.setUsername(user.getUsername());
-        response.setEmail(user.getEmail());
-        response.setRole(user.getRole().name());
-
-        log.info("User logged in successfully: {}", user.getUsername());
+        // AuthService'e delegate et - tüm business logic orada
+        JwtResponse response = authService.login(request);
         return ResponseEntity.ok(response);
     }
 
@@ -67,12 +49,9 @@ public class UserController {
     public ResponseEntity<Map<String, String>> logout(HttpServletRequest request) {
         String token = extractTokenFromRequest(request);
 
-        if (token == null || token.isEmpty()) {
-            throw new com.beratcan.app.exception.BadRequestException("No token found in request");
-        }
+        // AuthService'e delegate et - tüm business logic orada
+        authService.logout(token);
 
-        // Token'ı blacklist'e ekle
-        jwtUtil.blacklistToken(token);
         return ResponseEntity.ok(Map.of(
                 "message", "Logout successful",
                 "status", "success"));
@@ -89,49 +68,8 @@ public class UserController {
             throw new com.beratcan.app.exception.BadRequestException("Refresh token is required");
         }
 
-        String refreshToken = request.getRefreshToken();
-
-        // 1. Refresh token geçerli mi kontrol et
-        if (!jwtUtil.validateToken(refreshToken)) {
-            log.warn("Invalid refresh token attempt");
-            throw new com.beratcan.app.exception.UnauthorizedOperationException("Invalid or expired refresh token");
-        }
-
-        // 2. Refresh token mı kontrol et (Access token ile karışmasın)
-        if (!jwtUtil.isRefreshToken(refreshToken)) {
-            log.warn("Attempted to use non-refresh token for refresh");
-            throw new com.beratcan.app.exception.UnauthorizedOperationException("Not a refresh token");
-        }
-
-        // 3. Token'dan kullanıcı bilgilerini çıkar
-        String username = jwtUtil.extractUsername(refreshToken);
-        Long userId = jwtUtil.extractUserId(refreshToken);
-
-        log.info("Refreshing token for user: {} (ID: {})", username, userId);
-
-        // 4. User hala var mı kontrol et
-        User user = userRepository.findByUsername(username)
-                .orElseThrow(() -> new com.beratcan.app.exception.UserNotFoundException("User not found: " + username));
-
-        // 5. YENİ tokenlar oluştur
-        String newAccessToken = jwtUtil.generateAccessToken(username, userId);
-        String newRefreshToken = jwtUtil.generateRefreshToken(username, userId);
-
-        // 6. ESKİ refresh token'ı blacklist'e ekle (tek kullanımlık - rotation)
-        jwtUtil.blacklistToken(refreshToken);
-
-        // 7. Response hazırla
-        JwtResponse response = new JwtResponse();
-        response.setAccessToken(newAccessToken);
-        response.setRefreshToken(newRefreshToken);
-        response.setType("Bearer");
-        response.setExpiresIn(jwtUtil.getExpirationTimeInSeconds());
-        response.setUserId(user.getId());
-        response.setUsername(user.getUsername());
-        response.setEmail(user.getEmail());
-        response.setRole(user.getRole().name());
-
-        log.info("Token refreshed successfully for user: {}", username);
+        // AuthService'e delegate et - tüm business logic orada
+        JwtResponse response = authService.refreshToken(request.getRefreshToken());
         return ResponseEntity.ok(response);
     }
 

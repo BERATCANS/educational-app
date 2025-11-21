@@ -2,7 +2,7 @@ package com.beratcan.app.service;
 
 import com.beratcan.app.dto.request.BookReviewRequest;
 import com.beratcan.app.dto.response.BookReviewResponse;
-import com.beratcan.app.dto.response.BookReviewsPageResponse;
+import com.beratcan.app.dto.response.PageResponse;
 import com.beratcan.app.entity.Book;
 import com.beratcan.app.entity.BookReview;
 import com.beratcan.app.entity.User;
@@ -122,7 +122,7 @@ public class BookReviewService {
     }
 
     @Transactional(readOnly = true)
-    public BookReviewsPageResponse getBookReviews(Long bookId, Long currentUserId, int page, int size) {
+    public PageResponse<BookReviewResponse> getBookReviews(Long bookId, Long currentUserId, int page, int size) {
         if (!bookRepository.existsById(bookId)) {
             throw new BookNotFoundException(bookId);
         }
@@ -138,20 +138,9 @@ public class BookReviewService {
                 .map(this::toBookReviewResponse)
                 .toList();
 
-        return new BookReviewsPageResponse(
-                pageContent,
-                page,
-                size,
-                reviewPage.getTotalElements());
+        return PageResponse.of(pageContent, page, size, reviewPage.getTotalElements());
     }
 
-    /**
-     * Kullanıcının kendi yorumunu getir (varsa)
-     * 
-     * @param bookId Kitap ID
-     * @param userId Kullanıcı ID
-     * @return Kullanıcının yorumu (varsa), yoksa null
-     */
     @Transactional(readOnly = true)
     public BookReviewResponse getMyReview(Long bookId, Long userId) {
         if (!bookRepository.existsById(bookId)) {

@@ -3,6 +3,7 @@ package com.beratcan.app.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.beratcan.app.dto.response.QuestionAnalysisResult;
+import com.beratcan.app.exception.ExternalServiceException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import okhttp3.*;
@@ -71,7 +72,8 @@ public class AIQuestionAnalyzer {
                     String errorBody = response.body() != null ? response.body().string() : "No error body";
                     log.error("OpenAI API failed: status={}, duration={}ms, model={}, imageSize={}KB, error={}",
                             response.code(), duration, model, imageSizeKB, errorBody);
-                    throw new RuntimeException("OpenAI API hatası: " + response.code() + " - " + errorBody);
+                    throw new ExternalServiceException(
+                            String.format("OpenAI API hatası: HTTP %d - %s", response.code(), errorBody));
                 }
 
                 String responseBody = response.body().string();
@@ -100,16 +102,17 @@ public class AIQuestionAnalyzer {
                 return parseAIResponse(content);
             }
 
-        } catch (RuntimeException e) {
+        } catch (ExternalServiceException e) {
             long duration = System.currentTimeMillis() - startTime;
-            log.error("AI analysis failed: file={}, duration={}ms, model={}, imageSize={}KB, error={}",
+            log.error(
+                    "AI analysis failed (ExternalServiceException): file={}, duration={}ms, model={}, imageSize={}KB, error={}",
                     imageFile.getName(), duration, model, imageSizeKB, e.getMessage(), e);
-            throw e;
+            throw e; // ExternalServiceException'ı olduğu gibi fırlat
         } catch (Exception e) {
             long duration = System.currentTimeMillis() - startTime;
             log.error("AI analysis error: file={}, duration={}ms, model={}, imageSize={}KB",
                     imageFile.getName(), duration, model, imageSizeKB, e);
-            throw new RuntimeException("Soru analizi başarısız oldu: " + e.getMessage(), e);
+            throw new ExternalServiceException("Soru analizi başarısız oldu: " + e.getMessage(), e);
         }
     }
 
@@ -157,13 +160,14 @@ public class AIQuestionAnalyzer {
         try {
             return objectMapper.writeValueAsString(requestMap);
         } catch (Exception e) {
-            throw new RuntimeException("Request body oluşturulamadı", e);
+            log.error("Failed to create request body for OpenAI API", e);
+            throw new ExternalServiceException("OpenAI API için request body oluşturulamadı", e);
         }
     }
 
     private String createPrompt() {
         return """
-                Bu TYT matematik sorusunu analiz et ve şu formatta JSON döndür:
+                Bu YKS sınavındaki konularla alakalı olan soruyu analiz et ve şu formatta JSON döndür:
 
                 {
                   "hint1": "İlk ipucu - Sorunun hangi konuyla ilgili olduğunu belirt",
@@ -204,7 +208,8 @@ public class AIQuestionAnalyzer {
             int endIndex = aiResponse.lastIndexOf('}');
 
             if (startIndex == -1 || endIndex == -1) {
-                throw new RuntimeException("JSON bulunamadı: " + aiResponse);
+                throw new ExternalServiceException("OpenAI yanıtında JSON bulunamadı: "
+                        + aiResponse.substring(0, Math.min(200, aiResponse.length())));
             }
 
             String jsonString = aiResponse.substring(startIndex, endIndex + 1);
@@ -213,16 +218,16 @@ public class AIQuestionAnalyzer {
 
             // Validasyon
             if (result.getHint1() == null || result.getHint1().isEmpty()) {
-                throw new RuntimeException("İpucu 1 bulunamadı");
+                throw new ExternalServiceException("OpenAI yanıtında ipucu 1 bulunamadı");
             }
             if (result.getHint2() == null || result.getHint2().isEmpty()) {
-                throw new RuntimeException("İpucu 2 bulunamadı");
+                throw new ExternalServiceException("OpenAI yanıtında ipucu 2 bulunamadı");
             }
             if (result.getHint3() == null || result.getHint3().isEmpty()) {
-                throw new RuntimeException("İpucu 3 bulunamadı");
+                throw new ExternalServiceException("OpenAI yanıtında ipucu 3 bulunamadı");
             }
             if (result.getSolution() == null || result.getSolution().isEmpty()) {
-                throw new RuntimeException("Çözüm bulunamadı");
+                throw new ExternalServiceException("OpenAI yanıtında çözüm bulunamadı");
             }
 
             log.info("AI response parsed successfully: hints=3, solutionLength={} chars",
@@ -230,9 +235,11 @@ public class AIQuestionAnalyzer {
 
             return result;
 
+        } catch (ExternalServiceException e) {
+            throw e; // ExternalServiceException'ı olduğu gibi fırlat
         } catch (Exception e) {
             log.error("JSON parse error: responseLength={}, error={}", aiResponse.length(), e.getMessage(), e);
-            throw new RuntimeException("AI yanıtı parse edilemedi: " + e.getMessage());
+            throw new ExternalServiceException("OpenAI yanıtı parse edilemedi: " + e.getMessage(), e);
         }
     }
 

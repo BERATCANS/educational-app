@@ -8,7 +8,6 @@ import com.beratcan.app.exception.BadRequestException;
 import com.beratcan.app.exception.ConflictException;
 import com.beratcan.app.exception.UserNotFoundException;
 import com.beratcan.app.repository.UserRepository;
-import com.beratcan.app.security.JwtUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -127,7 +126,13 @@ public class UserService {
         return savedUser;
     }
 
-    public User login(LoginRequest request, JwtUtil jwtUtil) {
+    /**
+     * Kullanıcı doğrulama (token oluşturma AuthService'de yapılıyor)
+     * 
+     * @param request Login request
+     * @return User entity (token oluşturma için)
+     */
+    public User login(LoginRequest request) {
         if (request == null) {
             throw new BadRequestException("Login request cannot be null");
         }
