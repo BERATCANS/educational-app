@@ -1,6 +1,7 @@
 package com.beratcan.app.controller;
 
 import com.beratcan.app.dto.request.BookReviewRequest;
+import com.beratcan.app.dto.response.BookReviewResponse;
 import com.beratcan.app.dto.response.BookReviewsPageResponse;
 import com.beratcan.app.service.BookReviewService;
 import lombok.RequiredArgsConstructor;
@@ -59,6 +60,29 @@ public class BookReviewController {
                 ? Long.parseLong(authentication.getName())
                 : null;
         return bookReviewService.getBookReviews(bookId, userId, page, size);
+    }
+
+    /**
+     * Kullanıcının kendi yorumunu getir (varsa)
+     * GET /api/books/{bookId}/reviews/my
+     */
+    @GetMapping("/{bookId}/reviews/my")
+    public ResponseEntity<?> getMyReview(
+            @PathVariable Long bookId,
+            Authentication authentication) {
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(Map.of("error", "Yorumu görmek için giriş yapmalısınız."));
+        }
+
+        Long userId = Long.parseLong(authentication.getName());
+        BookReviewResponse myReview = bookReviewService.getMyReview(bookId, userId);
+
+        if (myReview == null) {
+            return ResponseEntity.ok(false);
+        }
+
+        return ResponseEntity.ok(myReview);
     }
 
     @DeleteMapping("/{bookId}/reviews/{reviewId}")

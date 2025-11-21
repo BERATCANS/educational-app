@@ -127,24 +127,9 @@ public class BookReviewService {
             throw new BookNotFoundException(bookId);
         }
 
-        // Kullanıcının kendi yorumunu bul (sadece ilk sayfada göstermek için)
-        BookReviewResponse ownedReview = null;
-        boolean hasOwnedReview = false;
-        if (currentUserId != null && page == 0) {
-            Optional<BookReview> ownedReviewOpt = bookReviewRepository.findByBookIdAndUserId(bookId, currentUserId);
-            if (ownedReviewOpt.isPresent()) {
-                ownedReview = toBookReviewResponse(ownedReviewOpt.get());
-                hasOwnedReview = true;
-            }
-        }
-
-        // İlk sayfada ve kullanıcının yorumu varsa, size'ı 1 azalt
-        // Böylece toplam 10 yorum gösterilir (ownedReview + 9 diğer yorum)
-        int adjustedSize = (page == 0 && hasOwnedReview) ? size - 1 : size;
-
         // Repository'den direkt pagination ile yorumları al (kullanıcının yorumunu
         // hariç tutarak)
-        Pageable pageable = PageRequest.of(page, adjustedSize);
+        Pageable pageable = PageRequest.of(page, size);
         Page<BookReview> reviewPage = bookReviewRepository.findByBookIdExcludingUserId(
                 bookId, currentUserId, pageable);
 
@@ -153,15 +138,37 @@ public class BookReviewService {
                 .map(this::toBookReviewResponse)
                 .toList();
 
-        // Sadece ilk sayfada (page == 0) owned review göster
-        BookReviewResponse ownedReviewToShow = (page == 0) ? ownedReview : null;
-
         return new BookReviewsPageResponse(
-                ownedReviewToShow,
                 pageContent,
                 page,
-                size, // Response'da orijinal size'ı göster
+                size,
                 reviewPage.getTotalElements());
+    }
+
+    /**
+     * Kullanıcının kendi yorumunu getir (varsa)
+     * 
+     * @param bookId Kitap ID
+     * @param userId Kullanıcı ID
+     * @return Kullanıcının yorumu (varsa), yoksa null
+     */
+    @Transactional(readOnly = true)
+    public BookReviewResponse getMyReview(Long bookId, Long userId) {
+        if (!bookRepository.existsById(bookId)) {
+            throw new BookNotFoundException(bookId);
+        }
+
+        if (userId == null) {
+            throw new BadRequestException("Kullanıcı ID gerekli.");
+        }
+
+        Optional<BookReview> reviewOpt = bookReviewRepository.findByBookIdAndUserId(bookId, userId);
+
+        if (reviewOpt.isEmpty()) {
+            return null; // Kullanıcının yorumu yok
+        }
+
+        return toBookReviewResponse(reviewOpt.get());
     }
 
     /**
