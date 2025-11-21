@@ -211,11 +211,6 @@ public class QuestionService {
         return response;
     }
 
-    public List<QuestionResponse> getFlaggedQuestions() {
-        // Şimdilik boş liste döndür, daha sonra implement edilecek
-        return List.of();
-    }
-
     /**
      * AI tarafından üretilen ipucu ekle
      */
