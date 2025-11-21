@@ -71,11 +71,17 @@ public class QuestionFlagService {
                 .toList();
     }
 
-    public FlaggedResponse getFlaggedQuestionById(Long questionId) {
-        Question question = questionRepository.findById(questionId)
+    public FlaggedResponse getFlaggedQuestionById(Long userId, Long questionId) {
+        var user = userRepository.findById(userId)
+                .orElseThrow(() -> new UserNotFoundException(userId));
+
+        // Kullanıcının işaretlediği sorular içinde arama yap
+        Question flaggedQuestion = user.getFlaggedQuestions().stream()
+                .filter(q -> q.getId().equals(questionId))
+                .findFirst()
                 .orElseThrow(() -> new QuestionNotFoundException(questionId));
 
-        return toFlaggedResponse(question);
+        return toFlaggedResponse(flaggedQuestion);
     }
 
     private FlaggedResponse toFlaggedResponse(Question question) {

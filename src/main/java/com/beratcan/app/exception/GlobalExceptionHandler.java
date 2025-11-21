@@ -3,6 +3,7 @@ package com.beratcan.app.exception;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -82,6 +83,15 @@ public class GlobalExceptionHandler {
         ErrorDetails errorDetails = buildErrorDetails(
                 ex.getMessage(),
                 "You are not allowed to perform this operation.",
+                HttpStatus.FORBIDDEN);
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(errorDetails);
+    }
+
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ErrorDetails> handleAccessDenied(AccessDeniedException ex) {
+        ErrorDetails errorDetails = buildErrorDetails(
+                "Access Denied",
+                "You do not have permission to access this resource.",
                 HttpStatus.FORBIDDEN);
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(errorDetails);
     }

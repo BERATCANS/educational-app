@@ -39,12 +39,6 @@ public class QuestionController {
         return questionService.getQuestionById(questionId);
     }
 
-    @PreAuthorize("hasRole('ADMIN')")
-    @GetMapping("/flagged")
-    public List<QuestionResponse> getFlaggedQuestions() {
-        return questionService.getFlaggedQuestions();
-    }
-
     // UPDATE
     @PreAuthorize("hasRole('ADMIN')")
     @PutMapping("/{questionId}")

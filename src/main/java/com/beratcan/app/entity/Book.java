@@ -73,7 +73,7 @@ public class Book {
 
     private Integer numberOfQuestions;
 
-    @Column(nullable = false, columnDefinition = "DOUBLE DEFAULT 0.0")
+    @Column(nullable = false, columnDefinition = "REAL DEFAULT 0.0")
     private Double averageRating = 0.0; // Ortalama puan (1-5 arası)
 
     @Column(nullable = false, columnDefinition = "BIGINT DEFAULT 0")

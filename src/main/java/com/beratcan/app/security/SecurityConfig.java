@@ -41,6 +41,9 @@ public class SecurityConfig {
                 .exceptionHandling(ex -> ex
                         .authenticationEntryPoint(unauthorizedHandler)) // ✅ Profesyonel error handling
                 .authorizeHttpRequests(auth -> auth
+                        // Swagger UI endpoints (herkese açık - development için)
+                        .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html").permitAll()
+                        // Public endpoints
                         .requestMatchers("/api/users/register", "/api/users/login").permitAll() // herkes erişebilir
                         .requestMatchers("/api/users/refresh").permitAll() // ✅ Token yenileme herkese açık
                         .requestMatchers("/api/books/store").permitAll() // Kitap mağazası herkese açık
