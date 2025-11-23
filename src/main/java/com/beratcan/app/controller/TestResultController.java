@@ -1,6 +1,9 @@
 package com.beratcan.app.controller;
 
+import com.beratcan.app.annotation.RateLimit;
+import com.beratcan.app.constants.AppConstants;
 import com.beratcan.app.dto.request.TestSubmissionRequest;
+import com.beratcan.app.dto.response.PageResponse;
 import com.beratcan.app.dto.response.TestResultResponse;
 import com.beratcan.app.entity.TestResult;
 import com.beratcan.app.service.TestResultService;
@@ -9,7 +12,6 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -24,6 +26,7 @@ public class TestResultController {
 
     // Test sonucunu kaydet
     @PostMapping("/submit")
+    @RateLimit(requestsPerMinute = 10, keyType = "USER", message = "Too many test submissions. Please try again later.")
     public ResponseEntity<TestResult> submitTest(
             @RequestBody TestSubmissionRequest request,
             Authentication authentication) {
@@ -36,11 +39,14 @@ public class TestResultController {
         return ResponseEntity.ok(result);
     }
 
-    // Kullanıcının kendi test sonuçları
+    // Kullanıcının kendi test sonuçları (pagination destekli)
     @GetMapping("/my-results")
-    public ResponseEntity<List<TestResult>> getMyTestResults(Authentication authentication) {
+    public ResponseEntity<PageResponse<TestResult>> getMyTestResults(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "" + AppConstants.DEFAULT_PAGE_SIZE) int size,
+            Authentication authentication) {
         Long userId = Long.parseLong(authentication.getName());
-        List<TestResult> results = testResultService.getUserTestResults(userId);
+        PageResponse<TestResult> results = testResultService.getUserTestResults(userId, page, size);
         return ResponseEntity.ok(results);
     }
 
@@ -89,13 +95,16 @@ public class TestResultController {
         return ResponseEntity.ok(response);
     }
 
-    // Kullanıcının belirli bir kitaptaki kendi test sonuçları
+    // Kullanıcının belirli bir kitaptaki kendi test sonuçları (pagination destekli)
     @GetMapping("/book/{bookId}")
-    public ResponseEntity<List<TestResultResponse>> getMyTestResultsByBook(
+    public ResponseEntity<PageResponse<TestResultResponse>> getMyTestResultsByBook(
             @PathVariable Long bookId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "" + AppConstants.DEFAULT_PAGE_SIZE) int size,
             Authentication authentication) {
         Long userId = Long.parseLong(authentication.getName());
-        List<TestResultResponse> results = testResultService.getUserTestResultsByBookId(userId, bookId);
+        PageResponse<TestResultResponse> results = testResultService.getUserTestResultsByBookId(userId, bookId, page,
+                size);
         return ResponseEntity.ok(results);
     }
 }

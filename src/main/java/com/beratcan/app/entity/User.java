@@ -65,7 +65,8 @@ public class User {
         private SchoolType schoolType; // sadece YKS için zorunlu olabilir (nullable bırakabilirsin)
 
         @ManyToMany
-        @JoinTable(name = "user_books", joinColumns = @JoinColumn(name = "user_id"), inverseJoinColumns = @JoinColumn(name = "book_id"))
+        @JoinTable(name = "user_books", joinColumns = @JoinColumn(name = "user_id"), inverseJoinColumns = @JoinColumn(name = "book_id"), uniqueConstraints = @UniqueConstraint(name = "uk_user_book", columnNames = {
+                        "user_id", "book_id" }))
         private Set<Book> ownedBooks = new HashSet<>();
 
         @ManyToMany

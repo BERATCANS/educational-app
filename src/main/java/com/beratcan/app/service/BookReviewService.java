@@ -1,5 +1,6 @@
 package com.beratcan.app.service;
 
+import com.beratcan.app.constants.AppConstants;
 import com.beratcan.app.dto.request.BookReviewRequest;
 import com.beratcan.app.dto.response.BookReviewResponse;
 import com.beratcan.app.dto.response.PageResponse;
@@ -43,8 +44,9 @@ public class BookReviewService {
         }
 
         int rating = request.getRating();
-        if (rating < 1 || rating > 5) {
-            throw new BadRequestException("Puan 1 ile 5 arasında olmalıdır.");
+        if (rating < AppConstants.MIN_RATING || rating > AppConstants.MAX_RATING) {
+            throw new BadRequestException(
+                    "Puan " + AppConstants.MIN_RATING + " ile " + AppConstants.MAX_RATING + " arasında olmalıdır.");
         }
 
         User user = userRepository.findById(userId)
@@ -91,8 +93,9 @@ public class BookReviewService {
         }
 
         int rating = request.getRating();
-        if (rating < 1 || rating > 5) {
-            throw new BadRequestException("Puan 1 ile 5 arasında olmalıdır.");
+        if (rating < AppConstants.MIN_RATING || rating > AppConstants.MAX_RATING) {
+            throw new BadRequestException(
+                    "Puan " + AppConstants.MIN_RATING + " ile " + AppConstants.MAX_RATING + " arasında olmalıdır.");
         }
 
         User user = userRepository.findById(userId)
@@ -230,7 +233,8 @@ public class BookReviewService {
                     .mapToInt(BookReview::getRating)
                     .sum();
             double average = totalRating / reviews.size();
-            book.setAverageRating(Math.round(average * 10.0) / 10.0); // 1 ondalık basamak
+            book.setAverageRating(Math.round(average * AppConstants.RATING_DECIMAL_MULTIPLIER)
+                    / AppConstants.RATING_DECIMAL_MULTIPLIER);
             book.setReviewCount((long) reviews.size());
         }
 

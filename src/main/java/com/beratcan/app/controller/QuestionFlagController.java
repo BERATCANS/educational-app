@@ -1,5 +1,6 @@
 package com.beratcan.app.controller;
 
+import com.beratcan.app.annotation.RateLimit;
 import com.beratcan.app.dto.response.FlaggedResponse;
 import com.beratcan.app.service.QuestionFlagService;
 import lombok.RequiredArgsConstructor;
@@ -19,6 +20,7 @@ public class QuestionFlagController {
     private final QuestionFlagService questionFlagService;
 
     @PostMapping("/{questionId}")
+    @RateLimit(requestsPerMinute = 10, keyType = "USER", message = "Too many flag submissions. Please try again later.")
     public ResponseEntity<?> flagQuestion(
             @PathVariable Long questionId,
             Authentication authentication) {

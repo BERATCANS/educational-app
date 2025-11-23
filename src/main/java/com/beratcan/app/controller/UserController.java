@@ -1,5 +1,6 @@
 package com.beratcan.app.controller;
 
+import com.beratcan.app.annotation.RateLimit;
 import com.beratcan.app.dto.response.JwtResponse;
 import com.beratcan.app.dto.response.UserResponse;
 import com.beratcan.app.dto.request.LoginRequest;
@@ -28,12 +29,14 @@ public class UserController {
     private final AuthService authService;
 
     @PostMapping("/register")
+    @RateLimit(requestsPerMinute = 3, keyType = "IP", message = "Too many registration attempts. Please try again later.")
     public ResponseEntity<User> register(@RequestBody UserRequest userRequest) {
         User user = userService.registerUser(userRequest);
         return ResponseEntity.ok(user);
     }
 
     @PostMapping("/login")
+    @RateLimit(requestsPerMinute = 5, keyType = "IP", message = "Too many login attempts. Please try again later.")
     public ResponseEntity<JwtResponse> login(@RequestBody LoginRequest request) {
         // AuthService'e delegate et - tüm business logic orada
         JwtResponse response = authService.login(request);
@@ -63,6 +66,7 @@ public class UserController {
      * POST /api/users/refresh
      */
     @PostMapping("/refresh")
+    @RateLimit(requestsPerMinute = 10, keyType = "IP", message = "Too many token refresh attempts. Please try again later.")
     public ResponseEntity<JwtResponse> refreshToken(@RequestBody RefreshTokenRequest request) {
         if (request == null || request.getRefreshToken() == null || request.getRefreshToken().trim().isEmpty()) {
             throw new com.beratcan.app.exception.BadRequestException("Refresh token is required");

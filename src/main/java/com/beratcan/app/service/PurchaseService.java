@@ -21,6 +21,7 @@ import com.beratcan.app.repository.PurchaseRepository;
 import com.beratcan.app.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -139,9 +140,21 @@ public class PurchaseService {
                     userId, bookId, transactionId);
 
             // Kitabı kullanıcının kütüphanesine ekle
-            user.getOwnedBooks().add(book);
-            userRepository.save(user);
-            log.debug("Book added to user library: userId={}, bookId={}", userId, bookId);
+            try {
+                user.getOwnedBooks().add(book);
+                userRepository.save(user);
+                log.debug("Book added to user library: userId={}, bookId={}", userId, bookId);
+            } catch (DataIntegrityViolationException e) {
+                // DB constraint hatası (duplicate entry) yakalandı
+                if (e.getMessage() != null && e.getMessage().contains("uk_user_book")) {
+                    log.warn("Duplicate book ownership attempt prevented by DB constraint: userId={}, bookId={}",
+                            userId, bookId);
+                    // Kitap zaten kütüphanede, ama purchase kaydı oluşturuldu - bu normal bir durum
+                    // (kullanıcı daha önce eklemiş ama purchase kaydı yok olabilir)
+                } else {
+                    throw e; // Diğer constraint hataları için
+                }
+            }
         } else {
             purchase.setStatus(PurchaseStatus.FAILED);
             log.error("Payment failed: userId={}, bookId={}, transactionId={}",
@@ -318,7 +331,18 @@ public class PurchaseService {
             purchase.setStatus(PurchaseStatus.COMPLETED);
 
             // Kitabı kullanıcının kütüphanesine ekle
-            user.getOwnedBooks().add(book);
+            try {
+                user.getOwnedBooks().add(book);
+            } catch (DataIntegrityViolationException e) {
+                // DB constraint hatası (duplicate entry) yakalandı
+                // Bu durumda sadece purchase kaydını oluştur, kütüphaneye ekleme
+                if (e.getMessage() != null && e.getMessage().contains("uk_user_book")) {
+                    log.warn("Book already in library (checkout): userId={}, bookId={}", userId, book.getId());
+                    // Kitap zaten kütüphanede, purchase kaydı oluşturmaya devam et
+                } else {
+                    throw e; // Diğer constraint hataları için
+                }
+            }
 
             // Purchase'ı kaydet
             Purchase savedPurchase = purchaseRepository.save(purchase);

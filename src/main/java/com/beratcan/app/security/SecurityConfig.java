@@ -1,5 +1,6 @@
 package com.beratcan.app.security;
 
+import com.beratcan.app.constants.AppConstants;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -23,14 +24,17 @@ public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final AuthEntryPointJwt unauthorizedHandler;
+    private final RateLimitFilter rateLimitFilter;
 
     @Value("${allowed.origins}")
     private String allowedOrigins;
 
     public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter,
-            AuthEntryPointJwt unauthorizedHandler) {
+            AuthEntryPointJwt unauthorizedHandler,
+            RateLimitFilter rateLimitFilter) {
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
         this.unauthorizedHandler = unauthorizedHandler;
+        this.rateLimitFilter = rateLimitFilter;
     }
 
     @Bean
@@ -51,6 +55,9 @@ public class SecurityConfig {
                 )
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)); // JWT
                                                                                                                // stateless
+
+        // Rate limit filter ÖNCE ekle (tüm requestleri kontrol et)
+        http.addFilterBefore(rateLimitFilter, UsernamePasswordAuthenticationFilter.class);
 
         // JWT filter ekle
         http.addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
@@ -93,7 +100,7 @@ public class SecurityConfig {
         configuration.setAllowCredentials(true);
 
         // Preflight cache süresi (1 saat)
-        configuration.setMaxAge(3600L);
+        configuration.setMaxAge(AppConstants.CORS_MAX_AGE_SECONDS);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);

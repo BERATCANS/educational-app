@@ -198,10 +198,11 @@ public class QuestionService {
             response.setExplanation("");
         }
 
-        // Handle hints safely
+        // Handle hints safely - sequenceNumber'a göre sırala
         if (question.getHints() != null && !question.getHints().isEmpty()) {
             response.setHints(
                     question.getHints().stream()
+                            .sorted((h1, h2) -> Integer.compare(h1.getSequenceNumber(), h2.getSequenceNumber()))
                             .map(Hint::getText)
                             .toList());
         } else {
@@ -226,6 +227,8 @@ public class QuestionService {
         hint.setText(hintText);
         hint.setLikes(0);
         hint.setDislikes(0);
+        // Sequence number'ı mevcut hint sayısına göre set et (0, 1, 2, ...)
+        hint.setSequenceNumber(question.getHints().size());
 
         question.getHints().add(hint);
         questionRepository.save(question);

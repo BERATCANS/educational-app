@@ -1,5 +1,6 @@
 package com.beratcan.app.controller;
 
+import com.beratcan.app.annotation.RateLimit;
 import com.beratcan.app.dto.response.BookResponse;
 import com.beratcan.app.service.UserLibraryService;
 import lombok.RequiredArgsConstructor;
@@ -24,6 +25,7 @@ public class BookLibraryController {
     }
 
     @PostMapping("/use-code")
+    @RateLimit(requestsPerMinute = 5, keyType = "USER", message = "Too many code attempts. Please try again later.")
     public ResponseEntity<?> useCode(
             @RequestParam String code,
             Authentication authentication) {

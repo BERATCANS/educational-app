@@ -1,5 +1,6 @@
 package com.beratcan.app.controller;
 
+import com.beratcan.app.annotation.RateLimit;
 import com.beratcan.app.dto.request.PurchaseRequest;
 import com.beratcan.app.dto.response.PurchaseResponse;
 import com.beratcan.app.service.PurchaseService;
@@ -23,6 +24,7 @@ public class PurchaseController {
      * POST /api/purchases/buy/{bookId}
      */
     @PostMapping("/buy/{bookId}")
+    @RateLimit(requestsPerMinute = 5, keyType = "USER", message = "Too many purchase attempts. Please try again later.")
     public ResponseEntity<?> buyBook(
             @PathVariable Long bookId,
             @RequestBody(required = false) PurchaseRequest request,

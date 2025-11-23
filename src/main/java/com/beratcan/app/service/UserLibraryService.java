@@ -13,6 +13,8 @@ import com.beratcan.app.repository.BookRepository;
 import com.beratcan.app.repository.TestResultRepository;
 import com.beratcan.app.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,6 +24,7 @@ import java.util.List;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class UserLibraryService {
 
     private final UserRepository userRepository;
@@ -54,8 +57,18 @@ public class UserLibraryService {
         bookCodeRepository.save(code);
 
         // Kullanıcıya kitabı ekle
-        user.getOwnedBooks().add(book);
-        userRepository.save(user);
+        try {
+            user.getOwnedBooks().add(book);
+            userRepository.save(user);
+        } catch (DataIntegrityViolationException e) {
+            // DB constraint hatası (duplicate entry) yakalandı
+            if (e.getMessage() != null && e.getMessage().contains("uk_user_book")) {
+                log.warn("Duplicate book ownership attempt prevented by DB constraint: userId={}, bookId={}",
+                        userId, book.getId());
+                throw new ConflictException("Bu kitabı zaten sahipsiniz");
+            }
+            throw e; // Diğer constraint hataları için
+        }
 
         return "Kod başarıyla kullanıldı, kitap erişimi açıldı: " + book.getTitle();
     }
@@ -85,8 +98,18 @@ public class UserLibraryService {
         }
 
         // Kütüphaneye ekle
-        user.getOwnedBooks().add(book);
-        userRepository.save(user);
+        try {
+            user.getOwnedBooks().add(book);
+            userRepository.save(user);
+        } catch (DataIntegrityViolationException e) {
+            // DB constraint hatası (duplicate entry) yakalandı
+            if (e.getMessage() != null && e.getMessage().contains("uk_user_book")) {
+                log.warn("Duplicate book ownership attempt prevented by DB constraint: userId={}, bookId={}",
+                        userId, bookId);
+                throw new ConflictException("Bu kitap zaten kütüphanenizde");
+            }
+            throw e; // Diğer constraint hataları için
+        }
 
         return "Kitap kütüphanenize eklendi: " + book.getTitle();
     }

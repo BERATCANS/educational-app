@@ -1,5 +1,6 @@
 package com.beratcan.app.controller;
 
+import com.beratcan.app.annotation.RateLimit;
 import com.beratcan.app.dto.request.DailyQuestionAnswerRequest;
 import com.beratcan.app.dto.request.CreateDailyQuestionRequest;
 import com.beratcan.app.dto.response.DailyQuestionResponse;
@@ -55,6 +56,7 @@ public class DailyQuestionController {
     }
 
     @PostMapping("/answer")
+    @RateLimit(requestsPerMinute = 3, keyType = "USER", message = "Too many answer submissions. Please try again later.")
     public ResponseEntity<DailyQuestionResponse> submitAnswer(
             @RequestBody DailyQuestionAnswerRequest request,
             Authentication authentication) {

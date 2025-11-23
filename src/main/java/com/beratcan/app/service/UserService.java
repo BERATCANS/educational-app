@@ -1,5 +1,6 @@
 package com.beratcan.app.service;
 
+import com.beratcan.app.constants.AppConstants;
 import com.beratcan.app.dto.request.LoginRequest;
 import com.beratcan.app.dto.request.UserRequest;
 import com.beratcan.app.entity.enums.*;
@@ -22,7 +23,7 @@ public class UserService {
     private final UserRepository userRepository;
     private final BCryptPasswordEncoder passwordEncoder;
 
-    private static final Pattern PHONE_PATTERN = Pattern.compile("^\\+?[0-9]{10,13}$");
+    private static final Pattern PHONE_PATTERN = Pattern.compile(AppConstants.PHONE_NUMBER_PATTERN);
 
     public UserService(UserRepository userRepository,
             BCryptPasswordEncoder passwordEncoder) { // ✅ Inject edildi

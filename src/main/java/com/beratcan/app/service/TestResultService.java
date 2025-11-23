@@ -1,5 +1,6 @@
 package com.beratcan.app.service;
 
+import com.beratcan.app.dto.response.PageResponse;
 import com.beratcan.app.dto.response.TestResultResponse;
 import com.beratcan.app.entity.*;
 import com.beratcan.app.entity.enums.OptionLetter;
@@ -10,11 +11,13 @@ import com.beratcan.app.exception.TestResultNotFoundException;
 import com.beratcan.app.exception.UnauthorizedOperationException;
 import com.beratcan.app.exception.UserNotFoundException;
 import com.beratcan.app.repository.*;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -126,8 +129,21 @@ public class TestResultService {
         return testResultRepository.save(testResult);
     }
 
-    public List<TestResult> getUserTestResults(Long userId) {
-        return testResultRepository.findByUserIdOrderByCompletedAtDesc(userId);
+    /**
+     * Kullanıcının tüm test sonuçlarını pagination ile getirir
+     * DB seviyesinde pagination yapar, memory'ye yük bindirmez
+     * JOIN FETCH ile N+1 query problemini önler
+     */
+    public PageResponse<TestResult> getUserTestResults(Long userId, int page, int size) {
+        Pageable pageable = PageRequest.of(page, size);
+        Page<TestResult> testResultPage = testResultRepository
+                .findByUserIdOrderByCompletedAtDesc(userId, pageable);
+
+        return PageResponse.of(
+                testResultPage.getContent(),
+                page,
+                size,
+                testResultPage.getTotalElements());
     }
 
     public TestResult getTestResultById(Long testResultId) {
@@ -161,8 +177,12 @@ public class TestResultService {
                 .orElse(null); // Eğer bulunamazsa null döner
     }
 
-    // Kullanıcının belirli bir kitaptaki tüm test sonuçlarını getir
-    public List<TestResultResponse> getUserTestResultsByBookId(Long userId, Long bookId) {
+    /**
+     * Kullanıcının belirli bir kitaptaki test sonuçlarını pagination ile getirir
+     * DB seviyesinde filtreleme yapar, memory'ye yük bindirmez
+     * JOIN FETCH ile N+1 query problemini önler
+     */
+    public PageResponse<TestResultResponse> getUserTestResultsByBookId(Long userId, Long bookId, int page, int size) {
         if (userId == null) {
             throw new BadRequestException("User ID cannot be null");
         }
@@ -174,26 +194,26 @@ public class TestResultService {
         userRepository.findById(userId)
                 .orElseThrow(() -> new UserNotFoundException(userId));
 
-        // Önce kullanıcının tüm test sonuçlarını al
-        List<TestResult> allUserResults = testResultRepository.findByUserIdOrderByCompletedAtDesc(userId);
+        // DB seviyesinde filtreleme ve pagination
+        Pageable pageable = PageRequest.of(page, size);
+        Page<TestResult> testResultPage = testResultRepository
+                .findByUserIdAndBookId(userId, bookId, pageable);
 
-        List<TestResultResponse> responses = new ArrayList<>();
-
-        // Her test sonucu için, o testin kitabı kontrol et
-        for (TestResult testResult : allUserResults) {
-            Test test = testResult.getTest();
-            if (test != null && test.getTopic() != null && test.getTopic().getBook() != null) {
-                if (test.getTopic().getBook().getId().equals(bookId)) {
-                    // Bu test sonucu istenen kitaba ait
+        // DTO'ya çevir
+        List<TestResultResponse> responses = testResultPage.getContent().stream()
+                .map(testResult -> {
                     TestResultResponse response = new TestResultResponse();
                     response.setUserId(userId);
-                    response.setTestId(test.getId());
+                    response.setTestId(testResult.getTest().getId());
                     response.setSuccessRate(testResult.getSuccessRate());
-                    responses.add(response);
-                }
-            }
-        }
+                    return response;
+                })
+                .toList();
 
-        return responses;
+        return PageResponse.of(
+                responses,
+                page,
+                size,
+                testResultPage.getTotalElements());
     }
 }

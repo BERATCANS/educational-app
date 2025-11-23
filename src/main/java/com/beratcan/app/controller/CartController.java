@@ -1,5 +1,6 @@
 package com.beratcan.app.controller;
 
+import com.beratcan.app.annotation.RateLimit;
 import com.beratcan.app.dto.request.AddToCartRequest;
 import com.beratcan.app.dto.response.CartResponse;
 import com.beratcan.app.dto.response.PurchaseResponse;
@@ -27,6 +28,7 @@ public class CartController {
      * POST /api/cart/add
      */
     @PostMapping("/add")
+    @RateLimit(requestsPerMinute = 30, keyType = "USER", message = "Too many cart operations. Please try again later.")
     public ResponseEntity<?> addToCart(
             @RequestBody AddToCartRequest request,
             Authentication authentication) {
@@ -86,6 +88,7 @@ public class CartController {
      * POST /api/cart/checkout
      */
     @PostMapping("/checkout")
+    @RateLimit(requestsPerMinute = 3, keyType = "USER", message = "Too many checkout attempts. Please try again later.")
     public ResponseEntity<?> checkout(Authentication authentication) {
         Long userId = Long.parseLong(authentication.getName());
         List<PurchaseResponse> purchases = purchaseService.checkoutCart(userId);

@@ -11,4 +11,5 @@ public class Hint {
     private String text;
     private int likes = 0;
     private int dislikes = 0;
+    private int sequenceNumber = 0; // Hint sırası: 0, 1, 2, ...
 }

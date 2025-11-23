@@ -1,5 +1,7 @@
 package com.beratcan.app.controller;
 
+import com.beratcan.app.annotation.RateLimit;
+import com.beratcan.app.constants.AppConstants;
 import com.beratcan.app.dto.request.BookReviewRequest;
 import com.beratcan.app.dto.response.BookReviewResponse;
 import com.beratcan.app.dto.response.PageResponse;
@@ -20,6 +22,7 @@ public class BookReviewController {
     private final BookReviewService bookReviewService;
 
     @PostMapping("/{bookId}/reviews")
+    @RateLimit(requestsPerMinute = 5, keyType = "USER", message = "Too many review submissions. Please try again later.")
     public ResponseEntity<?> addReview(
             @PathVariable Long bookId,
             @RequestBody BookReviewRequest request,
@@ -55,7 +58,7 @@ public class BookReviewController {
             @PathVariable Long bookId,
             Authentication authentication,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size) {
+            @RequestParam(defaultValue = "" + AppConstants.REVIEW_PAGE_SIZE) int size) {
         Long userId = (authentication != null && authentication.isAuthenticated())
                 ? Long.parseLong(authentication.getName())
                 : null;
