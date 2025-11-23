@@ -14,56 +14,19 @@
 4. ✅ **AuthService** - Authentication logic service katmanına taşındı
 5. ✅ **TestResultRepository Temizliği** - Kullanılmayan metodlar kaldırıldı
 
----
-
-## 🔴 KRİTİK SORUNLAR (ACİL - 1-2 Hafta İçinde)
-
-### 1. **Rate Limiting Eksikliği** ⚠️ CRİTİK
-
-**Problem:**
-- Hiçbir endpoint rate-limited değil
-- Brute force saldırılarına açık (login endpoint)
-- DDoS saldırılarına açık
-- AI API cost attack riski (1000 call = $50)
-
-**Risk Senaryoları:**
-```bash
-# Brute force attack
-for i in {1..10000}; do
-  curl -X POST /api/users/login -d '{"identifier":"admin","password":"test'$i'"}'
-done
-
-# AI cost attack
-for i in {1..1000}; do
-  curl -X POST /api/files/upload-question-with-ai -F "file=@large_image.png"
-done
-# 1000 call × $0.05 = $50/gün = $1500/ay
-```
-
-**Çözüm:**
-1. Bucket4j dependency ekle
-2. RateLimitFilter oluştur
-3. Critical endpoint'lere rate limit ekle:
-   - `/api/users/login` → 5/min per IP
-   - `/api/users/register` → 3/min per IP
-   - `/api/files/upload-question-with-ai` → 5/min per USER
-   - `/api/test-results/submit` → 10/min per USER
-
-**Etki:** Çok Yüksek - Security ve cost control için kritik
-
----
-
 ### 2. **Daily Question Modülünde File Operations Güvenlik Sorunları** ⚠️ YÜKSEK
 
 **Konum:** `DailyQuestionService.createDailyQuestion()`
 
 **Problem:**
+
 - File upload validation eksik
 - Antivirus/scanning yok
 - Path traversal riski
 - File deletion handling yok (record silinince file kalıyor)
 
 **Mevcut Durum:**
+
 ```java
 // File direkt uploads/ klasörüne kaydediliyor
 // Validation minimal
@@ -71,6 +34,7 @@ done
 ```
 
 **Çözüm:**
+
 1. `FileValidationUtil` oluştur (size, content type, extension kontrolü)
 2. `FileStorageService` oluştur (güvenli kaydetme + silme)
 3. Path traversal koruması ekle
@@ -85,14 +49,17 @@ done
 **Konum:** `AIQuestionAnalyzer.java`
 
 **Problem:**
+
 - Retry/backoff mekanizması yok
 - Timeout handling eksik
 - Circuit breaker yok
 - External service hataları yönetilemiyor
 
 **Çözüm:**
+
 1. Resilience4j veya Spring Retry ekle
 2. Retry mekanizması ekle:
+
 ```java
 @Retry(name = "openai-api", fallbackMethod = "fallbackAnalyze")
 @CircuitBreaker(name = "openai-api")
@@ -100,6 +67,7 @@ public QuestionAnalysisResult analyzeQuestion(File imageFile) {
     // ...
 }
 ```
+
 3. Timeout handling ekle
 4. Fallback mechanism ekle
 
@@ -110,24 +78,28 @@ public QuestionAnalysisResult analyzeQuestion(File imageFile) {
 ### 4. **Validation Eksikliği** ⚠️ YÜKSEK
 
 **Problem:**
+
 - DTO'larda `@Valid` annotation'ı eksik
 - `@NotNull`, `@NotBlank`, `@Size`, `@Email` gibi validation annotation'ları yok
 - Manual validation yapılıyor (UserService'te)
 - Tutarsız validation yaklaşımı
 
 **Çözüm:**
+
 1. DTO'lara validation annotation'ları ekle:
+
 ```java
 public class UserRequest {
     @NotBlank(message = "Email zorunludur")
     @Email(message = "Geçerli bir email adresi giriniz")
     private String email;
-    
+
     @NotBlank(message = "Telefon numarası zorunludur")
     @Pattern(regexp = "^\\+?[0-9]{10,13}$", message = "Geçersiz telefon numarası")
     private String phoneNumber;
 }
 ```
+
 2. Controller'larda `@Valid` kullan
 3. Custom validators oluştur (gerekirse)
 
@@ -142,11 +114,13 @@ public class UserRequest {
 **Konum:** Birçok Service ve Repository
 
 **Problem:**
+
 - Lazy loading ile ilişkiler fetch edilirken N+1 query oluşuyor
 - `@EntityGraph` veya `JOIN FETCH` kullanılmıyor (bazı yerlerde)
 - Döngü içinde repository çağrıları
 
 **Örnek Sorunlar:**
+
 ```java
 // CartService.mapToResponse()
 cart.getItems().stream()
@@ -157,11 +131,14 @@ purchase.getBook().getTitle() // ❌ Lazy load - N+1 query
 ```
 
 **Çözüm:**
+
 1. `@EntityGraph` kullan:
+
 ```java
 @EntityGraph(attributePaths = {"items", "items.book"})
 Optional<Cart> findByUserId(Long userId);
 ```
+
 2. `JOIN FETCH` kullan (JPQL query'lerde)
 3. Batch query'ler kullan
 
@@ -172,6 +149,7 @@ Optional<Cart> findByUserId(Long userId);
 ### 6. **Logging Eksiklikleri** ⚠️ YÜKSEK
 
 **Problem:**
+
 - `TestResultService` - HİÇ LOG YOK! (Core business logic)
 - Bazı controller'larda loglama eksik
 - AI cost tracking eksik
@@ -179,6 +157,7 @@ Optional<Cart> findByUserId(Long userId);
 **Eksik Loglar:**
 
 **TestResultService:**
+
 ```java
 // ❌ HİÇBİR LOG YOK!
 // Eklenecekler:
@@ -188,6 +167,7 @@ log.error("Test submission failed: userId={}, testId={}, error={}", ..., excepti
 ```
 
 **AIQuestionAnalyzer:**
+
 ```java
 // Eksikler:
 log.info("OpenAI API call: duration={}ms, cost=~${}, model={}", duration, cost, model);
@@ -195,6 +175,7 @@ log.warn("Slow AI response: duration={}ms, threshold=30000ms", duration);
 ```
 
 **Çözüm:**
+
 - Tüm kritik service'lere `@Slf4j` ekle
 - Business logic kararlarını logla
 - Error'ları stack trace ile logla
@@ -207,12 +188,14 @@ log.warn("Slow AI response: duration={}ms, threshold=30000ms", duration);
 ### 7. **Input Sanitization Eksikliği** ⚠️ YÜKSEK
 
 **Problem:**
+
 - SQL injection koruması var (JPA) ama
 - XSS koruması yok
 - File upload validation eksik
 - Path traversal riski
 
 **Çözüm:**
+
 1. Input sanitization library kullan
 2. File upload validation ekle (FileValidationUtil ile)
 3. Path validation yap
@@ -227,15 +210,18 @@ log.warn("Slow AI response: duration={}ms, threshold=30000ms", duration);
 **Konum:** `SecurityConfig.java`
 
 **Problem:**
+
 - `allowedHeaders("*")` çok geniş
 - Production'da daha spesifik olmalı
 
 **Mevcut Durum:**
+
 ```java
 configuration.setAllowedHeaders(Arrays.asList("*")); // ❌ Çok geniş
 ```
 
 **Çözüm:**
+
 ```java
 configuration.setAllowedHeaders(Arrays.asList(
     "Authorization",
@@ -253,11 +239,13 @@ configuration.setAllowedHeaders(Arrays.asList(
 ### 9. **Repository-Layer Validation**
 
 **Problem:**
+
 - Uniqueness check'ler (email/username/phone) 3 ayrı query ile yapılıyor
 - Race condition riski var
 - DB seviyesinde unique constraint yok
 
 **Mevcut Durum:**
+
 ```java
 if (userRepository.existsByEmail(dto.getEmail())) { // Query 1
 if (userRepository.existsByPhoneNumber(dto.getPhoneNumber())) { // Query 2
@@ -265,12 +253,15 @@ if (userRepository.existsByUsername(dto.getUsername())) { // Query 3
 ```
 
 **Çözüm:**
+
 1. DB seviyesinde unique constraint ekle:
+
 ```sql
 ALTER TABLE users ADD CONSTRAINT uk_email UNIQUE (email);
 ALTER TABLE users ADD CONSTRAINT uk_username UNIQUE (username);
 ALTER TABLE users ADD CONSTRAINT uk_phone UNIQUE (phone_number);
 ```
+
 2. Composite query kullan (opsiyonel)
 
 **Etki:** Orta - Performans ve data integrity
@@ -280,11 +271,13 @@ ALTER TABLE users ADD CONSTRAINT uk_phone UNIQUE (phone_number);
 ### 10. **Index Eksikliği**
 
 **Problem:**
+
 - Foreign key'lerde index yok (otomatik eklenir ama)
 - Sık sorgulanan alanlarda index yok
 - Performance sorunları olabilir
 
 **Eklenecek Index'ler:**
+
 ```sql
 -- Books tablosu
 CREATE INDEX idx_book_exam_type ON books(exam_type);
@@ -313,11 +306,13 @@ CREATE INDEX idx_book_review_user_id ON book_reviews(user_id);
 ### 11. **Unique Constraint Eksikliği**
 
 **Problem:**
+
 - Email, username, phone için unique constraint yok
 - Duplicate data riski
 - Race condition riski
 
 **Eklenecek Constraint'ler:**
+
 ```sql
 ALTER TABLE users ADD CONSTRAINT uk_email UNIQUE (email);
 ALTER TABLE users ADD CONSTRAINT uk_username UNIQUE (username);
@@ -334,18 +329,22 @@ ALTER TABLE book_reviews ADD CONSTRAINT uk_book_user_review UNIQUE (book_id, use
 ### 12. **Payment Simulation**
 
 **Problem:**
+
 - `PurchaseService.processPayment()` her zaman `true` döndürüyor
 - Gerçek payment gateway entegrasyonu için hazır değil
 - Strategy pattern yok
 
 **Mevcut Kod:**
+
 ```java
 // TODO: Gerçek ödeme gateway'i (Stripe, iyzico, vb.) ile entegrasyon
 boolean success = true; // ❌ Her zaman true!
 ```
 
 **Çözüm:**
+
 1. Payment strategy interface oluştur:
+
 ```java
 public interface PaymentStrategy {
     boolean processPayment(Purchase purchase, PurchaseRequest request);
@@ -369,18 +368,22 @@ public class StripePaymentStrategy implements PaymentStrategy {
 ### 13. **Logging'de Hassas Bilgi Riski**
 
 **Problem:**
+
 - Phone/email plaintext loglanıyor (registration failures)
 - PII (Personal Identifiable Information) loglanıyor
 - GDPR compliance riski
 
 **Mevcut Durum:**
+
 ```java
 log.warn("Registration failed - email already exists: email={}", dto.getEmail());
 // ❌ Email plaintext loglanıyor
 ```
 
 **Çözüm:**
+
 1. Log sanitization utility oluştur:
+
 ```java
 public class LogSanitizer {
     public static String sanitizeEmail(String email) {
@@ -391,7 +394,7 @@ public class LogSanitizer {
         }
         return "***";
     }
-    
+
     public static String sanitizePhone(String phone) {
         if (phone == null) return null;
         return phone.length() > 4 ? "***" + phone.substring(phone.length() - 4) : "***";
@@ -408,10 +411,12 @@ public class LogSanitizer {
 ### 14. **Magic Number ve String Literaller**
 
 **Problem:**
+
 - Hard-coded değerler var
 - Maintenance zorluğu
 
 **Mevcut Durum:**
+
 ```java
 if (rating < 1 || rating > 5) // ❌ Magic numbers
 Math.round(average * 10.0) / 10.0 // ❌ Magic number
@@ -419,7 +424,9 @@ Pattern.compile("^\\+?[0-9]{10,13}$") // ❌ Magic regex
 ```
 
 **Çözüm:**
+
 1. Constant sınıfı oluştur:
+
 ```java
 public class AppConstants {
     public static final int MIN_RATING = 1;
@@ -437,11 +444,13 @@ public class AppConstants {
 ### 15. **Entity Callback'leri Eksik**
 
 **Problem:**
+
 - `@PrePersist`, `@PreUpdate` eksik (bazı entity'lerde)
 - Default değerler atanmıyor
 - Timestamp'ler otomatik güncellenmiyor
 
 **Çözüm:**
+
 ```java
 @PrePersist
 @PreUpdate
@@ -462,12 +471,15 @@ public void initializeRatingFields() {
 ### 16. **Audit Trail Eksikliği**
 
 **Problem:**
+
 - `createdAt`, `updatedAt` bazı entity'lerde yok
 - `createdBy`, `updatedBy` hiçbirinde yok
 - Kim ne zaman değiştirdi bilinmiyor
 
 **Çözüm:**
+
 1. BaseEntity oluştur:
+
 ```java
 @MappedSuperclass
 public abstract class BaseEntity {
@@ -503,11 +515,13 @@ public abstract class BaseEntity {
 ### 17. **Gereksiz Kod**
 
 **Problem:**
+
 - Kullanılmayan repository metodları var (temizlendi ama kontrol edilmeli)
 - Dead code var
 - TODO comment'leri kodda kalıyor
 
 **Temizlenecekler:**
+
 - `PurchaseService.processPayment` içindeki TODO
 - Kullanılmayan helper metodlar
 
@@ -518,6 +532,7 @@ public abstract class BaseEntity {
 ## 🧪 TEST EKSİKLİKLERİ
 
 ### Mevcut Durum
+
 - ❌ JUnit/Integration test yok (sadece boş `AppApplicationTests`)
 - ❌ Unit test yok
 - ❌ Integration test yok
@@ -526,24 +541,24 @@ public abstract class BaseEntity {
 ### Test Edilmesi Gerekenler
 
 **Yüksek Öncelik:**
+
 1. `BookCatalogService.getBookStore` (filter/sort/pagination)
 2. `TestResultService.saveTestResult` (sequence generation, stats)
 3. `QuestionFlagService` (auth ownership + duplicate handling)
 4. Authentication flows (register/login/refresh/logout)
 
-**Orta Öncelik:**
-5. `PurchaseService.checkoutCart` (transaction consistency)
-6. `BookReviewService` (rating calculation)
-7. `CartService` (add/remove items)
+**Orta Öncelik:** 5. `PurchaseService.checkoutCart` (transaction consistency) 6. `BookReviewService` (rating calculation) 7. `CartService` (add/remove items)
 
 ### Test Stratejisi
 
 1. **Unit Tests:**
+
    - Service layer logic
    - Business rule validation
    - Exception handling
 
 2. **Integration Tests:**
+
    - Repository queries
    - Transaction management
    - Endpoint testing (MockMvc)
@@ -564,6 +579,7 @@ public abstract class BaseEntity {
 **Hedef:** Production-ready hale getirme
 
 **Yapılacaklar:**
+
 1. ⚠️ Rate limiting ekle (login, register, AI endpoints)
 2. ⚠️ File validation ve security (DailyQuestionService, FileController)
 3. ⚠️ AIQuestionAnalyzer retry/resilience ekle
@@ -581,6 +597,7 @@ public abstract class BaseEntity {
 **Hedef:** Performance ve security iyileştirmeleri
 
 **Yapılacaklar:**
+
 1. ⚠️ N+1 query problemini çöz (kalanlar)
 2. ⚠️ Input sanitization ekle
 3. ⚠️ CORS konfigürasyonunu daralt
@@ -597,6 +614,7 @@ public abstract class BaseEntity {
 **Hedef:** Uzun vadeli maintainability
 
 **Yapılacaklar:**
+
 1. ⚠️ Audit trail ekle (BaseEntity)
 2. ⚠️ Dead code temizliği
 3. ⚠️ Magic number'ları constant'a çevir
@@ -613,6 +631,7 @@ public abstract class BaseEntity {
 **Hedef:** Comprehensive test coverage
 
 **Yapılacaklar:**
+
 1. ⚠️ Unit tests (service layer)
 2. ⚠️ Integration tests (repository, endpoints)
 3. ⚠️ Testcontainers setup
@@ -626,14 +645,14 @@ public abstract class BaseEntity {
 
 ## 📊 ÖZET TABLO
 
-| Kategori | Sorun Sayısı | Öncelik | Tahmini Süre |
-|----------|--------------|---------|--------------|
-| **Kritik Sorunlar** | 4 | 🔥 ACİL | 1-2 hafta |
-| **Yüksek Öncelikli** | 4 | ⚡ YÜKSEK | 2-4 hafta |
-| **Orta Öncelikli** | 5 | 🟡 ORTA | 1-2 ay |
-| **Düşük Öncelikli** | 4 | 🟢 DÜŞÜK | İleride |
-| **Test** | 1 | 🟡 ORTA | 2-3 hafta |
-| **TOPLAM** | **18** | - | **8-12 hafta** |
+| Kategori             | Sorun Sayısı | Öncelik   | Tahmini Süre   |
+| -------------------- | ------------ | --------- | -------------- |
+| **Kritik Sorunlar**  | 4            | 🔥 ACİL   | 1-2 hafta      |
+| **Yüksek Öncelikli** | 4            | ⚡ YÜKSEK | 2-4 hafta      |
+| **Orta Öncelikli**   | 5            | 🟡 ORTA   | 1-2 ay         |
+| **Düşük Öncelikli**  | 4            | 🟢 DÜŞÜK  | İleride        |
+| **Test**             | 1            | 🟡 ORTA   | 2-3 hafta      |
+| **TOPLAM**           | **18**       | -         | **8-12 hafta** |
 
 ---
 
@@ -657,4 +676,3 @@ Bu rapor, backend kod tabanındaki **yapılmamış sorunlar** ve çözüm öneri
 **Son Güncelleme:** 2025-01-15  
 **Hazırlayan:** AI Assistant  
 **Durum:** Yapılması Gereken Sorunlar Listesi
-
