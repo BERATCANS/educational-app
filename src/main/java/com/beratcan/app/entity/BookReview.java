@@ -9,6 +9,9 @@ import java.time.LocalDateTime;
 @Entity
 @Table(name = "book_reviews", uniqueConstraints = {
         @UniqueConstraint(columnNames = { "book_id", "user_id" })
+}, indexes = {
+        @Index(name = "idx_book_review_book_id", columnList = "book_id"),
+        @Index(name = "idx_book_review_user_id", columnList = "user_id")
 })
 @Getter
 @Setter

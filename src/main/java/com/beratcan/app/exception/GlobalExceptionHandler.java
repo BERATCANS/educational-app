@@ -19,197 +19,214 @@ import java.util.stream.Collectors;
 @Slf4j
 public class GlobalExceptionHandler {
 
-    @Value("${spring.profiles.active:prod}")
-    private String activeProfile;
+        @Value("${spring.profiles.active:prod}")
+        private String activeProfile;
 
-    private boolean isProduction() {
-        return "prod".equals(activeProfile);
-    }
+        private boolean isProduction() {
+                return "prod".equals(activeProfile);
+        }
 
-    @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<ErrorDetails> handleValidationExceptions(MethodArgumentNotValidException ex) {
-        String details = ex.getBindingResult()
-                .getFieldErrors()
-                .stream()
-                .map(error -> formatFieldError(error))
-                .collect(Collectors.joining("; "));
+        @ExceptionHandler(MethodArgumentNotValidException.class)
+        public ResponseEntity<ErrorDetails> handleValidationExceptions(MethodArgumentNotValidException ex) {
+                String details = ex.getBindingResult()
+                                .getFieldErrors()
+                                .stream()
+                                .map(error -> formatFieldError(error))
+                                .collect(Collectors.joining("; "));
 
-        ErrorDetails errorDetails = buildErrorDetails(
-                "Validation failed",
-                details,
-                HttpStatus.BAD_REQUEST);
+                ErrorDetails errorDetails = buildErrorDetails(
+                                "Validation failed",
+                                details,
+                                HttpStatus.BAD_REQUEST);
 
-        return ResponseEntity.badRequest().body(errorDetails);
-    }
+                return ResponseEntity.badRequest().body(errorDetails);
+        }
 
-    @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<ErrorDetails> handleIllegalArgumentException(
-            IllegalArgumentException ex, HttpServletRequest request) {
-        log.warn("Illegal argument: path={}, error={}", request.getRequestURI(), ex.getMessage());
+        @ExceptionHandler(IllegalArgumentException.class)
+        public ResponseEntity<ErrorDetails> handleIllegalArgumentException(
+                        IllegalArgumentException ex, HttpServletRequest request) {
+                log.warn("Illegal argument: path={}, error={}", request.getRequestURI(), ex.getMessage());
 
-        String message = isProduction()
-                ? "Invalid request parameters"
-                : ex.getMessage();
+                String message = isProduction()
+                                ? "Invalid request parameters"
+                                : ex.getMessage();
 
-        ErrorDetails errorDetails = buildErrorDetails(
-                message,
-                "Validation error",
-                HttpStatus.BAD_REQUEST);
+                ErrorDetails errorDetails = buildErrorDetails(
+                                message,
+                                "Validation error",
+                                HttpStatus.BAD_REQUEST);
 
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorDetails);
-    }
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorDetails);
+        }
 
-    @ExceptionHandler(HttpMessageNotReadableException.class)
-    public ResponseEntity<ErrorDetails> handleJsonParseError(HttpMessageNotReadableException ex) {
-        ErrorDetails errorDetails = buildErrorDetails(
-                "Malformed JSON request",
-                "Please ensure that the request body is correctly formatted.",
-                HttpStatus.BAD_REQUEST);
-        return ResponseEntity.badRequest().body(errorDetails);
-    }
+        @ExceptionHandler(HttpMessageNotReadableException.class)
+        public ResponseEntity<ErrorDetails> handleJsonParseError(HttpMessageNotReadableException ex) {
+                ErrorDetails errorDetails = buildErrorDetails(
+                                "Malformed JSON request",
+                                "Please ensure that the request body is correctly formatted.",
+                                HttpStatus.BAD_REQUEST);
+                return ResponseEntity.badRequest().body(errorDetails);
+        }
 
-    @ExceptionHandler(ResourceNotFoundException.class)
-    public ResponseEntity<ErrorDetails> handleResourceNotFound(
-            ResourceNotFoundException ex, HttpServletRequest request) {
-        log.warn("Resource not found: path={}, error={}", request.getRequestURI(), ex.getMessage());
+        @ExceptionHandler(ResourceNotFoundException.class)
+        public ResponseEntity<ErrorDetails> handleResourceNotFound(
+                        ResourceNotFoundException ex, HttpServletRequest request) {
+                log.warn("Resource not found: path={}, error={}", request.getRequestURI(), ex.getMessage());
 
-        String message = isProduction()
-                ? "Resource not found"
-                : ex.getMessage();
+                String message = isProduction()
+                                ? "Resource not found"
+                                : ex.getMessage();
 
-        ErrorDetails errorDetails = buildErrorDetails(
-                message,
-                "The requested resource was not found.",
-                HttpStatus.NOT_FOUND);
+                ErrorDetails errorDetails = buildErrorDetails(
+                                message,
+                                "The requested resource was not found.",
+                                HttpStatus.NOT_FOUND);
 
-        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(errorDetails);
-    }
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body(errorDetails);
+        }
 
-    @ExceptionHandler(BadRequestException.class)
-    public ResponseEntity<ErrorDetails> handleBadRequest(
-            BadRequestException ex, HttpServletRequest request) {
-        log.warn("Bad request: path={}, error={}", request.getRequestURI(), ex.getMessage());
+        @ExceptionHandler(BadRequestException.class)
+        public ResponseEntity<ErrorDetails> handleBadRequest(
+                        BadRequestException ex, HttpServletRequest request) {
+                log.warn("Bad request: path={}, error={}", request.getRequestURI(), ex.getMessage());
 
-        String message = isProduction()
-                ? "Invalid request"
-                : ex.getMessage();
+                String message = isProduction()
+                                ? "Invalid request"
+                                : ex.getMessage();
 
-        ErrorDetails errorDetails = buildErrorDetails(
-                message,
-                "Bad request",
-                HttpStatus.BAD_REQUEST);
-        return ResponseEntity.badRequest().body(errorDetails);
-    }
+                ErrorDetails errorDetails = buildErrorDetails(
+                                message,
+                                "Bad request",
+                                HttpStatus.BAD_REQUEST);
+                return ResponseEntity.badRequest().body(errorDetails);
+        }
 
-    @ExceptionHandler(ConflictException.class)
-    public ResponseEntity<ErrorDetails> handleConflict(
-            ConflictException ex, HttpServletRequest request) {
-        log.warn("Conflict: path={}, error={}", request.getRequestURI(), ex.getMessage());
+        @ExceptionHandler(ConflictException.class)
+        public ResponseEntity<ErrorDetails> handleConflict(
+                        ConflictException ex, HttpServletRequest request) {
+                log.warn("Conflict: path={}, error={}", request.getRequestURI(), ex.getMessage());
 
-        String message = isProduction()
-                ? "Conflict detected"
-                : ex.getMessage();
+                String message = isProduction()
+                                ? "Conflict detected"
+                                : ex.getMessage();
 
-        ErrorDetails errorDetails = buildErrorDetails(
-                message,
-                "Conflict detected",
-                HttpStatus.CONFLICT);
-        return ResponseEntity.status(HttpStatus.CONFLICT).body(errorDetails);
-    }
+                ErrorDetails errorDetails = buildErrorDetails(
+                                message,
+                                "Conflict detected",
+                                HttpStatus.CONFLICT);
+                return ResponseEntity.status(HttpStatus.CONFLICT).body(errorDetails);
+        }
 
-    @ExceptionHandler(UnauthorizedOperationException.class)
-    public ResponseEntity<ErrorDetails> handleUnauthorizedOperation(
-            UnauthorizedOperationException ex, HttpServletRequest request) {
-        log.warn("Unauthorized operation: path={}, error={}", request.getRequestURI(), ex.getMessage());
+        @ExceptionHandler(UnauthorizedOperationException.class)
+        public ResponseEntity<ErrorDetails> handleUnauthorizedOperation(
+                        UnauthorizedOperationException ex, HttpServletRequest request) {
+                log.warn("Unauthorized operation: path={}, error={}", request.getRequestURI(), ex.getMessage());
 
-        String message = isProduction()
-                ? "Access denied"
-                : ex.getMessage();
+                String message = isProduction()
+                                ? "Access denied"
+                                : ex.getMessage();
 
-        ErrorDetails errorDetails = buildErrorDetails(
-                message,
-                "You are not allowed to perform this operation.",
-                HttpStatus.FORBIDDEN);
-        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(errorDetails);
-    }
+                ErrorDetails errorDetails = buildErrorDetails(
+                                message,
+                                "You are not allowed to perform this operation.",
+                                HttpStatus.FORBIDDEN);
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body(errorDetails);
+        }
 
-    @ExceptionHandler(AccessDeniedException.class)
-    public ResponseEntity<ErrorDetails> handleAccessDenied(AccessDeniedException ex) {
-        ErrorDetails errorDetails = buildErrorDetails(
-                "Access Denied",
-                "You do not have permission to access this resource.",
-                HttpStatus.FORBIDDEN);
-        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(errorDetails);
-    }
+        @ExceptionHandler(AccessDeniedException.class)
+        public ResponseEntity<ErrorDetails> handleAccessDenied(AccessDeniedException ex) {
+                ErrorDetails errorDetails = buildErrorDetails(
+                                "Access Denied",
+                                "You do not have permission to access this resource.",
+                                HttpStatus.FORBIDDEN);
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body(errorDetails);
+        }
 
-    @ExceptionHandler(ExternalServiceException.class)
-    public ResponseEntity<ErrorDetails> handleExternalServiceException(
-            ExternalServiceException ex, HttpServletRequest request) {
-        log.error("External service error: path={}, error={}",
-                request.getRequestURI(), ex.getMessage(), ex);
+        @ExceptionHandler(ExternalServiceException.class)
+        public ResponseEntity<ErrorDetails> handleExternalServiceException(
+                        ExternalServiceException ex, HttpServletRequest request) {
+                log.error("External service error: path={}, error={}",
+                                request.getRequestURI(), ex.getMessage(), ex);
 
-        String message = isProduction()
-                ? "External service temporarily unavailable"
-                : ex.getMessage();
+                String message = isProduction()
+                                ? "External service temporarily unavailable"
+                                : ex.getMessage();
 
-        ErrorDetails errorDetails = buildErrorDetails(
-                message,
-                "External service error",
-                HttpStatus.BAD_GATEWAY);
-        return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(errorDetails);
-    }
+                ErrorDetails errorDetails = buildErrorDetails(
+                                message,
+                                "External service error",
+                                HttpStatus.BAD_GATEWAY);
+                return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(errorDetails);
+        }
 
-    @ExceptionHandler(TooManyRequestsException.class)
-    public ResponseEntity<ErrorDetails> handleTooManyRequests(
-            TooManyRequestsException ex, HttpServletRequest request) {
-        log.warn("Rate limit exceeded: path={}, retryAfter={}s",
-                request.getRequestURI(), ex.getRetryAfterSeconds());
+        @ExceptionHandler(FileStorageException.class)
+        public ResponseEntity<ErrorDetails> handleFileStorageException(
+                        FileStorageException ex, HttpServletRequest request) {
+                log.error("File storage error: path={}, error={}",
+                                request.getRequestURI(), ex.getMessage(), ex);
 
-        ErrorDetails errorDetails = buildErrorDetails(
-                ex.getMessage(),
-                "Rate limit exceeded. Please try again later.",
-                HttpStatus.TOO_MANY_REQUESTS);
+                String message = isProduction()
+                                ? "File operation failed. Please try again later."
+                                : ex.getMessage();
 
-        // Response header'larına retry-after ekle
-        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
-                .header("X-Rate-Limit-Retry-After-Seconds", String.valueOf(ex.getRetryAfterSeconds()))
-                .body(errorDetails);
-    }
+                ErrorDetails errorDetails = buildErrorDetails(
+                                message,
+                                "File storage error",
+                                HttpStatus.INTERNAL_SERVER_ERROR);
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorDetails);
+        }
 
-    @ExceptionHandler(Exception.class)
-    public ResponseEntity<ErrorDetails> handleGenericException(
-            Exception ex, HttpServletRequest request) {
-        // DETAYLI LOG (her zaman - sadece server'da)
-        log.error("Unexpected error: path={}, method={}, error={}",
-                request.getRequestURI(),
-                request.getMethod(),
-                ex.getMessage(),
-                ex);
+        @ExceptionHandler(TooManyRequestsException.class)
+        public ResponseEntity<ErrorDetails> handleTooManyRequests(
+                        TooManyRequestsException ex, HttpServletRequest request) {
+                log.warn("Rate limit exceeded: path={}, retryAfter={}s",
+                                request.getRequestURI(), ex.getRetryAfterSeconds());
 
-        // PRODUCTION'DA GENERIC MESAJ, DEV'DE DETAYLI
-        String details = isProduction()
-                ? "An unexpected error occurred. Please try again later."
-                : ex.getMessage();
+                ErrorDetails errorDetails = buildErrorDetails(
+                                ex.getMessage(),
+                                "Rate limit exceeded. Please try again later.",
+                                HttpStatus.TOO_MANY_REQUESTS);
 
-        ErrorDetails errorDetails = buildErrorDetails(
-                "An unexpected error occurred",
-                details,
-                HttpStatus.INTERNAL_SERVER_ERROR);
+                // Response header'larına retry-after ekle
+                return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                                .header("X-Rate-Limit-Retry-After-Seconds", String.valueOf(ex.getRetryAfterSeconds()))
+                                .body(errorDetails);
+        }
 
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorDetails);
-    }
+        @ExceptionHandler(Exception.class)
+        public ResponseEntity<ErrorDetails> handleGenericException(
+                        Exception ex, HttpServletRequest request) {
+                // DETAYLI LOG (her zaman - sadece server'da)
+                log.error("Unexpected error: path={}, method={}, error={}",
+                                request.getRequestURI(),
+                                request.getMethod(),
+                                ex.getMessage(),
+                                ex);
 
-    private ErrorDetails buildErrorDetails(String message, String details, HttpStatus status) {
-        return ErrorDetails.builder()
-                .message(message)
-                .details(details)
-                .timestamp(LocalDateTime.now().toString())
-                .status(status.value())
-                .error(status.getReasonPhrase())
-                .build();
-    }
+                // PRODUCTION'DA GENERIC MESAJ, DEV'DE DETAYLI
+                String details = isProduction()
+                                ? "An unexpected error occurred. Please try again later."
+                                : ex.getMessage();
 
-    private String formatFieldError(FieldError error) {
-        return error.getField() + ": " + error.getDefaultMessage();
-    }
+                ErrorDetails errorDetails = buildErrorDetails(
+                                "An unexpected error occurred",
+                                details,
+                                HttpStatus.INTERNAL_SERVER_ERROR);
+
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorDetails);
+        }
+
+        private ErrorDetails buildErrorDetails(String message, String details, HttpStatus status) {
+                return ErrorDetails.builder()
+                                .message(message)
+                                .details(details)
+                                .timestamp(LocalDateTime.now().toString())
+                                .status(status.value())
+                                .error(status.getReasonPhrase())
+                                .build();
+        }
+
+        private String formatFieldError(FieldError error) {
+                return error.getField() + ": " + error.getDefaultMessage();
+        }
 }

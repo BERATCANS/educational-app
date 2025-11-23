@@ -1,31 +1,45 @@
 package com.beratcan.app.controller;
 
+import com.beratcan.app.annotation.RateLimit;
 import com.beratcan.app.dto.request.QuestionRequest;
+import com.beratcan.app.dto.request.UpdateAnalysisRequest;
 import com.beratcan.app.dto.response.QuestionResponse;
 import com.beratcan.app.service.QuestionService;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/questions")
+@RequiredArgsConstructor
 public class QuestionController {
 
     private final QuestionService questionService;
 
-    public QuestionController(QuestionService questionService) {
-        this.questionService = questionService;
-    }
-
     // CREATE
-    @PreAuthorize("hasRole('ADMIN')")
+    /**
+     * Soru oluştur (görsel + temel bilgiler) + Otomatik AI analiz
+     */
     @PostMapping("/add")
-    public QuestionResponse addQuestion(@RequestParam Long testId, @RequestBody QuestionRequest request) {
-        return questionService.addQuestion(testId, request);
+    @PreAuthorize("hasRole('ADMIN')")
+    @RateLimit(requestsPerMinute = 10, keyType = "USER", message = "Too many question creation requests. Please try again later.")
+    public QuestionResponse addQuestion(
+            @RequestParam("file") MultipartFile file,
+            @RequestParam("testId") Long testId,
+            @RequestParam("correctAnswer") String correctAnswer,
+            @RequestParam(value = "answerNumber", defaultValue = "5") int answerNumber,
+            @RequestParam(value = "videoUrl", required = false) String videoUrl,
+            @RequestParam(value = "sequenceNumber", required = false) Integer sequenceNumber) {
+
+        return questionService.addQuestionWithImageAndAI(
+                file, testId, correctAnswer, answerNumber, videoUrl, sequenceNumber);
     }
 
     // READ
@@ -81,5 +95,20 @@ public class QuestionController {
         }
         questionService.voteExplanation(questionId, like);
         return ResponseEntity.ok("Vote recorded for explanation");
+    }
+
+    /**
+     * Soru için hints ve explanation'ı birlikte güncelle
+     */
+    @PutMapping("/{questionId}/analysis")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<?> updateAnalysis(
+            @PathVariable Long questionId,
+            @RequestBody UpdateAnalysisRequest request) {
+
+        questionService.updateAnalysis(questionId, request.getHints(), request.getExplanation());
+        return ResponseEntity.ok(Map.of(
+                "success", true,
+                "message", "Analysis updated successfully"));
     }
 }

@@ -17,6 +17,9 @@ import java.util.Set;
                 @UniqueConstraint(columnNames = { "email" }),
                 @UniqueConstraint(columnNames = { "phoneNumber" }),
                 @UniqueConstraint(columnNames = { "username" })
+}, indexes = {
+                @Index(name = "idx_user_email", columnList = "email"),
+                @Index(name = "idx_user_username", columnList = "username")
 })
 public class User {
 

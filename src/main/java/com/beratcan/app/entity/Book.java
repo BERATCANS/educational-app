@@ -17,7 +17,12 @@ import java.util.Set;
 @Entity
 @Getter
 @Setter
-@Table(name = "books")
+@Table(name = "books", indexes = {
+        @Index(name = "idx_book_exam_type", columnList = "exam_type"),
+        @Index(name = "idx_book_grade_level", columnList = "grade_level"),
+        @Index(name = "idx_book_paid", columnList = "paid"),
+        @Index(name = "idx_book_price", columnList = "price")
+})
 public class Book {
 
     @Id
