@@ -23,13 +23,13 @@ public class FileService {
     private String uploadDir;
 
     /**
-     * Dosya yükleme
+     * Dosya kaydetme
      * 
      * @param file Yüklenecek dosya
-     * @return Dosya URL'si
+     * @return Kaydedilen dosya adı (sadece filename, URL değil)
      * @throws FileStorageException Dosya yükleme hatası
      */
-    public String uploadFile(MultipartFile file) {
+    public String saveFile(MultipartFile file) {
         if (file == null || file.isEmpty()) {
             throw new FileStorageException("Dosya boş olamaz");
         }
@@ -42,7 +42,7 @@ public class FileService {
             Files.write(filePath, file.getBytes());
 
             log.info("Dosya yüklendi: {}", filename);
-            return "/api/files/" + filename;
+            return filename;
         } catch (IOException e) {
             log.error("Dosya yükleme hatası: ", e);
             throw new FileStorageException("Dosya yüklenemedi: " + e.getMessage(), e);
@@ -73,26 +73,41 @@ public class FileService {
     }
 
     /**
-     * Görsel dosyasını kaydet
+     * Dosya silme
      * 
-     * @param file Yüklenecek dosya
-     * @return Kaydedilen dosya adı (sadece filename, URL değil)
-     * @throws FileStorageException Dosya kaydetme hatası
+     * @param filename Silinecek dosya adı
+     * @throws FileStorageException Dosya silme hatası
      */
-    public String saveImageFile(MultipartFile file) {
-        if (file == null || file.isEmpty()) {
-            throw new FileStorageException("Dosya boş olamaz");
+    public void deleteFile(String filename) {
+        if (filename == null || filename.trim().isEmpty()) {
+            throw new FileStorageException("Dosya adı boş olamaz");
         }
 
         try {
-            String filename = System.currentTimeMillis() + "_" + file.getOriginalFilename();
-            Path filePath = Paths.get(uploadDir + filename);
-            Files.createDirectories(filePath.getParent());
-            Files.write(filePath, file.getBytes());
-            return filename;
+            // URL'den sadece filename'i çıkar (eğer /api/files/ prefix'i varsa)
+            String actualFilename = filename;
+            if (filename.startsWith("/api/files/")) {
+                actualFilename = filename.substring("/api/files/".length());
+            }
+
+            Path filePath = Paths.get(uploadDir + actualFilename).normalize();
+
+            // Güvenlik kontrolü: uploadDir dışına çıkmayı engelle
+            Path uploadDirPath = Paths.get(uploadDir).normalize();
+            if (!filePath.startsWith(uploadDirPath)) {
+                throw new FileStorageException("Güvenlik hatası: Dosya upload dizini dışında");
+            }
+
+            if (Files.exists(filePath)) {
+                Files.delete(filePath);
+                log.info("Dosya silindi: {}", actualFilename);
+            } else {
+                log.warn("Silinecek dosya bulunamadı: {}", actualFilename);
+                // Dosya yoksa exception fırlatmıyoruz, sadece log yazıyoruz
+            }
         } catch (IOException e) {
-            log.error("Görsel kaydetme hatası: ", e);
-            throw new FileStorageException("Görsel kaydedilemedi: " + e.getMessage(), e);
+            log.error("Dosya silme hatası: filename={}", filename, e);
+            throw new FileStorageException("Dosya silinemedi: " + filename, e);
         }
     }
 

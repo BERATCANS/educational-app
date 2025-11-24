@@ -219,7 +219,8 @@ public class CartService {
                 response.setId(item.getId());
                 response.setBookId(item.getBook().getId());
                 response.setBookTitle(item.getBook().getTitle());
-                response.setBookPublisher(item.getBook().getPublisher());
+                response.setBookPublisher(
+                                item.getBook().getPublisher() != null ? item.getBook().getPublisher().getName() : null);
                 response.setBookCoverImageUrl(item.getBook().getCoverImageUrl());
                 response.setPriceAtAdd(item.getPriceAtAdd());
                 response.setCurrentPrice(item.getBook().getPrice());

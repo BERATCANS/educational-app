@@ -11,6 +11,8 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.Map;
+
 @Slf4j
 @RestController
 @RequestMapping("/api/files")
@@ -23,8 +25,8 @@ public class FileController {
     @PreAuthorize("hasRole('ADMIN')")
     @RateLimit(requestsPerMinute = 20, keyType = "USER", message = "Too many file uploads. Please try again later.")
     public ResponseEntity<String> uploadFile(@RequestParam("file") MultipartFile file) {
-        String fileUrl = fileService.uploadFile(file);
-        return ResponseEntity.ok(fileUrl);
+        String filename = fileService.saveFile(file);
+        return ResponseEntity.ok(filename);
     }
 
     @GetMapping("/{filename}")
@@ -33,5 +35,17 @@ public class FileController {
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + filename + "\"")
                 .body(resource);
+    }
+
+    /**
+     * Dosya silme
+     */
+    @DeleteMapping("/{filename}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<?> deleteFile(@PathVariable String filename) {
+        fileService.deleteFile(filename);
+        return ResponseEntity.ok(Map.of(
+                "success", true,
+                "message", "Dosya başarıyla silindi"));
     }
 }

@@ -20,6 +20,7 @@ public class PurchaseResponse {
     private Long bookId;
     private String bookTitle;
     private String bookCoverImageUrl;
+    private String bookPublisher;
     private BigDecimal price;
     private LocalDateTime purchaseDate;
     private PurchaseStatus status;

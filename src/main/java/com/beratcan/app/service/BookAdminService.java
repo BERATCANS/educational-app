@@ -5,15 +5,19 @@ import com.beratcan.app.entity.Book;
 import com.beratcan.app.entity.BookCode;
 import com.beratcan.app.entity.Test;
 import com.beratcan.app.entity.Topic;
+import com.beratcan.app.entity.Publisher;
 import com.beratcan.app.exception.BadRequestException;
 import com.beratcan.app.exception.BookNotFoundException;
+import com.beratcan.app.exception.PublisherNotFoundException;
 import com.beratcan.app.repository.BookCodeRepository;
 import com.beratcan.app.repository.BookRepository;
 import com.beratcan.app.repository.TestRepository;
 import com.beratcan.app.repository.TopicRepository;
+import com.beratcan.app.repository.PublisherRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -26,6 +30,7 @@ public class BookAdminService {
     private final BookCodeRepository bookCodeRepository;
     private final TopicRepository topicRepository;
     private final TestRepository testRepository;
+    private final PublisherRepository publisherRepository;
 
     @Transactional
     public Book addBook(BookRequest request) {
@@ -35,7 +40,8 @@ public class BookAdminService {
 
         Book book = new Book();
         book.setTitle(request.getTitle());
-        book.setPublisher(request.getPublisher());
+        Publisher publisher = resolvePublisher(request);
+        book.setPublisher(publisher);
         book.setCoverImageUrl(request.getCoverImageUrl());
         book.setPaid(request.isPaid());
         book.setGradeLevel(request.getGradeLevel());
@@ -75,7 +81,8 @@ public class BookAdminService {
                 .orElseThrow(() -> new BookNotFoundException(bookId));
 
         book.setTitle(request.getTitle());
-        book.setPublisher(request.getPublisher());
+        Publisher publisher = resolvePublisher(request);
+        book.setPublisher(publisher);
         book.setCoverImageUrl(request.getCoverImageUrl());
         book.setPaid(request.isPaid());
         book.setGradeLevel(request.getGradeLevel());
@@ -200,5 +207,22 @@ public class BookAdminService {
         }
 
         return result.toString();
+    }
+
+    private Publisher resolvePublisher(BookRequest request) {
+        if (request.getPublisherId() != null) {
+            return publisherRepository.findById(request.getPublisherId())
+                    .orElseThrow(() -> new PublisherNotFoundException(request.getPublisherId()));
+        }
+        if (StringUtils.hasText(request.getPublisher())) {
+            String normalizedName = request.getPublisher().trim();
+            return publisherRepository.findByNameIgnoreCase(normalizedName)
+                    .orElseGet(() -> {
+                        Publisher newPublisher = new Publisher();
+                        newPublisher.setName(normalizedName);
+                        return publisherRepository.save(newPublisher);
+                    });
+        }
+        throw new BadRequestException("Yayınevi bilgisi zorunludur");
     }
 }

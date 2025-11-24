@@ -31,7 +31,9 @@ public class Book {
 
     private String title;
 
-    private String publisher; // örn: Metin Yayınları
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "publisher_id")
+    private Publisher publisher;
 
     private String description; // Kitap açıklaması
 

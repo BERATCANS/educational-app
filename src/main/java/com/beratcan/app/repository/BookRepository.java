@@ -22,7 +22,7 @@ public interface BookRepository extends JpaRepository<Book, Long> {
          * DB seviyesinde pagination yapar, memory'ye yük bindirmez
          */
         @Query("SELECT b FROM Book b WHERE " +
-                        "(:query IS NULL OR :query = '' OR LOWER(b.title) LIKE LOWER(CONCAT('%', :query, '%')) OR LOWER(b.publisher) LIKE LOWER(CONCAT('%', :query, '%'))) AND "
+                        "(:query IS NULL OR :query = '' OR LOWER(b.title) LIKE LOWER(CONCAT('%', :query, '%')) OR LOWER(b.publisher.name) LIKE LOWER(CONCAT('%', :query, '%'))) AND "
                         +
                         "(:examTypes IS NULL OR b.examType IN :examTypes) AND " +
                         "(:gradeLevels IS NULL OR b.gradeLevel IN :gradeLevels) AND " +
@@ -44,7 +44,7 @@ public interface BookRepository extends JpaRepository<Book, Long> {
          * DB seviyesinde pagination yapar, memory'ye yük bindirmez
          */
         @Query("SELECT b FROM Book b WHERE " +
-                        "(:query IS NULL OR :query = '' OR LOWER(b.title) LIKE LOWER(CONCAT('%', :query, '%')) OR LOWER(b.publisher) LIKE LOWER(CONCAT('%', :query, '%'))) AND "
+                        "(:query IS NULL OR :query = '' OR LOWER(b.title) LIKE LOWER(CONCAT('%', :query, '%')) OR LOWER(b.publisher.name) LIKE LOWER(CONCAT('%', :query, '%'))) AND "
                         +
                         "(:examTypes IS NULL OR b.examType IN :examTypes) AND " +
                         "(:gradeLevels IS NULL OR b.gradeLevel IN :gradeLevels) AND " +
@@ -61,4 +61,8 @@ public interface BookRepository extends JpaRepository<Book, Long> {
                         @Param("maxPrice") BigDecimal maxPrice,
                         @Param("userExamType") ExamType userExamType,
                         Pageable pageable);
+
+        long countByPublisher_Id(Long publisherId);
+
+        boolean existsByPublisher_Id(Long publisherId);
 }

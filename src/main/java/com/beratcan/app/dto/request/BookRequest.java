@@ -11,6 +11,12 @@ import java.util.List;
 public class BookRequest {
 
     private String title;
+    /**
+     * Var olan bir yayınevi kullanılacaksa id gönderilir.
+     * publisherId null ise publisher alanındaki isim kullanılarak yeni yayınevi
+     * oluşturulur.
+     */
+    private Long publisherId;
     private String publisher;
     private String coverImageUrl;
     private boolean paid;

@@ -23,7 +23,7 @@ public class UserService {
     private final UserRepository userRepository;
     private final BCryptPasswordEncoder passwordEncoder;
 
-    private static final Pattern PHONE_PATTERN = Pattern.compile(AppConstants.PHONE_NUMBER_PATTERN);
+    public static final Pattern PHONE_PATTERN = Pattern.compile(AppConstants.PHONE_NUMBER_PATTERN);
 
     public UserService(UserRepository userRepository,
             BCryptPasswordEncoder passwordEncoder) { // ✅ Inject edildi
@@ -178,5 +178,4 @@ public class UserService {
         return userRepository.findById(userId)
                 .orElseThrow(() -> new UserNotFoundException(userId));
     }
-
 }

@@ -189,7 +189,14 @@ public class QuestionService {
     private QuestionResponse toQuestionResponse(Question question) {
         QuestionResponse response = new QuestionResponse();
         response.setId(question.getId());
-        response.setImageUrl(question.getImageUrl());
+        // Database'de filename var, response'da URL oluştur
+        // Eğer zaten URL formatındaysa (eski kayıtlar için) olduğu gibi bırak
+        String imageUrl = question.getImageUrl();
+        if (imageUrl != null && !imageUrl.isEmpty() && !imageUrl.startsWith("/api/files/")) {
+            response.setImageUrl("/api/files/" + imageUrl);
+        } else {
+            response.setImageUrl(imageUrl);
+        }
         response.setCorrectAnswer(question.getCorrectAnswer());
         response.setAnswerNumber(question.getAnswerNumber());
         response.setVideoUrl(question.getVideoUrl());
@@ -290,7 +297,7 @@ public class QuestionService {
         log.info("Soru oluşturma başlatıldı: testId={}, correctAnswer={}", testId, correctAnswer);
 
         // 1. Görseli kaydet
-        String filename = fileService.saveImageFile(file);
+        String filename = fileService.saveFile(file);
         log.info("Görsel kaydedildi: {}", filename);
 
         // 2. QuestionRequest oluştur

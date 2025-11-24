@@ -146,7 +146,14 @@ public class DailyQuestionService {
     private DailyQuestionResponse toDailyQuestionResponse(DailyQuestion question, Long userId) {
         DailyQuestionResponse response = new DailyQuestionResponse();
         response.setId(question.getId());
-        response.setImageUrl(question.getImageUrl());
+        // Database'de filename var, response'da URL oluştur
+        // Eğer zaten URL formatındaysa (eski kayıtlar için) olduğu gibi bırak
+        String imageUrl = question.getImageUrl();
+        if (imageUrl != null && !imageUrl.isEmpty() && !imageUrl.startsWith("/api/files/")) {
+            response.setImageUrl("/api/files/" + imageUrl);
+        } else {
+            response.setImageUrl(imageUrl);
+        }
         response.setAnswerNumber(question.getAnswerNumber());
         response.setVideoUrl(question.getVideoUrl());
         response.setDisplayDate(question.getDisplayDate());

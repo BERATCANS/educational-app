@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.LocalDateTime;
 import java.util.Optional;
 
 public interface TestResultRepository extends JpaRepository<TestResult, Long> {
@@ -68,4 +69,11 @@ public interface TestResultRepository extends JpaRepository<TestResult, Long> {
                         @Param("userId") Long userId,
                         @Param("bookId") Long bookId,
                         Pageable pageable);
+
+        @Query("SELECT COALESCE(SUM(tr.totalQuestions),0) FROM TestResult tr " +
+                        "WHERE tr.user.id = :userId AND tr.completedAt BETWEEN :start AND :end")
+        Long sumSolvedQuestionsBetween(
+                        @Param("userId") Long userId,
+                        @Param("start") LocalDateTime start,
+                        @Param("end") LocalDateTime end);
 }

@@ -119,8 +119,15 @@ public class BookCatalogService {
                 BookDetailResponse response = new BookDetailResponse();
                 response.setId(book.getId());
                 response.setTitle(book.getTitle());
-                response.setPublisher(book.getPublisher());
-                response.setCoverImageUrl(book.getCoverImageUrl());
+                response.setPublisher(book.getPublisher() != null ? book.getPublisher().getName() : null);
+                // Database'de filename var, response'da URL oluştur
+                // Eğer zaten URL formatındaysa (eski kayıtlar için) olduğu gibi bırak
+                String coverImageUrl = book.getCoverImageUrl();
+                if (coverImageUrl != null && !coverImageUrl.isEmpty() && !coverImageUrl.startsWith("/api/files/")) {
+                        response.setCoverImageUrl("/api/files/" + coverImageUrl);
+                } else {
+                        response.setCoverImageUrl(coverImageUrl);
+                }
                 response.setPaid(book.isPaid());
                 response.setNumberOfTopics(book.getNumberOfTopics());
                 response.setNumberOfTests(book.getNumberOfTests());
@@ -147,8 +154,15 @@ public class BookCatalogService {
                 BookStoreResponse response = new BookStoreResponse();
                 response.setId(book.getId());
                 response.setTitle(book.getTitle());
-                response.setCoverImageUrl(book.getCoverImageUrl());
-                response.setPublisher(book.getPublisher());
+                // Database'de filename var, response'da URL oluştur
+                // Eğer zaten URL formatındaysa (eski kayıtlar için) olduğu gibi bırak
+                String coverImageUrl = book.getCoverImageUrl();
+                if (coverImageUrl != null && !coverImageUrl.isEmpty() && !coverImageUrl.startsWith("/api/files/")) {
+                        response.setCoverImageUrl("/api/files/" + coverImageUrl);
+                } else {
+                        response.setCoverImageUrl(coverImageUrl);
+                }
+                response.setPublisher(book.getPublisher() != null ? book.getPublisher().getName() : null);
                 response.setPaid(book.isPaid());
                 response.setPrice(book.getPrice());
                 response.setOwned(isOwned != null && isOwned);

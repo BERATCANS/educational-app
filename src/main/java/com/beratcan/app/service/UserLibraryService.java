@@ -173,8 +173,15 @@ public class UserLibraryService {
         BookResponse response = new BookResponse();
         response.setId(book.getId());
         response.setTitle(book.getTitle());
-        response.setPublisher(book.getPublisher());
-        response.setCoverImageUrl(book.getCoverImageUrl());
+        response.setPublisher(book.getPublisher() != null ? book.getPublisher().getName() : null);
+        // Database'de filename var, response'da URL oluştur
+        // Eğer zaten URL formatındaysa (eski kayıtlar için) olduğu gibi bırak
+        String coverImageUrl = book.getCoverImageUrl();
+        if (coverImageUrl != null && !coverImageUrl.isEmpty() && !coverImageUrl.startsWith("/api/files/")) {
+            response.setCoverImageUrl("/api/files/" + coverImageUrl);
+        } else {
+            response.setCoverImageUrl(coverImageUrl);
+        }
         response.setPaid(book.isPaid());
         // Hesaplanmış alanları entity'deki getter metodlarından al
         response.setNumberOfTopics(book.getNumberOfTopics());

@@ -101,6 +101,7 @@ public class PurchaseService {
                 response.setBookId(bookId);
                 response.setBookTitle(book.getTitle());
                 response.setBookCoverImageUrl(book.getCoverImageUrl());
+                response.setBookPublisher(book.getPublisher() != null ? book.getPublisher().getName() : null);
                 response.setPrice(book.getPrice());
                 response.setStatus(PurchaseStatus.COMPLETED);
             }
@@ -407,6 +408,9 @@ public class PurchaseService {
         response.setBookId(purchase.getBook().getId());
         response.setBookTitle(purchase.getBook().getTitle());
         response.setBookCoverImageUrl(purchase.getBook().getCoverImageUrl());
+        response.setBookPublisher(purchase.getBook().getPublisher() != null
+                ? purchase.getBook().getPublisher().getName()
+                : null);
         response.setPrice(purchase.getPrice());
         response.setPurchaseDate(purchase.getPurchaseDate());
         response.setStatus(purchase.getStatus());

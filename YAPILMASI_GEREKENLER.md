@@ -408,39 +408,6 @@ public class LogSanitizer {
 
 ## 🟢 DÜŞÜK ÖNCELİKLİ İYİLEŞTİRMELER (İleride)
 
-### 14. **Magic Number ve String Literaller**
-
-**Problem:**
-
-- Hard-coded değerler var
-- Maintenance zorluğu
-
-**Mevcut Durum:**
-
-```java
-if (rating < 1 || rating > 5) // ❌ Magic numbers
-Math.round(average * 10.0) / 10.0 // ❌ Magic number
-Pattern.compile("^\\+?[0-9]{10,13}$") // ❌ Magic regex
-```
-
-**Çözüm:**
-
-1. Constant sınıfı oluştur:
-
-```java
-public class AppConstants {
-    public static final int MIN_RATING = 1;
-    public static final int MAX_RATING = 5;
-    public static final int RATING_DECIMAL_PLACES = 1;
-    public static final int DEFAULT_PAGE_SIZE = 20;
-    public static final String PHONE_NUMBER_PATTERN = "^\\+?[0-9]{10,13}$";
-}
-```
-
-**Etki:** Düşük - Code maintainability
-
----
-
 ### 15. **Entity Callback'leri Eksik**
 
 **Problem:**

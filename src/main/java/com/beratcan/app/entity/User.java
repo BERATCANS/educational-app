@@ -67,6 +67,9 @@ public class User {
         @Enumerated(EnumType.STRING)
         private SchoolType schoolType; // sadece YKS için zorunlu olabilir (nullable bırakabilirsin)
 
+        @Column(nullable = false, columnDefinition = "INT DEFAULT 200")
+        private Integer dailyQuestionTarget = 200;
+
         @ManyToMany
         @JoinTable(name = "user_books", joinColumns = @JoinColumn(name = "user_id"), inverseJoinColumns = @JoinColumn(name = "book_id"), uniqueConstraints = @UniqueConstraint(name = "uk_user_book", columnNames = {
                         "user_id", "book_id" }))
