@@ -192,8 +192,8 @@ public class QuestionService {
         // Database'de filename var, response'da URL oluştur
         // Eğer zaten URL formatındaysa (eski kayıtlar için) olduğu gibi bırak
         String imageUrl = question.getImageUrl();
-        if (imageUrl != null && !imageUrl.isEmpty() && !imageUrl.startsWith("/api/files/")) {
-            response.setImageUrl("/api/files/" + imageUrl);
+        if (imageUrl != null && !imageUrl.isEmpty() && !imageUrl.startsWith("api/files/")) {
+            response.setImageUrl("api/files/" + imageUrl);
         } else {
             response.setImageUrl(imageUrl);
         }

@@ -123,8 +123,8 @@ public class BookCatalogService {
                 // Database'de filename var, response'da URL oluştur
                 // Eğer zaten URL formatındaysa (eski kayıtlar için) olduğu gibi bırak
                 String coverImageUrl = book.getCoverImageUrl();
-                if (coverImageUrl != null && !coverImageUrl.isEmpty() && !coverImageUrl.startsWith("/api/files/")) {
-                        response.setCoverImageUrl("/api/files/" + coverImageUrl);
+                if (coverImageUrl != null && !coverImageUrl.isEmpty() && !coverImageUrl.startsWith("api/files/")) {
+                        response.setCoverImageUrl("api/files/" + coverImageUrl);
                 } else {
                         response.setCoverImageUrl(coverImageUrl);
                 }
@@ -157,8 +157,8 @@ public class BookCatalogService {
                 // Database'de filename var, response'da URL oluştur
                 // Eğer zaten URL formatındaysa (eski kayıtlar için) olduğu gibi bırak
                 String coverImageUrl = book.getCoverImageUrl();
-                if (coverImageUrl != null && !coverImageUrl.isEmpty() && !coverImageUrl.startsWith("/api/files/")) {
-                        response.setCoverImageUrl("/api/files/" + coverImageUrl);
+                if (coverImageUrl != null && !coverImageUrl.isEmpty() && !coverImageUrl.startsWith("api/files/")) {
+                        response.setCoverImageUrl("api/files/" + coverImageUrl);
                 } else {
                         response.setCoverImageUrl(coverImageUrl);
                 }
