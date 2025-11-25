@@ -60,10 +60,28 @@ public class GlobalExceptionHandler {
         }
 
         @ExceptionHandler(HttpMessageNotReadableException.class)
-        public ResponseEntity<ErrorDetails> handleJsonParseError(HttpMessageNotReadableException ex) {
+        public ResponseEntity<ErrorDetails> handleJsonParseError(HttpMessageNotReadableException ex,
+                        HttpServletRequest request) {
+                log.warn("JSON parse error: path={}, error={}", request.getRequestURI(), ex.getMessage());
+
+                String message = ex.getMessage();
+                String details = "Malformed JSON request";
+
+                // Enum parse hatası kontrolü
+                if (message != null && message.contains("No enum constant")) {
+                        // "No enum constant com.beratcan.app.entity.enums.ExamType.INVALID" gibi bir
+                        // mesaj
+                        details = "Geçersiz enum değeri. Lütfen geçerli bir değer gönderin.";
+                        if (!isProduction()) {
+                                details = message; // Dev modda detaylı mesaj
+                        }
+                } else if (message != null && message.contains("JSON parse error")) {
+                        details = "JSON formatı hatalı. Lütfen request body'nin doğru formatta olduğundan emin olun.";
+                }
+
                 ErrorDetails errorDetails = buildErrorDetails(
-                                "Malformed JSON request",
-                                "Please ensure that the request body is correctly formatted.",
+                                isProduction() ? "Invalid request format" : message,
+                                details,
                                 HttpStatus.BAD_REQUEST);
                 return ResponseEntity.badRequest().body(errorDetails);
         }

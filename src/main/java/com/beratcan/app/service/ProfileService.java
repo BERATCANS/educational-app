@@ -7,12 +7,7 @@ import com.beratcan.app.dto.request.UpdateQuestionTargetRequest;
 import com.beratcan.app.dto.response.QuestionTargetResponse;
 import com.beratcan.app.dto.response.StreakResponse;
 import com.beratcan.app.entity.User;
-import com.beratcan.app.entity.enums.City;
 import com.beratcan.app.entity.enums.ExamType;
-import com.beratcan.app.entity.enums.FieldType;
-import com.beratcan.app.entity.enums.Gender;
-import com.beratcan.app.entity.enums.GradeLevel;
-import com.beratcan.app.entity.enums.SchoolType;
 import com.beratcan.app.exception.BadRequestException;
 import com.beratcan.app.exception.ConflictException;
 import com.beratcan.app.repository.UserRepository;
@@ -48,29 +43,28 @@ public class ProfileService {
         }
         User user = userService.getUserById(userId);
 
-        if (StringUtils.hasText(request.getExamType())) {
-            ExamType examType = parseEnum(ExamType.class, request.getExamType(), "examType");
-            user.setExamType(examType);
+        // ExamType güncelle
+        if (request.getExamType() != null) {
+            user.setExamType(request.getExamType());
         } else {
             user.setExamType(null);
         }
 
-        if (StringUtils.hasText(request.getGradeLevel())) {
-            GradeLevel gradeLevel = parseEnum(GradeLevel.class, request.getGradeLevel(), "gradeLevel");
-            user.setGradeLevel(gradeLevel);
+        // GradeLevel güncelle
+        if (request.getGradeLevel() != null) {
+            user.setGradeLevel(request.getGradeLevel());
         } else {
             user.setGradeLevel(null);
         }
 
+        // YKS için özel kontroller (validator zaten kontrol ediyor, burada sadece set
+        // ediyoruz)
         if (user.getExamType() == ExamType.YKS) {
-            if (!StringUtils.hasText(request.getFieldType()) || !StringUtils.hasText(request.getSchoolType())) {
-                throw new BadRequestException("YKS için alan ve okul türü zorunludur");
-            }
-            FieldType fieldType = parseEnum(FieldType.class, request.getFieldType(), "fieldType");
-            SchoolType schoolType = parseEnum(SchoolType.class, request.getSchoolType(), "schoolType");
-            user.setFieldType(fieldType);
-            user.setSchoolType(schoolType);
+            // Validator zaten null kontrolü yaptı, burada direkt set edebiliriz
+            user.setFieldType(request.getFieldType());
+            user.setSchoolType(request.getSchoolType());
         } else {
+            // YKS değilse (LGS, KPSS, DIGER) bu alanları temizle
             user.setFieldType(null);
             user.setSchoolType(null);
         }
@@ -123,13 +117,13 @@ public class ProfileService {
             updated = true;
         }
 
-        if (StringUtils.hasText(request.getGender())) {
-            user.setGender(parseEnum(Gender.class, request.getGender(), "gender"));
+        if (request.getGender() != null) {
+            user.setGender(request.getGender());
             updated = true;
         }
 
-        if (StringUtils.hasText(request.getCity())) {
-            user.setCity(parseEnum(City.class, request.getCity(), "city"));
+        if (request.getCity() != null) {
+            user.setCity(request.getCity());
             updated = true;
         }
 
@@ -162,14 +156,6 @@ public class ProfileService {
 
         user.setPassword(passwordEncoder.encode(request.getNewPassword()));
         userRepository.save(user);
-    }
-
-    private <E extends Enum<E>> E parseEnum(Class<E> enumClass, String value, String fieldName) {
-        try {
-            return Enum.valueOf(enumClass, value.trim());
-        } catch (Exception e) {
-            throw new BadRequestException("Geçersiz " + fieldName + " değeri: " + value);
-        }
     }
 
     @Transactional(readOnly = true)
