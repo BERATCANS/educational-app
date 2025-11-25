@@ -1,21 +1,15 @@
 package com.beratcan.app.service;
 
-import com.beratcan.app.dto.request.DiscountCodeRequest;
-import com.beratcan.app.dto.response.DiscountCodeResponse;
 import com.beratcan.app.dto.response.DiscountValidationResult;
 import com.beratcan.app.entity.Book;
 import com.beratcan.app.entity.Cart;
 import com.beratcan.app.entity.CartItem;
 import com.beratcan.app.entity.DiscountCode;
-import com.beratcan.app.entity.Publisher;
 import com.beratcan.app.entity.User;
 import com.beratcan.app.exception.BadRequestException;
-import com.beratcan.app.exception.ConflictException;
 import com.beratcan.app.exception.DiscountCodeNotFoundException;
-import com.beratcan.app.repository.BookRepository;
 import com.beratcan.app.repository.DiscountCodeRepository;
 import com.beratcan.app.repository.DiscountCodeUsageRepository;
-import com.beratcan.app.repository.PublisherRepository;
 import com.beratcan.app.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -26,7 +20,6 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -37,8 +30,6 @@ public class DiscountCodeService {
     private final DiscountCodeRepository discountCodeRepository;
     private final DiscountCodeUsageRepository discountCodeUsageRepository;
     private final UserRepository userRepository;
-    private final PublisherRepository publisherRepository;
-    private final BookRepository bookRepository;
 
     /**
      * İndirim kodunu validate et ve uygulanabilir mi kontrol et
@@ -214,82 +205,4 @@ public class DiscountCodeService {
                 code.getCode(), code.getUsedCount());
     }
 
-    /**
-     * Admin: İndirim kodu oluştur
-     */
-    @Transactional
-    public DiscountCodeResponse createDiscountCode(DiscountCodeRequest request) {
-        log.info("Creating discount code: code={}", request.getCode());
-
-        // Kod zaten var mı?
-        if (discountCodeRepository.existsByCode(request.getCode())) {
-            throw new ConflictException("Bu indirim kodu zaten mevcut: " + request.getCode());
-        }
-
-        DiscountCode discountCode = new DiscountCode();
-        discountCode.setCode(request.getCode().toUpperCase());
-        discountCode.setDescription(request.getDescription());
-        discountCode.setDiscountType(request.getDiscountType());
-        discountCode.setDiscountValue(request.getDiscountValue());
-        discountCode.setUsageLimit(request.getUsageLimit());
-        discountCode.setMinCartTotal(request.getMinCartTotal());
-        discountCode.setMaxCartTotal(request.getMaxCartTotal());
-        discountCode.setValidFrom(request.getValidFrom());
-        discountCode.setValidUntil(request.getValidUntil());
-        discountCode.setIsActive(request.getIsActive() != null ? request.getIsActive() : true);
-        discountCode.setMaxUsagePerUser(request.getMaxUsagePerUser());
-
-        // Yayınevi
-        if (request.getApplicablePublisherId() != null) {
-            Publisher publisher = publisherRepository.findById(request.getApplicablePublisherId())
-                    .orElseThrow(() -> new com.beratcan.app.exception.PublisherNotFoundException(
-                            request.getApplicablePublisherId()));
-            discountCode.setApplicablePublisher(publisher);
-        }
-
-        // Kitaplar
-        if (request.getApplicableBookIds() != null && !request.getApplicableBookIds().isEmpty()) {
-            Set<Book> books = request.getApplicableBookIds().stream()
-                    .map(bookId -> bookRepository.findById(bookId)
-                            .orElseThrow(() -> new com.beratcan.app.exception.BookNotFoundException(bookId)))
-                    .collect(Collectors.toSet());
-            discountCode.setApplicableBooks(books);
-        }
-
-        discountCode = discountCodeRepository.save(discountCode);
-        log.info("Discount code created successfully: id={}, code={}", discountCode.getId(), discountCode.getCode());
-
-        return toDiscountCodeResponse(discountCode);
-    }
-
-    /**
-     * DiscountCode'u DiscountCodeResponse'a dönüştür
-     */
-    private DiscountCodeResponse toDiscountCodeResponse(DiscountCode code) {
-        DiscountCodeResponse response = new DiscountCodeResponse();
-        response.setId(code.getId());
-        response.setCode(code.getCode());
-        response.setDescription(code.getDescription());
-        response.setDiscountType(code.getDiscountType());
-        response.setDiscountValue(code.getDiscountValue());
-        response.setUsageLimit(code.getUsageLimit());
-        response.setUsedCount(code.getUsedCount());
-        response.setMinCartTotal(code.getMinCartTotal());
-        response.setMaxCartTotal(code.getMaxCartTotal());
-        response.setValidFrom(code.getValidFrom());
-        response.setValidUntil(code.getValidUntil());
-        response.setIsActive(code.getIsActive());
-        response.setMaxUsagePerUser(code.getMaxUsagePerUser());
-        response.setCreatedAt(code.getCreatedAt());
-        response.setUpdatedAt(code.getUpdatedAt());
-
-        if (code.getApplicablePublisher() != null) {
-            response.setApplicablePublisherName(code.getApplicablePublisher().getName());
-        }
-        if (code.getApplicableBooks() != null) {
-            response.setApplicableBookCount(code.getApplicableBooks().size());
-        }
-
-        return response;
-    }
 }

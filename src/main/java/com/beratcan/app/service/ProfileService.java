@@ -166,7 +166,7 @@ public class ProfileService {
 
     private <E extends Enum<E>> E parseEnum(Class<E> enumClass, String value, String fieldName) {
         try {
-            return Enum.valueOf(enumClass, value.trim().toUpperCase());
+            return Enum.valueOf(enumClass, value.trim());
         } catch (Exception e) {
             throw new BadRequestException("Geçersiz " + fieldName + " değeri: " + value);
         }
