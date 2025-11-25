@@ -21,6 +21,10 @@ public class JwtResponse {
     private String email; // Email
     private String role; // Kullanıcı rolü (STUDENT, TEACHER, ADMIN)
 
+    // Streak güncellendi mi? (sadece o gün ilk girişte true)
+    // Frontend bu flag'i görürse /api/profile/streak endpoint'ini çağırabilir
+    private Boolean streakUpdated; // true: streak güncellendi, false/null: değişmedi
+
     // Backward compatibility için eski constructor
     @Deprecated
     public JwtResponse(String token, String username, String role) {

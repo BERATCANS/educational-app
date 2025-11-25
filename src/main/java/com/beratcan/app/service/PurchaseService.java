@@ -26,6 +26,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -41,6 +42,7 @@ public class PurchaseService {
     private final BookRepository bookRepository;
     private final UserRepository userRepository;
     private final CartRepository cartRepository;
+    private final DiscountCodeService discountCodeService;
 
     @Transactional
     public PurchaseResponse buyBook(Long userId, Long bookId, PurchaseRequest request) {
@@ -288,48 +290,100 @@ public class PurchaseService {
                     String.join(", ", validationErrors));
         }
 
-        // ADIM 2: TEK SEFERDE tüm sepet için ödeme işlemini yap
+        // ADIM 2: İndirim kontrolü ve uygulama
+        BigDecimal discountAmount = BigDecimal.ZERO;
+        BigDecimal finalTotalAmount = totalAmount;
+
+        if (cart.getAppliedDiscountCode() != null) {
+            // İndirim kodunu tekrar validate et (son kontrol)
+            com.beratcan.app.dto.response.DiscountValidationResult validation = discountCodeService
+                    .validateDiscountCode(cart.getAppliedDiscountCode().getCode(), userId, cart);
+
+            if (validation.isValid()) {
+                discountAmount = validation.getDiscountAmount();
+                finalTotalAmount = totalAmount.subtract(discountAmount);
+                log.info("Discount applied: userId={}, code={}, discountAmount={}, finalTotal={}",
+                        userId, cart.getAppliedDiscountCode().getCode(), discountAmount, finalTotalAmount);
+            } else {
+                log.warn("Discount code validation failed during checkout: userId={}, code={}, error={}",
+                        userId, cart.getAppliedDiscountCode().getCode(), validation.getErrorMessage());
+                // İndirim geçersiz, devam et ama indirimsiz
+                cart.setAppliedDiscountCode(null);
+                cart.setDiscountAmount(null);
+                cart.setTotalPriceAfterDiscount(null);
+            }
+        }
+
+        // ADIM 3: TEK SEFERDE tüm sepet için ödeme işlemini yap
         String transactionId = generateTransactionId();
-        log.info("Processing bulk payment: userId={}, bookCount={}, totalAmount={}, transactionId={}",
-                userId, validBooks.size(), totalAmount, transactionId);
+        log.info(
+                "Processing bulk payment: userId={}, bookCount={}, totalAmount={}, discountAmount={}, finalTotal={}, transactionId={}",
+                userId, validBooks.size(), totalAmount, discountAmount, finalTotalAmount, transactionId);
 
         PurchaseRequest paymentRequest = new PurchaseRequest();
         paymentRequest.setPaymentMethod("Sepet ile satın alma");
 
         // Dummy purchase objesi oluştur (sadece processPayment için)
         Purchase dummyPurchase = new Purchase();
-        dummyPurchase.setPrice(totalAmount); // Toplam tutar
+        dummyPurchase.setPrice(finalTotalAmount); // İndirim sonrası toplam tutar
         dummyPurchase.setTransactionId(transactionId);
 
         boolean paymentSuccess = processPayment(dummyPurchase, paymentRequest);
 
-        // ADIM 3: Ödeme başarısız ise hiçbir şey yapma
+        // ADIM 4: Ödeme başarısız ise hiçbir şey yapma
         if (!paymentSuccess) {
-            log.error("Bulk payment failed: userId={}, totalAmount={}, transactionId={}",
-                    userId, totalAmount, transactionId);
+            log.error("Bulk payment failed: userId={}, finalTotalAmount={}, transactionId={}",
+                    userId, finalTotalAmount, transactionId);
             throw new ExternalServiceException("Ödeme işlemi başarısız oldu. Toplam tutar: " +
-                    totalAmount + " TL. Lütfen tekrar deneyin.");
+                    finalTotalAmount + " TL. Lütfen tekrar deneyin.");
         }
 
-        log.info("Bulk payment successful: userId={}, totalAmount={}, transactionId={}",
-                userId, totalAmount, transactionId);
+        log.info("Bulk payment successful: userId={}, finalTotalAmount={}, discountAmount={}, transactionId={}",
+                userId, finalTotalAmount, discountAmount, transactionId);
 
-        // ADIM 4: Ödeme başarılı - Tüm kitaplar için Purchase kayıtları oluştur
+        // ADIM 5: İndirim kodunu kullan (kaydet)
+        if (cart.getAppliedDiscountCode() != null && discountAmount.compareTo(BigDecimal.ZERO) > 0) {
+            discountCodeService.useDiscountCode(
+                    cart.getAppliedDiscountCode().getId(),
+                    userId,
+                    transactionId);
+        }
+
+        // ADIM 6: Ödeme başarılı - Tüm kitaplar için Purchase kayıtları oluştur
         List<PurchaseResponse> successfulPurchases = new ArrayList<>();
         LocalDateTime purchaseDate = LocalDateTime.now();
+
+        // Her kitap için indirim tutarını hesapla (proportional)
+        BigDecimal discountPerBook = BigDecimal.ZERO;
+        if (discountAmount.compareTo(BigDecimal.ZERO) > 0 && validBooks.size() > 0) {
+            discountPerBook = discountAmount.divide(
+                    new BigDecimal(validBooks.size()), 2, RoundingMode.HALF_UP);
+        }
 
         for (Book book : validBooks) {
             log.debug("Creating purchase record: userId={}, bookId={}, transactionId={}",
                     userId, book.getId(), transactionId);
 
+            BigDecimal bookDiscount = discountPerBook;
+            BigDecimal bookFinalPrice = book.getPrice().subtract(bookDiscount);
+
             Purchase purchase = new Purchase();
             purchase.setUser(user);
             purchase.setBook(book);
-            purchase.setPrice(book.getPrice());
+            purchase.setPrice(book.getPrice()); // İndirim öncesi fiyat
             purchase.setPurchaseDate(purchaseDate);
             purchase.setPaymentMethod("Sepet ile satın alma");
             purchase.setTransactionId(transactionId); // Aynı transaction ID
             purchase.setStatus(PurchaseStatus.COMPLETED);
+
+            // İndirim bilgileri
+            if (cart.getAppliedDiscountCode() != null && discountAmount.compareTo(BigDecimal.ZERO) > 0) {
+                purchase.setDiscountCode(cart.getAppliedDiscountCode());
+                purchase.setDiscountAmount(bookDiscount);
+                purchase.setFinalPrice(bookFinalPrice);
+            } else {
+                purchase.setFinalPrice(book.getPrice()); // İndirim yoksa normal fiyat
+            }
 
             // Kitabı kullanıcının kütüphanesine ekle
             try {

@@ -128,12 +128,15 @@ public class UserService {
     }
 
     /**
-     * Kullanıcı doğrulama (token oluşturma AuthService'de yapılıyor)
+     * Kullanıcı kimlik bilgilerini doğrular (email/username + password)
+     * Token oluşturma ve streak güncelleme AuthService'de yapılıyor
      * 
-     * @param request Login request
-     * @return User entity (token oluşturma için)
+     * @param request Login request (identifier, password)
+     * @return User entity (doğrulama başarılıysa)
+     * @throws BadRequestException   Şifre yanlışsa
+     * @throws UserNotFoundException Kullanıcı bulunamazsa
      */
-    public User login(LoginRequest request) {
+    public User validateUserCredentials(LoginRequest request) {
         if (request == null) {
             throw new BadRequestException("Login request cannot be null");
         }

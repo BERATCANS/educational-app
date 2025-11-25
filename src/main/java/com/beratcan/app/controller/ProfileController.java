@@ -7,6 +7,7 @@ import com.beratcan.app.dto.request.UpdateQuestionTargetRequest;
 import com.beratcan.app.dto.response.ProfileAcademicResponse;
 import com.beratcan.app.dto.response.ProfileDetailsResponse;
 import com.beratcan.app.dto.response.QuestionTargetResponse;
+import com.beratcan.app.dto.response.StreakResponse;
 import com.beratcan.app.dto.response.UserResponse;
 import com.beratcan.app.entity.User;
 import com.beratcan.app.service.ProfileService;
@@ -98,5 +99,12 @@ public class ProfileController {
             Authentication authentication) {
         Long userId = Long.parseLong(authentication.getName());
         return ResponseEntity.ok(profileService.updateQuestionTarget(userId, request));
+    }
+
+    @GetMapping("/streak")
+    @RateLimit(requestsPerMinute = 20, keyType = "USER", message = "Streak bilgisi sık isteniyor, lütfen daha sonra deneyin.")
+    public ResponseEntity<StreakResponse> getStreak(Authentication authentication) {
+        Long userId = Long.parseLong(authentication.getName());
+        return ResponseEntity.ok(profileService.getStreak(userId));
     }
 }

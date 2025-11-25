@@ -97,4 +97,19 @@ public class CartController {
                 "purchases", purchases,
                 "totalItems", purchases.size()));
     }
+
+    @PostMapping("/apply-discount")
+    @RateLimit(requestsPerMinute = 10, keyType = "USER", message = "Too many discount code attempts. Please try again later.")
+    public ResponseEntity<CartResponse> applyDiscountCode(
+            @RequestParam String code,
+            Authentication authentication) {
+        Long userId = Long.parseLong(authentication.getName());
+        return ResponseEntity.ok(cartService.applyDiscountCode(userId, code));
+    }
+
+    @DeleteMapping("/remove-discount")
+    public ResponseEntity<CartResponse> removeDiscountCode(Authentication authentication) {
+        Long userId = Long.parseLong(authentication.getName());
+        return ResponseEntity.ok(cartService.removeDiscountCode(userId));
+    }
 }

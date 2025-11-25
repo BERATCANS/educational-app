@@ -34,6 +34,7 @@ public class CartService {
         private final CartItemRepository cartItemRepository;
         private final UserRepository userRepository;
         private final BookRepository bookRepository;
+        private final DiscountCodeService discountCodeService;
 
         /**
          * Kullanıcının sepetini getir, yoksa oluştur
@@ -208,6 +209,13 @@ public class CartService {
                                 .reduce(BigDecimal.ZERO, BigDecimal::add);
                 response.setTotalPrice(totalPrice);
 
+                // İndirim bilgilerini ekle
+                if (cart.getAppliedDiscountCode() != null) {
+                        response.setAppliedDiscountCode(cart.getAppliedDiscountCode().getCode());
+                        response.setDiscountAmount(cart.getDiscountAmount());
+                        response.setTotalPriceAfterDiscount(cart.getTotalPriceAfterDiscount());
+                }
+
                 return response;
         }
 
@@ -233,5 +241,68 @@ public class CartService {
                 response.setPriceChanged(priceChanged);
 
                 return response;
+        }
+
+        /**
+         * Sepete indirim kodu uygula
+         */
+        @Transactional
+        public CartResponse applyDiscountCode(Long userId, String discountCode) {
+                log.info("Applying discount code to cart: userId={}, code={}", userId, discountCode);
+
+                Cart cart = getOrCreateCart(userId);
+
+                // İndirim kodunu validate et
+                com.beratcan.app.dto.response.DiscountValidationResult validation = discountCodeService
+                                .validateDiscountCode(discountCode, userId, cart);
+
+                if (!validation.isValid()) {
+                        log.warn("Discount code validation failed: userId={}, code={}, error={}",
+                                        userId, discountCode, validation.getErrorMessage());
+                        throw new BadRequestException(validation.getErrorMessage());
+                }
+
+                // Sepete uygula
+                cart.setAppliedDiscountCode(validation.getDiscountCode());
+                cart.setDiscountAmount(validation.getDiscountAmount());
+
+                // İndirim sonrası toplamı hesapla
+                BigDecimal cartTotal = calculateCartTotal(cart);
+                cart.setTotalPriceAfterDiscount(cartTotal.subtract(validation.getDiscountAmount()));
+
+                cartRepository.save(cart);
+
+                log.info("Discount code applied successfully: userId={}, code={}, discountAmount={}",
+                                userId, discountCode, validation.getDiscountAmount());
+
+                return mapToResponse(cart);
+        }
+
+        /**
+         * Sepetten indirim kodunu kaldır
+         */
+        @Transactional
+        public CartResponse removeDiscountCode(Long userId) {
+                log.info("Removing discount code from cart: userId={}", userId);
+
+                Cart cart = getOrCreateCart(userId);
+                cart.setAppliedDiscountCode(null);
+                cart.setDiscountAmount(null);
+                cart.setTotalPriceAfterDiscount(null);
+                cartRepository.save(cart);
+
+                log.info("Discount code removed successfully: userId={}", userId);
+
+                return mapToResponse(cart);
+        }
+
+        /**
+         * Sepet toplamını hesapla
+         */
+        private BigDecimal calculateCartTotal(Cart cart) {
+                return cart.getItems().stream()
+                                .map(item -> item.getBook().getPrice())
+                                .filter(price -> price != null)
+                                .reduce(BigDecimal.ZERO, BigDecimal::add);
         }
 }

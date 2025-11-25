@@ -27,7 +27,17 @@ public class Purchase {
     private Book book;
 
     @Column(nullable = false, precision = 10, scale = 2)
-    private BigDecimal price; // Satın alma anındaki fiyat
+    private BigDecimal price; // Satın alma anındaki fiyat (indirim öncesi)
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "discount_code_id")
+    private DiscountCode discountCode; // Kullanılan indirim kodu (varsa)
+
+    @Column(precision = 10, scale = 2)
+    private BigDecimal discountAmount; // Uygulanan indirim tutarı
+
+    @Column(precision = 10, scale = 2)
+    private BigDecimal finalPrice; // İndirim sonrası ödenen tutar
 
     @Column(nullable = false)
     private LocalDateTime purchaseDate;

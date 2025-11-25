@@ -5,6 +5,7 @@ import com.beratcan.app.dto.request.UpdatePasswordRequest;
 import com.beratcan.app.dto.request.UpdateProfileRequest;
 import com.beratcan.app.dto.request.UpdateQuestionTargetRequest;
 import com.beratcan.app.dto.response.QuestionTargetResponse;
+import com.beratcan.app.dto.response.StreakResponse;
 import com.beratcan.app.entity.User;
 import com.beratcan.app.entity.enums.City;
 import com.beratcan.app.entity.enums.ExamType;
@@ -202,5 +203,28 @@ public class ProfileService {
         user.setDailyQuestionTarget(request.getTarget());
         userRepository.save(user);
         return getQuestionTarget(userId);
+    }
+
+    /**
+     * Kullanıcının streak (günlük giriş serisi) bilgisini döndürür
+     * 
+     * @param userId Kullanıcı ID
+     * @return StreakResponse (currentStreak, longestStreak, lastLoginDate,
+     *         loggedInToday)
+     */
+    @Transactional(readOnly = true)
+    public StreakResponse getStreak(Long userId) {
+        User user = userService.getUserById(userId);
+        LocalDate today = LocalDate.now();
+        LocalDate lastLogin = user.getLastLoginDate();
+
+        boolean loggedInToday = lastLogin != null && lastLogin.equals(today);
+
+        return StreakResponse.builder()
+                .currentStreak(user.getCurrentStreak() != null ? user.getCurrentStreak() : 0)
+                .longestStreak(user.getLongestStreak() != null ? user.getLongestStreak() : 0)
+                .lastLoginDate(lastLogin != null ? lastLogin.toString() : null)
+                .loggedInToday(loggedInToday)
+                .build();
     }
 }

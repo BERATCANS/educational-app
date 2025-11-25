@@ -5,6 +5,7 @@ import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -69,6 +70,15 @@ public class User {
 
         @Column(nullable = false, columnDefinition = "INT DEFAULT 200")
         private Integer dailyQuestionTarget = 200;
+
+        @Column(nullable = false, columnDefinition = "INT DEFAULT 0")
+        private Integer currentStreak = 0; // Mevcut günlük giriş serisi
+
+        @Column(nullable = false, columnDefinition = "INT DEFAULT 0")
+        private Integer longestStreak = 0; // En uzun günlük giriş serisi
+
+        @Column
+        private LocalDate lastLoginDate; // Son giriş tarihi (nullable - ilk girişte null olabilir)
 
         @ManyToMany
         @JoinTable(name = "user_books", joinColumns = @JoinColumn(name = "user_id"), inverseJoinColumns = @JoinColumn(name = "book_id"), uniqueConstraints = @UniqueConstraint(name = "uk_user_book", columnNames = {
