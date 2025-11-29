@@ -50,7 +50,7 @@ public class ProfileController {
     @PutMapping("/academic")
     @RateLimit(requestsPerMinute = 10, keyType = "USER", message = "Akademik bilgileri sık değiştiremezsiniz.")
     public ResponseEntity<ProfileAcademicResponse> updateAcademicInfo(
-            @Valid @RequestBody UpdateAcademicInfoRequest request,
+            @RequestBody UpdateAcademicInfoRequest request,
             Authentication authentication) {
         Long userId = Long.parseLong(authentication.getName());
         User updated = profileService.updateAcademicInfo(userId, request);
@@ -68,7 +68,7 @@ public class ProfileController {
     @PutMapping("/details")
     @RateLimit(requestsPerMinute = 10, keyType = "USER", message = "Profil bilgilerini sık değiştiremezsiniz.")
     public ResponseEntity<ProfileDetailsResponse> updateProfileDetails(
-            @Valid @RequestBody UpdateProfileRequest request,
+            @RequestBody UpdateProfileRequest request,
             Authentication authentication) {
         Long userId = Long.parseLong(authentication.getName());
         User updated = profileService.updateProfileDetails(userId, request);
