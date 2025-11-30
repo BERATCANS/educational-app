@@ -25,6 +25,9 @@ public class JwtResponse {
     // Frontend bu flag'i görürse /api/profile/streak endpoint'ini çağırabilir
     private Boolean streakUpdated; // true: streak güncellendi, false/null: değişmedi
 
+    // Email doğrulanmamışsa bilgilendirme mesajı
+    private String emailVerificationMessage; // null: email doğrulanmış, string: doğrulama mesajı
+
     // Backward compatibility için eski constructor
     @Deprecated
     public JwtResponse(String token, String username, String role) {

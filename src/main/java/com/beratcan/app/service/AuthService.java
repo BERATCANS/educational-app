@@ -41,15 +41,9 @@ public class AuthService {
         // UserService ile kullanıcı kimlik bilgilerini doğrula
         User user = userService.validateUserCredentials(request);
 
-        // Email doğrulanmamışsa giriş yapamaz
-        if (!user.getEmailVerified()) {
-            log.warn("Login blocked - email not verified: userId={}, email={}",
-                    user.getId(), user.getEmail());
-            throw new BadRequestException(
-                    "Email adresiniz doğrulanmamış. Lütfen email kutunuzu kontrol edin ve doğrulama linkine tıklayın. "
-                            +
-                            "Email gelmediyse 'Tekrar Email Gönder' butonuna tıklayarak yeni bir doğrulama email'i alabilirsiniz.");
-        }
+        // Email doğrulama zorunlu değil - kullanıcı email doğrulamadan da login
+        // yapabilir
+        // Sadece bilgilendirme mesajı gönderilecek
 
         // Streak güncelleme mantığı - o gün ilk giriş mi kontrol et
         boolean streakUpdated = updateStreak(user);
@@ -72,6 +66,12 @@ public class AuthService {
         // Streak güncellendi mi? Frontend bu flag'i görürse /api/profile/streak
         // endpoint'ini çağırabilir
         response.setStreakUpdated(streakUpdated);
+
+        // Email doğrulanmamışsa bilgilendirme mesajı ekle
+        if (!user.getEmailVerified()) {
+            response.setEmailVerificationMessage(
+                    "Lütfen email adresinizi doğrulayın. Email kutunuzu kontrol edin ve doğrulama linkine tıklayın.");
+        }
 
         if (streakUpdated) {
             log.info("User logged in successfully: {} (ID: {}), Streak updated: {}",

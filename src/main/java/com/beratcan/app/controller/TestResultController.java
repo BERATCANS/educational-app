@@ -12,6 +12,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -95,16 +96,13 @@ public class TestResultController {
         return ResponseEntity.ok(response);
     }
 
-    // Kullanıcının belirli bir kitaptaki kendi test sonuçları (pagination destekli)
+    // Kullanıcının belirli bir kitaptaki kendi test sonuçları
     @GetMapping("/book/{bookId}")
-    public ResponseEntity<PageResponse<TestResultResponse>> getMyTestResultsByBook(
+    public ResponseEntity<List<TestResultResponse>> getMyTestResultsByBook(
             @PathVariable Long bookId,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "" + AppConstants.DEFAULT_PAGE_SIZE) int size,
             Authentication authentication) {
         Long userId = Long.parseLong(authentication.getName());
-        PageResponse<TestResultResponse> results = testResultService.getUserTestResultsByBookId(userId, bookId, page,
-                size);
+        List<TestResultResponse> results = testResultService.getUserTestResultsByBookId(userId, bookId);
         return ResponseEntity.ok(results);
     }
 }

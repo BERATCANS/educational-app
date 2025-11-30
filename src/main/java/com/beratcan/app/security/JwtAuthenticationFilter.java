@@ -54,8 +54,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     return;
                 }
 
-                // Token geçerli mi kontrol et
-                if (jwtUtil.validateToken(token)) {
+                // Önce access token olarak kontrol et
+                boolean isAccessToken = jwtUtil.isAccessToken(token);
+                boolean isRefreshToken = jwtUtil.isRefreshToken(token);
+
+                // Access token geçerli mi kontrol et
+                if (isAccessToken && jwtUtil.validateToken(token)) {
                     String username = jwtUtil.extractUsername(token);
                     Long userId = jwtUtil.extractUserId(token);
 
@@ -77,8 +81,34 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     SecurityContextHolder.getContext().setAuthentication(authentication);
 
                     log.debug("User authenticated with roles: {}", userDetails.getAuthorities());
+                }
+                // Access token expire olmuşsa ama refresh token geçerliyse, authenticate et
+                // (Sadece /api/users/refresh endpoint'i için)
+                else if (isRefreshToken && jwtUtil.validateToken(token) &&
+                        request.getRequestURI().equals("/api/users/refresh")) {
+                    String username = jwtUtil.extractUsername(token);
+                    Long userId = jwtUtil.extractUserId(token);
+
+                    log.debug("Authenticated refresh request for user: {} (ID: {})", username, userId);
+
+                    // UserDetailsService ile kullanıcıyı yükle (role bilgisi ile birlikte)
+                    UserDetails userDetails = userDetailsService.loadUserByUsername(username);
+
+                    // Authorities (role'ler) ile authentication oluştur
+                    UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
+                            userId.toString(), // Principal (userId)
+                            null, // Credentials (şifre gerekmez)
+                            userDetails.getAuthorities() // ✅ Authorities (role'ler) eklendi!
+                    );
+
+                    authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+
+                    // SecurityContext'e kullanıcıyı ekle
+                    SecurityContextHolder.getContext().setAuthentication(authentication);
+
+                    log.debug("User authenticated with refresh token for refresh endpoint");
                 } else {
-                    log.warn("Invalid token from IP: {}", request.getRemoteAddr());
+                    log.warn("Invalid or expired token from IP: {}", request.getRemoteAddr());
                 }
             }
         } catch (Exception e) {

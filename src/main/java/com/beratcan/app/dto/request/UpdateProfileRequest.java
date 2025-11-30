@@ -8,7 +8,7 @@ import lombok.Data;
 public class UpdateProfileRequest {
     private String firstName;
     private String lastName;
-    private String email;
+    // Email artık burada değil - ayrı endpoint: PUT /api/profile/change-email
     private String phoneNumber;
     private String username;
     private Gender gender;

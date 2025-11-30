@@ -91,28 +91,17 @@ public class EmailVerificationService {
     }
 
     /**
-     * Doğrulama email'i tekrar gönder
-     * Email veya userId ile çağrılabilir
+     * Authenticated kullanıcı için doğrulama email'ini tekrar gönder
+     * userId ile çağrılır (authentication'dan alınır)
      */
     @Transactional
-    public void resendVerificationEmail(String email, Long userId) {
-        User user;
-
-        if (userId != null) {
-            // userId ile bul
-            user = userRepository.findById(userId)
-                    .orElseThrow(() -> new UserNotFoundException("Kullanıcı bulunamadı: " + userId));
-        } else if (email != null && !email.trim().isEmpty()) {
-            // Email format kontrolü
-            String normalizedEmail = email.trim().toLowerCase();
-            if (!isValidEmailFormat(normalizedEmail)) {
-                throw new BadRequestException("Geçersiz email formatı");
-            }
-            user = userRepository.findByEmail(normalizedEmail)
-                    .orElseThrow(() -> new UserNotFoundException("Email bulunamadı: " + normalizedEmail));
-        } else {
-            throw new BadRequestException("Email adresi veya kullanıcı ID'si gereklidir");
+    public void resendVerificationEmail(Long userId) {
+        if (userId == null) {
+            throw new BadRequestException("Kullanıcı ID'si gereklidir");
         }
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new UserNotFoundException("Kullanıcı bulunamadı: " + userId));
 
         if (user.getEmailVerified()) {
             throw new BadRequestException("Email zaten doğrulanmış.");
@@ -121,66 +110,6 @@ public class EmailVerificationService {
         // Yeni token oluştur ve gönder
         sendVerificationEmail(user);
         log.info("Verification email resent: userId={}, email={}", user.getId(), user.getEmail());
-    }
-
-    /**
-     * Doğrulama email'i tekrar gönder (backward compatibility)
-     */
-    @Transactional
-    public void resendVerificationEmail(String email) {
-        resendVerificationEmail(email, null);
-    }
-
-    /**
-     * Email değiştir ve yeni doğrulama email'i gönder
-     * Eski token geçersiz olur, yeni token oluşturulur
-     */
-    @Transactional
-    public void changeEmailAndResendVerification(Long userId, String newEmail) {
-        if (userId == null) {
-            throw new BadRequestException("Kullanıcı ID boş olamaz");
-        }
-
-        if (newEmail == null || newEmail.trim().isEmpty()) {
-            throw new BadRequestException("Email adresi boş olamaz");
-        }
-
-        // Email format kontrolü
-        String normalizedEmail = newEmail.trim().toLowerCase();
-        if (!isValidEmailFormat(normalizedEmail)) {
-            throw new BadRequestException("Geçersiz email formatı");
-        }
-
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new UserNotFoundException("Kullanıcı bulunamadı: " + userId));
-
-        // Email zaten doğrulanmışsa değiştirilemez (güvenlik için)
-        if (user.getEmailVerified()) {
-            throw new BadRequestException(
-                    "Email zaten doğrulanmış. Email değiştirmek için profil ayarlarını kullanın.");
-        }
-
-        // Yeni email başka bir kullanıcı tarafından kullanılıyor mu?
-        if (userRepository.existsByEmail(normalizedEmail)) {
-            throw new BadRequestException("Bu email adresi zaten kullanılıyor.");
-        }
-
-        // Email'i değiştir
-        String oldEmail = user.getEmail();
-        user.setEmail(normalizedEmail);
-
-        // Eski token'ı geçersiz kıl (yeni token oluşturulacak)
-        user.setEmailVerificationToken(null);
-        user.setEmailVerified(false);
-        user.setEmailVerifiedAt(null);
-
-        userRepository.save(user);
-
-        // Yeni email'e doğrulama email'i gönder
-        sendVerificationEmail(user);
-
-        log.info("Email changed and verification sent: userId={}, oldEmail={}, newEmail={}",
-                userId, oldEmail, normalizedEmail);
     }
 
     /**
@@ -197,18 +126,6 @@ public class EmailVerificationService {
 
         mailSender.send(message);
         log.debug("Email sent successfully: to={}, subject={}", to, subject);
-    }
-
-    /**
-     * Email formatını doğrula
-     */
-    private boolean isValidEmailFormat(String email) {
-        if (email == null || email.trim().isEmpty()) {
-            return false;
-        }
-        // Basit format kontrolü
-        return email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$")
-                && email.length() <= 100;
     }
 
     /**

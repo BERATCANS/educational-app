@@ -8,9 +8,12 @@ import lombok.Data;
 
 @Data
 public class ChangeEmailRequest {
-    @NotBlank(message = "Email adresi boş olamaz")
+    @NotBlank(message = "Email doğrulama token'ı boş olamaz")
+    private String verificationToken; // Email verification token (güvenlik için)
+
+    @NotBlank(message = "Yeni email adresi boş olamaz")
     @Email(message = "Geçerli bir email adresi giriniz")
     @Size(max = 100, message = "Email en fazla 100 karakter olabilir")
     @Pattern(regexp = "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$", message = "Geçersiz email formatı")
-    private String email;
+    private String newEmail; // Yeni email
 }

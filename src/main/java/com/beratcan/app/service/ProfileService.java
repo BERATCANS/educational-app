@@ -1,5 +1,6 @@
 package com.beratcan.app.service;
 
+import com.beratcan.app.dto.request.ChangeEmailForVerifiedUserRequest;
 import com.beratcan.app.dto.request.UpdateAcademicInfoRequest;
 import com.beratcan.app.dto.request.UpdatePasswordRequest;
 import com.beratcan.app.dto.request.UpdateProfileRequest;
@@ -13,6 +14,7 @@ import com.beratcan.app.exception.ConflictException;
 import com.beratcan.app.repository.UserRepository;
 import com.beratcan.app.repository.TestResultRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,12 +26,14 @@ import java.time.LocalTime;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class ProfileService {
 
     private final UserService userService;
     private final UserRepository userRepository;
     private final TestResultRepository testResultRepository;
     private final BCryptPasswordEncoder passwordEncoder;
+    private final EmailVerificationService emailVerificationService;
 
     @Transactional(readOnly = true)
     public User getCurrentUser(Long userId) {
@@ -90,13 +94,7 @@ public class ProfileService {
             updated = true;
         }
 
-        if (StringUtils.hasText(request.getEmail()) && !request.getEmail().equalsIgnoreCase(user.getEmail())) {
-            if (userRepository.existsByEmailAndIdNot(request.getEmail(), userId)) {
-                throw new ConflictException("Bu email başka bir kullanıcı tarafından kullanılıyor.");
-            }
-            user.setEmail(request.getEmail().trim());
-            updated = true;
-        }
+        // Email değiştirme artık ayrı endpoint'te: changeEmailForVerifiedUser()
 
         if (StringUtils.hasText(request.getPhoneNumber()) && !request.getPhoneNumber().equals(user.getPhoneNumber())) {
             if (!UserService.PHONE_PATTERN.matcher(request.getPhoneNumber()).matches()) {
@@ -132,6 +130,69 @@ public class ProfileService {
         }
 
         return userRepository.save(user);
+    }
+
+    /**
+     * Authenticated kullanıcı için email değiştirme
+     * Email değiştirildiğinde:
+     * - emailVerified → false yapılır
+     * - emailVerificationToken → null yapılır (yeni token oluşturulacak)
+     * - emailVerifiedAt → null yapılır
+     * - Yeni email'e verification email gönderilir
+     * - Logout yapılmaz (kullanıcı oturumda kalır)
+     */
+    @Transactional
+    public void changeEmail(Long userId, ChangeEmailForVerifiedUserRequest request) {
+        if (request == null || request.getNewEmail() == null || request.getNewEmail().trim().isEmpty()) {
+            throw new BadRequestException("Yeni email adresi boş olamaz");
+        }
+
+        User user = userService.getUserById(userId);
+
+        // Email format kontrolü
+        String normalizedNewEmail = request.getNewEmail().trim().toLowerCase();
+        if (!normalizedNewEmail.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$")) {
+            throw new BadRequestException("Geçersiz email formatı");
+        }
+
+        // Yeni email mevcut email ile aynı mı?
+        String normalizedCurrentEmail = user.getEmail().trim().toLowerCase();
+        if (normalizedCurrentEmail.equals(normalizedNewEmail)) {
+            throw new BadRequestException("Yeni email mevcut email ile aynı olamaz.");
+        }
+
+        // Yeni email başka bir kullanıcı tarafından kullanılıyor mu?
+        if (userRepository.existsByEmailAndIdNot(normalizedNewEmail, userId)) {
+            throw new ConflictException("Bu email başka bir kullanıcı tarafından kullanılıyor.");
+        }
+
+        // Email değiştir
+        String oldEmail = user.getEmail();
+        user.setEmail(normalizedNewEmail);
+
+        // Email verification durumunu sıfırla
+        user.setEmailVerified(false);
+        user.setEmailVerificationToken(null);
+        user.setEmailVerifiedAt(null);
+
+        userRepository.save(user);
+
+        // Yeni email'e verification email gönder
+        emailVerificationService.sendVerificationEmail(user);
+
+        // Logout yapılmaz - kullanıcı oturumda kalır
+
+        log.info(
+                "Email changed: userId={}, oldEmail={}, newEmail={}. Verification email sent. User remains logged in.",
+                userId, oldEmail, normalizedNewEmail);
+    }
+
+    /**
+     * Authenticated kullanıcı için doğrulama email'ini tekrar gönder
+     */
+    @Transactional
+    public void resendVerificationEmail(Long userId) {
+        emailVerificationService.resendVerificationEmail(userId);
     }
 
     @Transactional

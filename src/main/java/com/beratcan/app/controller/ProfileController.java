@@ -1,5 +1,6 @@
 package com.beratcan.app.controller;
 
+import com.beratcan.app.dto.request.ChangeEmailForVerifiedUserRequest;
 import com.beratcan.app.dto.request.UpdateAcademicInfoRequest;
 import com.beratcan.app.dto.request.UpdatePasswordRequest;
 import com.beratcan.app.dto.request.UpdateProfileRequest;
@@ -16,6 +17,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -73,6 +75,33 @@ public class ProfileController {
         Long userId = Long.parseLong(authentication.getName());
         User updated = profileService.updateProfileDetails(userId, request);
         return ResponseEntity.ok(ProfileDetailsResponse.fromUser(updated));
+    }
+
+    @PutMapping("/change-email")
+    @RateLimit(requestsPerMinute = 3, keyType = "USER", message = "Email değiştirme isteği çok sık gönderildi.")
+    public ResponseEntity<Map<String, String>> changeEmail(
+            @Valid @RequestBody ChangeEmailForVerifiedUserRequest request,
+            Authentication authentication) {
+        Long userId = Long.parseLong(authentication.getName());
+
+        profileService.changeEmail(userId, request);
+
+        return ResponseEntity.ok(Map.of(
+                "message",
+                "Email değiştirildi. Yeni email adresinize gönderilen doğrulama linkine tıklayarak email'inizi doğrulayın.",
+                "emailChanged", "true"));
+    }
+
+    @PostMapping("/resend-verification")
+    @RateLimit(requestsPerMinute = 3, keyType = "USER", message = "Tekrar email gönderme isteği çok sık gönderildi.")
+    public ResponseEntity<Map<String, String>> resendVerificationEmail(Authentication authentication) {
+        Long userId = Long.parseLong(authentication.getName());
+
+        profileService.resendVerificationEmail(userId);
+
+        return ResponseEntity.ok(Map.of(
+                "message", "Doğrulama email'i gönderildi. Lütfen email kutunuzu kontrol edin.",
+                "status", "success"));
     }
 
     @PutMapping("/password")

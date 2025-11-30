@@ -41,8 +41,8 @@ public class RateLimitFilter extends OncePerRequestFilter {
     private final RequestMappingHandlerMapping handlerMapping;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    // Default: 60 requests per minute (genel endpoint'ler için)
-    private static final int DEFAULT_REQUESTS_PER_MINUTE = 60;
+    // Default: 500 requests per minute (genel endpoint'ler için - toplam limit)
+    private static final int DEFAULT_REQUESTS_PER_MINUTE = 500;
 
     // Endpoint-specific rate limits
     private static final int LOGIN_RATE_LIMIT = 5; // 5 login per minute per IP

@@ -178,11 +178,10 @@ public class TestResultService {
     }
 
     /**
-     * Kullanıcının belirli bir kitaptaki test sonuçlarını pagination ile getirir
-     * DB seviyesinde filtreleme yapar, memory'ye yük bindirmez
+     * Kullanıcının belirli bir kitaptaki test sonuçlarını getirir
      * JOIN FETCH ile N+1 query problemini önler
      */
-    public PageResponse<TestResultResponse> getUserTestResultsByBookId(Long userId, Long bookId, int page, int size) {
+    public List<TestResultResponse> getUserTestResultsByBookId(Long userId, Long bookId) {
         if (userId == null) {
             throw new BadRequestException("User ID cannot be null");
         }
@@ -194,13 +193,12 @@ public class TestResultService {
         userRepository.findById(userId)
                 .orElseThrow(() -> new UserNotFoundException(userId));
 
-        // DB seviyesinde filtreleme ve pagination
-        Pageable pageable = PageRequest.of(page, size);
-        Page<TestResult> testResultPage = testResultRepository
-                .findByUserIdAndBookId(userId, bookId, pageable);
+        // DB seviyesinde filtreleme (pagination yok)
+        List<TestResult> testResults = testResultRepository
+                .findAllByUserIdAndBookId(userId, bookId);
 
         // DTO'ya çevir
-        List<TestResultResponse> responses = testResultPage.getContent().stream()
+        return testResults.stream()
                 .map(testResult -> {
                     TestResultResponse response = new TestResultResponse();
                     response.setUserId(userId);
@@ -209,11 +207,5 @@ public class TestResultService {
                     return response;
                 })
                 .toList();
-
-        return PageResponse.of(
-                responses,
-                page,
-                size,
-                testResultPage.getTotalElements());
     }
 }

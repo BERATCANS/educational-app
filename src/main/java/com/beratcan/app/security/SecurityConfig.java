@@ -49,10 +49,13 @@ public class SecurityConfig {
                         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html").permitAll()
                         // Public endpoints
                         .requestMatchers("/api/users/register", "/api/users/login").permitAll() // herkes erişebilir
-                        .requestMatchers("/api/users/refresh").permitAll() // ✅ Token yenileme herkese açık
-                        .requestMatchers("/api/users/verify-email", "/api/users/resend-verification",
-                                "/api/users/change-email")
-                        .permitAll() // ✅ Email doğrulama herkese açık
+                        // /api/users/refresh artık authenticated (refresh token ile authenticate
+                        // edilir)
+                        .requestMatchers("/api/users/verify-email")
+                        .permitAll() // ✅ Email doğrulama herkese açık (email verification token ile güvenlik
+                                     // sağlanır)
+                        // /api/users/resend-verification ve /api/users/change-email artık authenticated
+                        // (ProfileController'da)
                         .requestMatchers("/api/books/store").permitAll() // Kitap mağazası herkese açık
                         .anyRequest().authenticated() // ✅ DİĞER TÜM ENDPOINT'LER AUTH GEREKTİRİR!
                 )

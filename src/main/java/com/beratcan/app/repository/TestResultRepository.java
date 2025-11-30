@@ -70,6 +70,20 @@ public interface TestResultRepository extends JpaRepository<TestResult, Long> {
                         @Param("bookId") Long bookId,
                         Pageable pageable);
 
+        /**
+         * Kullanıcının belirli bir kitaptaki test sonuçlarını getirir (pagination yok)
+         * JOIN FETCH ile N+1 query problemini önler
+         */
+        @Query("SELECT tr FROM TestResult tr " +
+                        "JOIN FETCH tr.test t " +
+                        "JOIN FETCH t.topic tp " +
+                        "JOIN FETCH tp.book b " +
+                        "WHERE tr.user.id = :userId AND b.id = :bookId " +
+                        "ORDER BY tr.completedAt DESC")
+        java.util.List<TestResult> findAllByUserIdAndBookId(
+                        @Param("userId") Long userId,
+                        @Param("bookId") Long bookId);
+
         @Query("SELECT COALESCE(SUM(tr.totalQuestions),0) FROM TestResult tr " +
                         "WHERE tr.user.id = :userId AND tr.completedAt BETWEEN :start AND :end")
         Long sumSolvedQuestionsBetween(
