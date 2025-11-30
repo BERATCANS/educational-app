@@ -27,4 +27,9 @@ public class PurchaseResponse {
     private String transactionId;
     private String paymentMethod;
     private String infoMessage; // Bilgilendirme mesajı (error değil)
+    
+    // İndirim bilgileri
+    private String discountCode; // Kullanılan indirim kodu (varsa)
+    private BigDecimal discountAmount; // Uygulanan indirim tutarı
+    private BigDecimal finalPrice; // İndirim sonrası ödenen tutar
 }

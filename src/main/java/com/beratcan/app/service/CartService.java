@@ -114,6 +114,9 @@ public class CartService {
                 log.info("Book added to cart successfully: userId={}, bookId={}, bookTitle={}, price={}, cartItemCount={}",
                                 userId, bookId, book.getTitle(), book.getPrice(), cart.getItems().size());
 
+                // İndirim kodunu re-validate et ve güncelle (sepet tutarı değişti)
+                revalidateAndUpdateDiscountCode(cart, userId);
+
                 CartResponse response = mapToResponse(cart);
                 response.setInfoMessage("'" + book.getTitle() + "' sepete eklendi.");
                 return response;
@@ -145,6 +148,9 @@ public class CartService {
 
                 log.info("Item removed from cart successfully: userId={}, cartItemId={}, bookTitle={}, remainingItems={}",
                                 userId, cartItemId, bookTitle, cart.getItems().size());
+
+                // İndirim kodunu re-validate et ve güncelle (sepet tutarı değişti)
+                revalidateAndUpdateDiscountCode(cart, userId);
 
                 return mapToResponse(cart);
         }
@@ -308,5 +314,46 @@ public class CartService {
                                 .map(item -> item.getBook().getPrice())
                                 .filter(price -> price != null)
                                 .reduce(BigDecimal.ZERO, BigDecimal::add);
+        }
+
+        /**
+         * Sepetteki indirim kodunu re-validate et ve güncelle
+         * Sepete ürün eklenince/çıkarılınca çağrılır
+         */
+        @Transactional
+        private void revalidateAndUpdateDiscountCode(Cart cart, Long userId) {
+                if (cart.getAppliedDiscountCode() == null) {
+                        // İndirim kodu yok, bir şey yapma
+                        return;
+                }
+
+                log.info("Re-validating discount code after cart change: userId={}, code={}", 
+                                userId, cart.getAppliedDiscountCode().getCode());
+
+                // İndirim kodunu yeniden validate et
+                com.beratcan.app.dto.response.DiscountValidationResult validation = discountCodeService
+                                .validateDiscountCode(cart.getAppliedDiscountCode().getCode(), userId, cart);
+
+                if (!validation.isValid()) {
+                        // İndirim kodu geçersiz, kaldır
+                        log.warn("Discount code became invalid after cart change: userId={}, code={}, error={}",
+                                        userId, cart.getAppliedDiscountCode().getCode(), validation.getErrorMessage());
+                        cart.setAppliedDiscountCode(null);
+                        cart.setDiscountAmount(null);
+                        cart.setTotalPriceAfterDiscount(null);
+                        cartRepository.save(cart);
+                } else {
+                        // İndirim kodu geçerli, tutarı yeniden hesapla
+                        BigDecimal newDiscountAmount = validation.getDiscountAmount();
+                        BigDecimal cartTotal = calculateCartTotal(cart);
+                        BigDecimal newTotalAfterDiscount = cartTotal.subtract(newDiscountAmount);
+
+                        cart.setDiscountAmount(newDiscountAmount);
+                        cart.setTotalPriceAfterDiscount(newTotalAfterDiscount);
+                        cartRepository.save(cart);
+
+                        log.info("Discount code re-validated and updated: userId={}, code={}, newDiscountAmount={}, newTotal={}",
+                                        userId, cart.getAppliedDiscountCode().getCode(), newDiscountAmount, newTotalAfterDiscount);
+                }
         }
 }

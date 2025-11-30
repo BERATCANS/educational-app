@@ -177,6 +177,7 @@ public class DiscountCodeService {
 
     /**
      * İndirim kodunu kullan (checkout sırasında)
+     * NOT: Bu metod purchase kayıtları başarıyla oluşturulduktan SONRA çağrılmalı
      */
     @Transactional
     public void useDiscountCode(Long discountCodeId, Long userId, String transactionId) {
@@ -185,6 +186,14 @@ public class DiscountCodeService {
 
         DiscountCode code = discountCodeRepository.findById(discountCodeId)
                 .orElseThrow(() -> new DiscountCodeNotFoundException(discountCodeId));
+
+        // Son limit kontrolü (race condition önleme)
+        // İki kullanıcı aynı anda checkout yaparsa, bu kontrol limit aşımını önler
+        if (code.getUsedCount() >= code.getUsageLimit()) {
+            log.error("Discount code usage limit reached during use: codeId={}, usedCount={}, limit={}",
+                    discountCodeId, code.getUsedCount(), code.getUsageLimit());
+            throw new BadRequestException("Bu indirim kodu kullanım limitine ulaştı");
+        }
 
         // Kullanım sayısını artır
         code.setUsedCount(code.getUsedCount() + 1);

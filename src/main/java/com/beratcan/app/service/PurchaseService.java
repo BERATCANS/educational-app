@@ -308,6 +308,8 @@ public class PurchaseService {
                 log.warn("Discount code validation failed during checkout: userId={}, code={}, error={}",
                         userId, cart.getAppliedDiscountCode().getCode(), validation.getErrorMessage());
                 // İndirim geçersiz, devam et ama indirimsiz
+                // NOT: Kullanıcı indirimsiz ödeme yaptığını görecek (finalTotalAmount = totalAmount)
+                // Bu durumda checkout devam eder, sadece indirim uygulanmaz
                 cart.setAppliedDiscountCode(null);
                 cart.setDiscountAmount(null);
                 cart.setTotalPriceAfterDiscount(null);
@@ -331,6 +333,10 @@ public class PurchaseService {
         boolean paymentSuccess = processPayment(dummyPurchase, paymentRequest);
 
         // ADIM 4: Ödeme başarısız ise hiçbir şey yapma
+        // NOT: Gerçek ödeme gateway'i entegre edilirken dikkat edilmeli:
+        // Eğer purchase kayıtları oluşturulurken hata olursa, transaction rollback olur
+        // ama gerçek ödeme gateway'inde ödeme yapılmış olabilir.
+        // Bu durumda refund işlemi yapılmalı veya idempotent transaction kullanılmalı.
         if (!paymentSuccess) {
             log.error("Bulk payment failed: userId={}, finalTotalAmount={}, transactionId={}",
                     userId, finalTotalAmount, transactionId);
@@ -341,30 +347,35 @@ public class PurchaseService {
         log.info("Bulk payment successful: userId={}, finalTotalAmount={}, discountAmount={}, transactionId={}",
                 userId, finalTotalAmount, discountAmount, transactionId);
 
-        // ADIM 5: İndirim kodunu kullan (kaydet)
-        if (cart.getAppliedDiscountCode() != null && discountAmount.compareTo(BigDecimal.ZERO) > 0) {
-            discountCodeService.useDiscountCode(
-                    cart.getAppliedDiscountCode().getId(),
-                    userId,
-                    transactionId);
-        }
-
-        // ADIM 6: Ödeme başarılı - Tüm kitaplar için Purchase kayıtları oluştur
+        // ADIM 5: Ödeme başarılı - Tüm kitaplar için Purchase kayıtları oluştur
+        // NOT: İndirim kodunu kullanma işlemi purchase kayıtları başarıyla oluşturulduktan SONRA yapılacak
         List<PurchaseResponse> successfulPurchases = new ArrayList<>();
         LocalDateTime purchaseDate = LocalDateTime.now();
 
-        // Her kitap için indirim tutarını hesapla (proportional)
+        // İndirim tutarını kitaplara dağıt (accumulator pattern - rounding sorununu çözer)
+        BigDecimal totalDiscountDistributed = BigDecimal.ZERO;
         BigDecimal discountPerBook = BigDecimal.ZERO;
         if (discountAmount.compareTo(BigDecimal.ZERO) > 0 && validBooks.size() > 0) {
             discountPerBook = discountAmount.divide(
                     new BigDecimal(validBooks.size()), 2, RoundingMode.HALF_UP);
         }
 
+        int bookIndex = 0;
         for (Book book : validBooks) {
             log.debug("Creating purchase record: userId={}, bookId={}, transactionId={}",
                     userId, book.getId(), transactionId);
 
+            // Son kitaba kalan farkı ekle (rounding sorununu çözer)
             BigDecimal bookDiscount = discountPerBook;
+            boolean isLastBook = (bookIndex == validBooks.size() - 1);
+            if (isLastBook && discountAmount.compareTo(BigDecimal.ZERO) > 0) {
+                // Son kitaba kalan farkı ekle
+                BigDecimal remainingDiscount = discountAmount.subtract(totalDiscountDistributed);
+                bookDiscount = remainingDiscount;
+            } else {
+                totalDiscountDistributed = totalDiscountDistributed.add(bookDiscount);
+            }
+            
             BigDecimal bookFinalPrice = book.getPrice().subtract(bookDiscount);
 
             Purchase purchase = new Purchase();
@@ -404,11 +415,25 @@ public class PurchaseService {
             successfulPurchases.add(mapToResponse(savedPurchase));
             log.debug("Purchase record created: purchaseId={}, bookId={}",
                     savedPurchase.getId(), book.getId());
+            
+            bookIndex++; // Sonraki kitap için index'i artır
         }
 
         // Kullanıcıyı kaydet (ownedBooks güncellemeleri için)
         userRepository.save(user);
         log.debug("User library updated: userId={}, newBookCount={}", userId, validBooks.size());
+
+        // ADIM 6: İndirim kodunu kullan (kaydet) - Purchase kayıtları başarıyla oluşturulduktan SONRA
+        // Bu sayede transaction güvenliği sağlanır: Eğer purchase kayıtları oluşturulurken hata olursa,
+        // indirim kodu kullanılmamış olur (transaction rollback)
+        if (cart.getAppliedDiscountCode() != null && discountAmount.compareTo(BigDecimal.ZERO) > 0) {
+            discountCodeService.useDiscountCode(
+                    cart.getAppliedDiscountCode().getId(),
+                    userId,
+                    transactionId);
+            log.info("Discount code used after successful purchase creation: code={}, transactionId={}",
+                    cart.getAppliedDiscountCode().getCode(), transactionId);
+        }
 
         // Sepeti temizle (items ve indirim kodu bilgileri)
         cart.getItems().clear();
@@ -473,6 +498,14 @@ public class PurchaseService {
         response.setStatus(purchase.getStatus());
         response.setTransactionId(purchase.getTransactionId());
         response.setPaymentMethod(purchase.getPaymentMethod());
+        
+        // İndirim bilgilerini ekle
+        if (purchase.getDiscountCode() != null) {
+            response.setDiscountCode(purchase.getDiscountCode().getCode());
+        }
+        response.setDiscountAmount(purchase.getDiscountAmount());
+        response.setFinalPrice(purchase.getFinalPrice());
+        
         return response;
     }
 }
