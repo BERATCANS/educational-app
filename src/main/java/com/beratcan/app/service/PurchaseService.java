@@ -410,8 +410,11 @@ public class PurchaseService {
         userRepository.save(user);
         log.debug("User library updated: userId={}, newBookCount={}", userId, validBooks.size());
 
-        // Sepeti temizle
+        // Sepeti temizle (items ve indirim kodu bilgileri)
         cart.getItems().clear();
+        cart.setAppliedDiscountCode(null);
+        cart.setDiscountAmount(null);
+        cart.setTotalPriceAfterDiscount(null);
         cartRepository.save(cart);
         log.info("Cart cleared after successful checkout: userId={}", userId);
 

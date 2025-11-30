@@ -171,6 +171,10 @@ public class CartService {
 
                 int itemCount = cart.getItems().size();
                 cart.getItems().clear();
+                // İndirim kodu bilgilerini de temizle
+                cart.setAppliedDiscountCode(null);
+                cart.setDiscountAmount(null);
+                cart.setTotalPriceAfterDiscount(null);
                 cartRepository.save(cart);
 
                 log.info("Cart cleared successfully: userId={}, itemsRemoved={}", userId, itemCount);
