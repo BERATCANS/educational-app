@@ -7,7 +7,9 @@ import com.beratcan.app.dto.request.RefreshTokenRequest;
 import com.beratcan.app.dto.request.UserRequest;
 import com.beratcan.app.entity.User;
 import com.beratcan.app.entity.enums.City;
+import com.beratcan.app.dto.request.ResendVerificationRequest;
 import com.beratcan.app.service.AuthService;
+import com.beratcan.app.service.EmailVerificationService;
 import com.beratcan.app.service.UserService;
 
 import jakarta.servlet.http.HttpServletRequest;
@@ -19,7 +21,9 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import jakarta.validation.Valid;
 
 import java.util.Map;
 
@@ -31,12 +35,22 @@ public class UserController {
 
     private final UserService userService;
     private final AuthService authService;
+    private final EmailVerificationService emailVerificationService;
 
     @PostMapping("/register")
     @RateLimit(requestsPerMinute = 3, keyType = "IP", message = "Too many registration attempts. Please try again later.")
-    public ResponseEntity<User> register(@RequestBody UserRequest userRequest) {
+    public ResponseEntity<com.beratcan.app.dto.response.RegisterResponse> register(
+            @RequestBody UserRequest userRequest) {
         User user = userService.registerUser(userRequest);
-        return ResponseEntity.ok(user);
+
+        // Email doğrulanmamışsa özel response döner
+        com.beratcan.app.dto.response.RegisterResponse response = new com.beratcan.app.dto.response.RegisterResponse();
+        response.setUserId(user.getId());
+        response.setEmail(user.getEmail());
+        response.setEmailVerified(user.getEmailVerified());
+        response.setMessage("Kayıt başarılı! Lütfen email adresinizi doğrulayın.");
+
+        return ResponseEntity.ok(response);
     }
 
     @PostMapping("/login")
@@ -96,5 +110,51 @@ public class UserController {
     @Cacheable("cities")
     public City[] getCities() {
         return City.values();
+    }
+
+    /**
+     * Email doğrulama endpoint'i
+     * GET /api/users/verify-email?token=xxx
+     */
+    @GetMapping("/verify-email")
+    @RateLimit(requestsPerMinute = 10, keyType = "IP", message = "Too many verification attempts. Please try again later.")
+    public ResponseEntity<Map<String, String>> verifyEmail(@RequestParam String token) {
+        emailVerificationService.verifyEmail(token);
+        return ResponseEntity.ok(Map.of(
+                "message", "Email başarıyla doğrulandı",
+                "status", "success"));
+    }
+
+    /**
+     * Doğrulama email'ini tekrar gönder
+     * Email veya userId ile çağrılabilir
+     * POST /api/users/resend-verification
+     */
+    @PostMapping("/resend-verification")
+    @RateLimit(requestsPerMinute = 3, keyType = "IP", message = "Too many resend attempts. Please try again later.")
+    public ResponseEntity<Map<String, String>> resendVerification(
+            @RequestBody ResendVerificationRequest request) {
+        emailVerificationService.resendVerificationEmail(request.getEmail(), request.getUserId());
+        return ResponseEntity.ok(Map.of(
+                "message", "Doğrulama email'i gönderildi. Lütfen email kutunuzu kontrol edin.",
+                "status", "success"));
+    }
+
+    /**
+     * Email değiştir ve yeni doğrulama email'i gönder
+     * Sadece email doğrulanmamış kullanıcılar için
+     * POST /api/users/change-email?userId=xxx
+     */
+    @PostMapping("/change-email")
+    @RateLimit(requestsPerMinute = 3, keyType = "IP", message = "Too many email change attempts. Please try again later.")
+    public ResponseEntity<Map<String, String>> changeEmail(
+            @RequestParam Long userId,
+            @Valid @RequestBody com.beratcan.app.dto.request.ChangeEmailRequest request) {
+        emailVerificationService.changeEmailAndResendVerification(userId, request.getEmail());
+        return ResponseEntity.ok(Map.of(
+                "message",
+                "Email değiştirildi ve yeni doğrulama email'i gönderildi. Lütfen yeni email adresinizi kontrol edin.",
+                "status", "success",
+                "email", request.getEmail()));
     }
 }

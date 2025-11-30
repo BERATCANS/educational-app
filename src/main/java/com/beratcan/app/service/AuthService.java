@@ -41,6 +41,16 @@ public class AuthService {
         // UserService ile kullanıcı kimlik bilgilerini doğrula
         User user = userService.validateUserCredentials(request);
 
+        // Email doğrulanmamışsa giriş yapamaz
+        if (!user.getEmailVerified()) {
+            log.warn("Login blocked - email not verified: userId={}, email={}",
+                    user.getId(), user.getEmail());
+            throw new BadRequestException(
+                    "Email adresiniz doğrulanmamış. Lütfen email kutunuzu kontrol edin ve doğrulama linkine tıklayın. "
+                            +
+                            "Email gelmediyse 'Tekrar Email Gönder' butonuna tıklayarak yeni bir doğrulama email'i alabilirsiniz.");
+        }
+
         // Streak güncelleme mantığı - o gün ilk giriş mi kontrol et
         boolean streakUpdated = updateStreak(user);
 

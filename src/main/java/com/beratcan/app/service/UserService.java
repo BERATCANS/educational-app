@@ -22,13 +22,16 @@ public class UserService {
 
     private final UserRepository userRepository;
     private final BCryptPasswordEncoder passwordEncoder;
+    private final EmailVerificationService emailVerificationService;
 
     public static final Pattern PHONE_PATTERN = Pattern.compile(AppConstants.PHONE_NUMBER_PATTERN);
 
     public UserService(UserRepository userRepository,
-            BCryptPasswordEncoder passwordEncoder) { // ✅ Inject edildi
+            BCryptPasswordEncoder passwordEncoder,
+            EmailVerificationService emailVerificationService) {
         this.userRepository = userRepository;
-        this.passwordEncoder = passwordEncoder; // ✅ new yapma
+        this.passwordEncoder = passwordEncoder;
+        this.emailVerificationService = emailVerificationService;
     }
 
     public User registerUser(UserRequest dto) {
@@ -41,16 +44,23 @@ public class UserService {
 
         // Temel alan kontrolleri
         if (dto.getEmail() == null || dto.getEmail().trim().isEmpty()) {
-            throw new BadRequestException("Email cannot be null or empty");
+            throw new BadRequestException("Email boş olamaz");
         }
         if (dto.getUsername() == null || dto.getUsername().trim().isEmpty()) {
-            throw new BadRequestException("Username cannot be null or empty");
+            throw new BadRequestException("Kullanıcı adı boş olamaz");
         }
         if (dto.getPassword() == null || dto.getPassword().trim().isEmpty()) {
-            throw new BadRequestException("Password cannot be null or empty");
+            throw new BadRequestException("Şifre boş olamaz");
         }
         if (dto.getPhoneNumber() == null || dto.getPhoneNumber().trim().isEmpty()) {
-            throw new BadRequestException("Phone number cannot be null or empty");
+            throw new BadRequestException("Telefon numarası boş olamaz");
+        }
+
+        // Email format doğrulama ve normalize et
+        String email = dto.getEmail().trim().toLowerCase();
+        if (!isValidEmailFormat(email)) {
+            log.warn("Invalid email format: email={}", email);
+            throw new BadRequestException("Geçersiz email formatı. Lütfen geçerli bir email adresi giriniz.");
         }
 
         // Telefon doğrulama
@@ -77,7 +87,7 @@ public class UserService {
         User user = new User();
         user.setFirstName(dto.getFirstName());
         user.setLastName(dto.getLastName());
-        user.setEmail(dto.getEmail());
+        user.setEmail(email); // Lowercase ve trim edilmiş email
         user.setPhoneNumber(dto.getPhoneNumber());
         user.setUsername(dto.getUsername());
         user.setPassword(passwordEncoder.encode(dto.getPassword())); // şifreyi hashle
@@ -120,9 +130,23 @@ public class UserService {
         user.setGender(dto.getGender() != null ? Gender.valueOf(dto.getGender()) : Gender.DIGER);
         user.setCity(dto.getCity() != null ? City.valueOf(dto.getCity()) : City.Diğer);
 
+        // Email doğrulama - başlangıçta false
+        user.setEmailVerified(false);
+
         User savedUser = userRepository.save(user);
         log.info("User registered successfully: userId={}, username={}, email={}, role={}",
                 savedUser.getId(), savedUser.getUsername(), savedUser.getEmail(), savedUser.getRole());
+
+        // Email doğrulama email'i gönder
+        try {
+            emailVerificationService.sendVerificationEmail(savedUser);
+            log.info("Verification email sent to new user: userId={}, email={}",
+                    savedUser.getId(), savedUser.getEmail());
+        } catch (Exception e) {
+            log.error("Failed to send verification email during registration: userId={}, email={}",
+                    savedUser.getId(), savedUser.getEmail(), e);
+            // Email gönderilemese bile kullanıcı kaydedildi, sonra tekrar isteyebilir
+        }
 
         return savedUser;
     }
@@ -180,5 +204,33 @@ public class UserService {
         }
         return userRepository.findById(userId)
                 .orElseThrow(() -> new UserNotFoundException(userId));
+    }
+
+    /**
+     * Email formatını doğrula
+     */
+    private boolean isValidEmailFormat(String email) {
+        if (email == null || email.trim().isEmpty()) {
+            return false;
+        }
+        // Temel format kontrolü
+        if (!email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$")) {
+            return false;
+        }
+        // Email çok uzun olmamalı
+        if (email.length() > 100) {
+            return false;
+        }
+        // @ işaretinden önce ve sonra karakter olmalı
+        int atIndex = email.indexOf('@');
+        if (atIndex <= 0 || atIndex >= email.length() - 1) {
+            return false;
+        }
+        // Domain kısmında en az bir nokta olmalı
+        String domain = email.substring(atIndex + 1);
+        if (!domain.contains(".") || domain.startsWith(".") || domain.endsWith(".")) {
+            return false;
+        }
+        return true;
     }
 }

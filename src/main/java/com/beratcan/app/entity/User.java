@@ -80,6 +80,16 @@ public class User {
         @Column
         private LocalDate lastLoginDate; // Son giriş tarihi (nullable - ilk girişte null olabilir)
 
+        // Email doğrulama alanları
+        @Column(nullable = false, columnDefinition = "BOOLEAN DEFAULT FALSE")
+        private Boolean emailVerified = false; // Email doğrulandı mı?
+
+        @Column(length = 100)
+        private String emailVerificationToken; // Email doğrulama token'ı
+
+        @Column
+        private java.time.LocalDateTime emailVerifiedAt; // Email ne zaman doğrulandı
+
         @ManyToMany
         @JoinTable(name = "user_books", joinColumns = @JoinColumn(name = "user_id"), inverseJoinColumns = @JoinColumn(name = "book_id"), uniqueConstraints = @UniqueConstraint(name = "uk_user_book", columnNames = {
                         "user_id", "book_id" }))

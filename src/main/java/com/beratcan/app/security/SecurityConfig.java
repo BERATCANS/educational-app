@@ -50,6 +50,9 @@ public class SecurityConfig {
                         // Public endpoints
                         .requestMatchers("/api/users/register", "/api/users/login").permitAll() // herkes erişebilir
                         .requestMatchers("/api/users/refresh").permitAll() // ✅ Token yenileme herkese açık
+                        .requestMatchers("/api/users/verify-email", "/api/users/resend-verification",
+                                "/api/users/change-email")
+                        .permitAll() // ✅ Email doğrulama herkese açık
                         .requestMatchers("/api/books/store").permitAll() // Kitap mağazası herkese açık
                         .anyRequest().authenticated() // ✅ DİĞER TÜM ENDPOINT'LER AUTH GEREKTİRİR!
                 )

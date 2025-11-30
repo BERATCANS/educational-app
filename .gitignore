@@ -44,3 +44,9 @@ src/main/resources/static/
 ehthumbs.db
 Thumbs.db
 
+### Environment Variables ###
+.env
+.env.local
+.env.*.local
+*.env
+

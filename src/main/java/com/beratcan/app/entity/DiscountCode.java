@@ -23,6 +23,10 @@ public class DiscountCode {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Version
+    @Column(nullable = false)
+    private Long version; // Optimistic locking için version field - concurrent discount code usage'ı önler
+
     @Column(nullable = false, unique = true, length = 50)
     private String code; // "YKS2024", "YENI30" gibi
 

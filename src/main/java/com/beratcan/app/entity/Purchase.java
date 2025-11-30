@@ -46,7 +46,8 @@ public class Purchase {
     @Column(nullable = false)
     private PurchaseStatus status;
 
-    private String transactionId; // Ödeme işlem numarası (isteğe bağlı)
+    @Column(unique = true, length = 100)
+    private String transactionId; // Ödeme işlem numarası (unique - duplicate önleme için)
 
     private String paymentMethod; // Kredi kartı, havale, vb. (isteğe bağlı)
 

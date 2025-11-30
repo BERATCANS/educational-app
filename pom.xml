@@ -91,6 +91,12 @@
             <artifactId>spring-boot-starter-security</artifactId>
         </dependency>
 
+        <!-- Spring Mail (Email gönderme için) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-mail</artifactId>
+        </dependency>
+
         <!-- JWT (JSON Web Token) kütüphanesi -->
         <dependency>
             <groupId>io.jsonwebtoken</groupId>
