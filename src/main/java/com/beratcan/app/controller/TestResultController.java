@@ -7,6 +7,7 @@ import com.beratcan.app.dto.response.PageResponse;
 import com.beratcan.app.dto.response.TestResultResponse;
 import com.beratcan.app.entity.TestResult;
 import com.beratcan.app.service.TestResultService;
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
@@ -29,7 +30,7 @@ public class TestResultController {
     @PostMapping("/submit")
     @RateLimit(requestsPerMinute = 10, keyType = "USER", message = "Too many test submissions. Please try again later.")
     public ResponseEntity<TestResult> submitTest(
-            @RequestBody TestSubmissionRequest request,
+            @Valid @RequestBody TestSubmissionRequest request,
             Authentication authentication) {
         Long userId = Long.parseLong(authentication.getName());
         TestResult result = testResultService.saveTestResult(

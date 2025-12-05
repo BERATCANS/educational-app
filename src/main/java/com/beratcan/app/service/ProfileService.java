@@ -1,6 +1,6 @@
 package com.beratcan.app.service;
 
-import com.beratcan.app.dto.request.ChangeEmailForVerifiedUserRequest;
+import com.beratcan.app.dto.request.ChangeEmailRequest;
 import com.beratcan.app.dto.request.UpdateAcademicInfoRequest;
 import com.beratcan.app.dto.request.UpdatePasswordRequest;
 import com.beratcan.app.dto.request.UpdateProfileRequest;
@@ -142,7 +142,7 @@ public class ProfileService {
      * - Logout yapılmaz (kullanıcı oturumda kalır)
      */
     @Transactional
-    public void changeEmail(Long userId, ChangeEmailForVerifiedUserRequest request) {
+    public void changeEmail(Long userId, ChangeEmailRequest request) {
         if (request == null || request.getNewEmail() == null || request.getNewEmail().trim().isEmpty()) {
             throw new BadRequestException("Yeni email adresi boş olamaz");
         }

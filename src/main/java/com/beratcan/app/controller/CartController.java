@@ -6,6 +6,7 @@ import com.beratcan.app.dto.response.CartResponse;
 import com.beratcan.app.dto.response.PurchaseResponse;
 import com.beratcan.app.service.CartService;
 import com.beratcan.app.service.PurchaseService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -30,7 +31,7 @@ public class CartController {
     @PostMapping("/add")
     @RateLimit(requestsPerMinute = 30, keyType = "USER", message = "Too many cart operations. Please try again later.")
     public ResponseEntity<?> addToCart(
-            @RequestBody AddToCartRequest request,
+            @Valid @RequestBody AddToCartRequest request,
             Authentication authentication) {
         Long userId = Long.parseLong(authentication.getName());
         CartResponse response = cartService.addToCart(userId, request.getBookId());

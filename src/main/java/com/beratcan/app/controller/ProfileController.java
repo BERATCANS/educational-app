@@ -1,6 +1,6 @@
 package com.beratcan.app.controller;
 
-import com.beratcan.app.dto.request.ChangeEmailForVerifiedUserRequest;
+import com.beratcan.app.dto.request.ChangeEmailRequest;
 import com.beratcan.app.dto.request.UpdateAcademicInfoRequest;
 import com.beratcan.app.dto.request.UpdatePasswordRequest;
 import com.beratcan.app.dto.request.UpdateProfileRequest;
@@ -52,7 +52,7 @@ public class ProfileController {
     @PutMapping("/academic")
     @RateLimit(requestsPerMinute = 10, keyType = "USER", message = "Akademik bilgileri sık değiştiremezsiniz.")
     public ResponseEntity<ProfileAcademicResponse> updateAcademicInfo(
-            @RequestBody UpdateAcademicInfoRequest request,
+            @Valid @RequestBody UpdateAcademicInfoRequest request,
             Authentication authentication) {
         Long userId = Long.parseLong(authentication.getName());
         User updated = profileService.updateAcademicInfo(userId, request);
@@ -70,7 +70,7 @@ public class ProfileController {
     @PutMapping("/details")
     @RateLimit(requestsPerMinute = 10, keyType = "USER", message = "Profil bilgilerini sık değiştiremezsiniz.")
     public ResponseEntity<ProfileDetailsResponse> updateProfileDetails(
-            @RequestBody UpdateProfileRequest request,
+            @Valid @RequestBody UpdateProfileRequest request,
             Authentication authentication) {
         Long userId = Long.parseLong(authentication.getName());
         User updated = profileService.updateProfileDetails(userId, request);
@@ -80,7 +80,7 @@ public class ProfileController {
     @PutMapping("/change-email")
     @RateLimit(requestsPerMinute = 3, keyType = "USER", message = "Email değiştirme isteği çok sık gönderildi.")
     public ResponseEntity<Map<String, String>> changeEmail(
-            @Valid @RequestBody ChangeEmailForVerifiedUserRequest request,
+            @Valid @RequestBody ChangeEmailRequest request,
             Authentication authentication) {
         Long userId = Long.parseLong(authentication.getName());
 
@@ -107,7 +107,7 @@ public class ProfileController {
     @PutMapping("/password")
     @RateLimit(requestsPerMinute = 5, keyType = "USER", message = "Şifre güncelleme isteği çok sık gönderildi.")
     public ResponseEntity<Map<String, String>> changePassword(
-            @RequestBody UpdatePasswordRequest request,
+            @Valid @RequestBody UpdatePasswordRequest request,
             Authentication authentication) {
         Long userId = Long.parseLong(authentication.getName());
         profileService.changePassword(userId, request);

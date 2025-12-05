@@ -5,6 +5,7 @@ import com.beratcan.app.dto.request.QuestionRequest;
 import com.beratcan.app.dto.request.UpdateAnalysisRequest;
 import com.beratcan.app.dto.response.QuestionResponse;
 import com.beratcan.app.service.QuestionService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -57,7 +58,7 @@ public class QuestionController {
     @PreAuthorize("hasRole('ADMIN')")
     @PutMapping("/{questionId}")
     public QuestionResponse updateQuestion(@PathVariable Long questionId,
-            @RequestBody QuestionRequest request) {
+            @Valid @RequestBody QuestionRequest request) {
         return questionService.updateQuestion(questionId, request);
     }
 

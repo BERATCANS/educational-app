@@ -12,6 +12,7 @@ import com.beratcan.app.service.UserService;
 import com.beratcan.app.dto.response.RegisterResponse;
 
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.Cacheable;
@@ -39,7 +40,7 @@ public class UserController {
     @PostMapping("/register")
     @RateLimit(requestsPerMinute = 3, keyType = "IP", message = "Too many registration attempts. Please try again later.")
     public ResponseEntity<RegisterResponse> register(
-            @RequestBody UserRequest userRequest) {
+            @Valid @RequestBody UserRequest userRequest) {
         User user = userService.registerUser(userRequest);
 
         // Email doğrulanmamışsa özel response döner
@@ -55,7 +56,7 @@ public class UserController {
 
     @PostMapping("/login")
     @RateLimit(requestsPerMinute = 5, keyType = "IP", message = "Too many login attempts. Please try again later.")
-    public ResponseEntity<JwtResponse> login(@RequestBody LoginRequest request) {
+    public ResponseEntity<JwtResponse> login(@Valid @RequestBody LoginRequest request) {
         // AuthService'e delegate et - tüm business logic orada
         JwtResponse response = authService.login(request);
         return ResponseEntity.ok(response);

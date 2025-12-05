@@ -6,6 +6,7 @@ import com.beratcan.app.dto.request.BookReviewRequest;
 import com.beratcan.app.dto.response.BookReviewResponse;
 import com.beratcan.app.dto.response.PageResponse;
 import com.beratcan.app.service.BookReviewService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -25,7 +26,7 @@ public class BookReviewController {
     @RateLimit(requestsPerMinute = 5, keyType = "USER", message = "Too many review submissions. Please try again later.")
     public ResponseEntity<?> addReview(
             @PathVariable Long bookId,
-            @RequestBody BookReviewRequest request,
+            @Valid @RequestBody BookReviewRequest request,
             Authentication authentication) {
         if (authentication == null || !authentication.isAuthenticated()) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
@@ -41,7 +42,7 @@ public class BookReviewController {
     public ResponseEntity<?> updateReview(
             @PathVariable Long bookId,
             @PathVariable Long reviewId,
-            @RequestBody BookReviewRequest request,
+            @Valid @RequestBody BookReviewRequest request,
             Authentication authentication) {
         if (authentication == null || !authentication.isAuthenticated()) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)

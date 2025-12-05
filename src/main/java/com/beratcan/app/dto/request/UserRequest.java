@@ -1,5 +1,6 @@
 package com.beratcan.app.dto.request;
 
+import com.beratcan.app.constants.AppConstants;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
@@ -19,11 +20,10 @@ public class UserRequest {
     @NotBlank(message = "Email boş olamaz")
     @Email(message = "Geçerli bir email adresi giriniz")
     @Size(max = 100, message = "Email en fazla 100 karakter olabilir")
-    @Pattern(regexp = "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$", message = "Geçersiz email formatı")
     private String email;
 
     @NotBlank(message = "Telefon numarası boş olamaz")
-    @Pattern(regexp = "^\\+?[0-9]{10,15}$", message = "Geçersiz telefon numarası formatı")
+    @Pattern(regexp = AppConstants.PHONE_NUMBER_PATTERN, message = "Geçersiz telefon numarası formatı")
     private String phoneNumber;
 
     @NotBlank(message = "Kullanıcı adı boş olamaz")
@@ -32,7 +32,8 @@ public class UserRequest {
     private String username;
 
     @NotBlank(message = "Şifre boş olamaz")
-    @Size(min = 6, max = 100, message = "Şifre 6-100 karakter arasında olmalıdır")
+    @Size(min = 6, message = "Şifre en az 6 karakter olmalıdır")
+    @Size(max = 100, message = "Şifre en fazla 100 karakter olabilir")
     private String password;
 
     @NotBlank(message = "Rol boş olamaz")

@@ -23,7 +23,7 @@ public class Question {
     @JsonBackReference
     private Test test;
 
-    @Column(nullable = false)
+    @Column(nullable = false, length = 500)
     private String imageUrl;
 
     @Column(nullable = false)
@@ -39,7 +39,7 @@ public class Question {
     @Embedded
     private Explanation explanation;
 
-    @Column
+    @Column(length = 500)
     private String videoUrl;
 
     @Column(name = "sequence_number")

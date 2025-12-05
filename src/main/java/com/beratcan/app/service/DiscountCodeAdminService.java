@@ -5,7 +5,6 @@ import com.beratcan.app.dto.response.DiscountCodeResponse;
 import com.beratcan.app.entity.Book;
 import com.beratcan.app.entity.DiscountCode;
 import com.beratcan.app.entity.Publisher;
-import com.beratcan.app.entity.enums.DiscountType;
 import com.beratcan.app.exception.BadRequestException;
 import com.beratcan.app.exception.ConflictException;
 import com.beratcan.app.exception.DiscountCodeNotFoundException;
@@ -19,9 +18,9 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.beratcan.app.exception.PublisherNotFoundException;
+import com.beratcan.app.exception.BookNotFoundException;
 
-import java.math.BigDecimal;
-import java.time.LocalDateTime;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -33,11 +32,6 @@ public class DiscountCodeAdminService {
     private final DiscountCodeRepository discountCodeRepository;
     private final PublisherRepository publisherRepository;
     private final BookRepository bookRepository;
-
-    // Validasyon sabitleri
-    private static final BigDecimal MIN_PERCENTAGE = BigDecimal.ONE;
-    private static final BigDecimal MAX_PERCENTAGE = new BigDecimal("100");
-    private static final BigDecimal MIN_FIXED_AMOUNT = BigDecimal.ONE;
 
     /**
      * Admin: İndirim kodu oluştur
@@ -70,7 +64,7 @@ public class DiscountCodeAdminService {
         // Yayınevi
         if (request.getApplicablePublisherId() != null) {
             Publisher publisher = publisherRepository.findById(request.getApplicablePublisherId())
-                    .orElseThrow(() -> new com.beratcan.app.exception.PublisherNotFoundException(
+                    .orElseThrow(() -> new PublisherNotFoundException(
                             request.getApplicablePublisherId()));
             discountCode.setApplicablePublisher(publisher);
         }
@@ -79,7 +73,7 @@ public class DiscountCodeAdminService {
         if (request.getApplicableBookIds() != null && !request.getApplicableBookIds().isEmpty()) {
             Set<Book> books = request.getApplicableBookIds().stream()
                     .map(bookId -> bookRepository.findById(bookId)
-                            .orElseThrow(() -> new com.beratcan.app.exception.BookNotFoundException(bookId)))
+                            .orElseThrow(() -> new BookNotFoundException(bookId)))
                     .collect(Collectors.toSet());
             discountCode.setApplicableBooks(books);
         }
@@ -210,87 +204,15 @@ public class DiscountCodeAdminService {
 
     /**
      * İndirim kodu request validasyonu
+     * Not: Temel validasyonlar DTO'da @Valid ve custom validator ile yapılıyor.
+     * Burada sadece business logic kontrolleri yapılıyor.
      */
     private void validateDiscountCodeRequest(DiscountCodeRequest request) {
         if (request == null) {
             throw new BadRequestException("İndirim kodu bilgileri boş olamaz");
         }
-
-        // Kod validasyonu
-        if (request.getCode() == null || request.getCode().trim().isEmpty()) {
-            throw new BadRequestException("İndirim kodu boş olamaz");
-        }
-        if (request.getCode().length() > 50) {
-            throw new BadRequestException("İndirim kodu en fazla 50 karakter olabilir");
-        }
-
-        // Açıklama validasyonu
-        if (request.getDescription() == null || request.getDescription().trim().isEmpty()) {
-            throw new BadRequestException("Açıklama boş olamaz");
-        }
-        if (request.getDescription().length() > 500) {
-            throw new BadRequestException("Açıklama en fazla 500 karakter olabilir");
-        }
-
-        // Discount type validasyonu
-        if (request.getDiscountType() == null) {
-            throw new BadRequestException("İndirim tipi seçilmelidir (PERCENTAGE veya FIXED_AMOUNT)");
-        }
-
-        // Discount value validasyonu
-        if (request.getDiscountValue() == null) {
-            throw new BadRequestException("İndirim değeri boş olamaz");
-        }
-
-        if (request.getDiscountType() == DiscountType.PERCENTAGE) {
-            // Percentage: 1-100 arası olmalı
-            if (request.getDiscountValue().compareTo(MIN_PERCENTAGE) < 0 ||
-                    request.getDiscountValue().compareTo(MAX_PERCENTAGE) > 0) {
-                throw new BadRequestException("Yüzde indirim değeri 1 ile 100 arasında olmalıdır");
-            }
-        } else if (request.getDiscountType() == DiscountType.FIXED_AMOUNT) {
-            // Fixed amount: pozitif olmalı
-            if (request.getDiscountValue().compareTo(MIN_FIXED_AMOUNT) < 0) {
-                throw new BadRequestException("Sabit tutar indirimi en az 1 TL olmalıdır");
-            }
-        }
-
-        // Usage limit validasyonu
-        if (request.getUsageLimit() == null || request.getUsageLimit() <= 0) {
-            throw new BadRequestException("Kullanım limiti en az 1 olmalıdır");
-        }
-
-        // Tarih validasyonu
-        if (request.getValidFrom() == null) {
-            throw new BadRequestException("Geçerlilik başlangıç tarihi boş olamaz");
-        }
-        if (request.getValidUntil() == null) {
-            throw new BadRequestException("Geçerlilik bitiş tarihi boş olamaz");
-        }
-        if (request.getValidUntil().isBefore(request.getValidFrom())) {
-            throw new BadRequestException("Geçerlilik bitiş tarihi, başlangıç tarihinden önce olamaz");
-        }
-        if (request.getValidUntil().isBefore(LocalDateTime.now())) {
-            throw new BadRequestException("Geçerlilik bitiş tarihi geçmiş bir tarih olamaz");
-        }
-
-        // Min-max cart total validasyonu
-        if (request.getMinCartTotal() != null && request.getMinCartTotal().compareTo(BigDecimal.ZERO) < 0) {
-            throw new BadRequestException("Minimum sepet tutarı negatif olamaz");
-        }
-        if (request.getMaxCartTotal() != null && request.getMaxCartTotal().compareTo(BigDecimal.ZERO) < 0) {
-            throw new BadRequestException("Maksimum sepet tutarı negatif olamaz");
-        }
-        if (request.getMinCartTotal() != null && request.getMaxCartTotal() != null) {
-            if (request.getMinCartTotal().compareTo(request.getMaxCartTotal()) > 0) {
-                throw new BadRequestException("Minimum sepet tutarı, maksimum sepet tutarından büyük olamaz");
-            }
-        }
-
-        // Max usage per user validasyonu
-        if (request.getMaxUsagePerUser() != null && request.getMaxUsagePerUser() <= 0) {
-            throw new BadRequestException("Kullanıcı başına maksimum kullanım sayısı en az 1 olmalıdır");
-        }
+        // Diğer validasyonlar DTO'da @Valid annotation ve ValidDiscountCode custom
+        // validator ile yapılıyor
     }
 
     /**

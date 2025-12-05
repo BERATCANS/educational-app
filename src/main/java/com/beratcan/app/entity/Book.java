@@ -29,6 +29,7 @@ public class Book {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Column(length = 200)
     private String title;
 
     @ManyToOne(fetch = FetchType.EAGER)
@@ -46,6 +47,7 @@ public class Book {
     @Enumerated(EnumType.STRING)
     private LessonType lessonType; // Kitap yazarı
 
+    @Column(length = 500)
     private String coverImageUrl; // Kitap kapak fotoğrafı URL'si
 
     private boolean paid; // Kitap paralı mı?

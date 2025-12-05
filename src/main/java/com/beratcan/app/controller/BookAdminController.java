@@ -3,6 +3,7 @@ package com.beratcan.app.controller;
 import com.beratcan.app.dto.request.BookRequest;
 import com.beratcan.app.entity.Book;
 import com.beratcan.app.service.BookAdminService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -19,7 +20,7 @@ public class BookAdminController {
 
     @PreAuthorize("hasRole('ADMIN')")
     @PostMapping("/add")
-    public Book addBook(@RequestBody BookRequest request) {
+    public Book addBook(@Valid @RequestBody BookRequest request) {
         return bookAdminService.addBook(request);
     }
 
@@ -27,7 +28,7 @@ public class BookAdminController {
     @PutMapping("/{bookId}")
     public ResponseEntity<Book> updateBook(
             @PathVariable Long bookId,
-            @RequestBody BookRequest request) {
+            @Valid @RequestBody BookRequest request) {
         Book updatedBook = bookAdminService.updateBook(bookId, request);
         bookAdminService.countBookData(bookId);
         return ResponseEntity.ok(updatedBook);
