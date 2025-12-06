@@ -37,8 +37,8 @@ public class ProfileController {
     @RateLimit(requestsPerMinute = 30, keyType = "USER", message = "Profil bilgileri sık isteniyor, lütfen daha sonra tekrar deneyin.")
     public ResponseEntity<UserResponse> getMyProfile(Authentication authentication) {
         Long userId = Long.parseLong(authentication.getName());
-        User user = profileService.getCurrentUser(userId);
-        return ResponseEntity.ok(new UserResponse(user));
+        ProfileService.UserWithStreakUpdate result = profileService.getCurrentUserWithStreakUpdate(userId);
+        return ResponseEntity.ok(new UserResponse(result.getUser(), result.isStreakUpdated()));
     }
 
     @GetMapping("/academic")

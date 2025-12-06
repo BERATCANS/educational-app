@@ -43,6 +43,42 @@ public class ProfileService {
         return user;
     }
 
+    /**
+     * Kullanıcı bilgilerini getirir ve streak güncellemesi yapar
+     * Streak güncellenip güncellenmediğini döndürür
+     * 
+     * @param userId Kullanıcı ID
+     * @return User ve streak güncellenip güncellenmediği bilgisi
+     */
+    @Transactional
+    public UserWithStreakUpdate getCurrentUserWithStreakUpdate(Long userId) {
+        User user = userService.getUserById(userId);
+        // Streak güncelle ve güncellenip güncellenmediğini kontrol et
+        boolean streakUpdated = updateStreak(user);
+        return new UserWithStreakUpdate(user, streakUpdated);
+    }
+
+    /**
+     * Wrapper class for User with streak update information
+     */
+    public static class UserWithStreakUpdate {
+        private final User user;
+        private final boolean streakUpdated;
+
+        public UserWithStreakUpdate(User user, boolean streakUpdated) {
+            this.user = user;
+            this.streakUpdated = streakUpdated;
+        }
+
+        public User getUser() {
+            return user;
+        }
+
+        public boolean isStreakUpdated() {
+            return streakUpdated;
+        }
+    }
+
     @Transactional
     public User updateAcademicInfo(Long userId, UpdateAcademicInfoRequest request) {
         if (request == null) {
@@ -270,8 +306,9 @@ public class ProfileService {
      * - Dünden önce aktivite yapılmışsa: streak = 1 (reset)
      * 
      * @param user Kullanıcı entity
+     * @return true eğer streak güncellendiyse, false eğer değişmediyse
      */
-    private void updateStreak(User user) {
+    private boolean updateStreak(User user) {
         LocalDate today = LocalDate.now();
         LocalDate lastActivity = user.getLastActivityDate() != null
                 ? user.getLastActivityDate()
@@ -286,14 +323,14 @@ public class ProfileService {
             }
             userRepository.save(user);
             log.debug("First activity for user {}: streak set to 1", user.getUsername());
-            return;
+            return true; // Streak güncellendi
         }
 
         // Bugün zaten aktivite yapılmışsa streak değişmez
         if (lastActivity.equals(today)) {
             log.debug("User {} already had activity today, streak unchanged: {}",
                     user.getUsername(), user.getCurrentStreak());
-            return;
+            return false; // Streak değişmedi
         }
 
         // Dün aktivite yapılmışsa streak artır
@@ -311,7 +348,7 @@ public class ProfileService {
             userRepository.save(user);
             log.info("User {} streak increased: {} -> {}",
                     user.getUsername(), user.getCurrentStreak() - 1, newStreak);
-            return;
+            return true; // Streak güncellendi
         }
 
         // Dünden önce aktivite yapılmışsa streak reset
@@ -323,6 +360,7 @@ public class ProfileService {
         userRepository.save(user);
         log.info("User {} streak reset to 1 (last activity: {})",
                 user.getUsername(), lastActivity);
+        return true; // Streak güncellendi (reset)
     }
 
     /**

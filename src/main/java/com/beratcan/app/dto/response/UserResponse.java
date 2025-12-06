@@ -18,6 +18,7 @@ public class UserResponse {
     private String schoolType;
     private String gender;
     private String city;
+    private Boolean streakUpdated; // Streak güncellenip güncellenmediği bilgisi
 
     public UserResponse(User user) {
         this.id = user.getId();
@@ -33,5 +34,11 @@ public class UserResponse {
         this.schoolType = user.getSchoolType() != null ? user.getSchoolType().name() : null;
         this.gender = user.getGender() != null ? user.getGender().name() : null;
         this.city = user.getCity() != null ? user.getCity().name() : null;
+        this.streakUpdated = false; // Default false, setter ile set edilecek
+    }
+
+    public UserResponse(User user, Boolean streakUpdated) {
+        this(user);
+        this.streakUpdated = streakUpdated;
     }
 }
