@@ -21,10 +21,6 @@ public class JwtResponse {
     private String email; // Email
     private String role; // Kullanıcı rolü (STUDENT, TEACHER, ADMIN)
 
-    // Streak güncellendi mi? (sadece o gün ilk girişte true)
-    // Frontend bu flag'i görürse /api/profile/streak endpoint'ini çağırabilir
-    private Boolean streakUpdated; // true: streak güncellendi, false/null: değişmedi
-
     // Email doğrulanmamışsa bilgilendirme mesajı
     private String emailVerificationMessage; // null: email doğrulanmış, string: doğrulama mesajı
 

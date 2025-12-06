@@ -80,6 +80,9 @@ public class User {
         @Column
         private LocalDate lastLoginDate; // Son giriş tarihi (nullable - ilk girişte null olabilir)
 
+        @Column
+        private LocalDate lastActivityDate; // Son aktivite tarihi (nullable - uygulama açma, soru çözme vb.)
+
         // Email doğrulama alanları
         @Column(nullable = false, columnDefinition = "BOOLEAN DEFAULT FALSE")
         private Boolean emailVerified = false; // Email doğrulandı mı?

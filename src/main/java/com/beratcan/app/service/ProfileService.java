@@ -35,9 +35,12 @@ public class ProfileService {
     private final BCryptPasswordEncoder passwordEncoder;
     private final EmailVerificationService emailVerificationService;
 
-    @Transactional(readOnly = true)
+    @Transactional
     public User getCurrentUser(Long userId) {
-        return userService.getUserById(userId);
+        User user = userService.getUserById(userId);
+        // Her profile/me çağrısında streak güncelle (uygulama açma = aktivite)
+        updateStreak(user);
+        return user;
     }
 
     @Transactional
@@ -260,24 +263,89 @@ public class ProfileService {
     }
 
     /**
+     * Kullanıcının streak (günlük giriş serisi) bilgisini günceller
+     * - İlk aktivite: streak = 1
+     * - Bugün zaten aktivite yapılmışsa: streak değişmez
+     * - Dün aktivite yapılmışsa: streak += 1
+     * - Dünden önce aktivite yapılmışsa: streak = 1 (reset)
+     * 
+     * @param user Kullanıcı entity
+     */
+    private void updateStreak(User user) {
+        LocalDate today = LocalDate.now();
+        LocalDate lastActivity = user.getLastActivityDate() != null
+                ? user.getLastActivityDate()
+                : user.getLastLoginDate(); // Fallback: eğer lastActivityDate null ise lastLoginDate kullan
+
+        // İlk aktivite veya lastActivity null ise
+        if (lastActivity == null) {
+            user.setCurrentStreak(1);
+            user.setLastActivityDate(today);
+            if (user.getLongestStreak() < 1) {
+                user.setLongestStreak(1);
+            }
+            userRepository.save(user);
+            log.debug("First activity for user {}: streak set to 1", user.getUsername());
+            return;
+        }
+
+        // Bugün zaten aktivite yapılmışsa streak değişmez
+        if (lastActivity.equals(today)) {
+            log.debug("User {} already had activity today, streak unchanged: {}",
+                    user.getUsername(), user.getCurrentStreak());
+            return;
+        }
+
+        // Dün aktivite yapılmışsa streak artır
+        LocalDate yesterday = today.minusDays(1);
+        if (lastActivity.equals(yesterday)) {
+            int newStreak = user.getCurrentStreak() + 1;
+            user.setCurrentStreak(newStreak);
+            user.setLastActivityDate(today);
+
+            // En uzun streak'i güncelle
+            if (newStreak > user.getLongestStreak()) {
+                user.setLongestStreak(newStreak);
+            }
+
+            userRepository.save(user);
+            log.info("User {} streak increased: {} -> {}",
+                    user.getUsername(), user.getCurrentStreak() - 1, newStreak);
+            return;
+        }
+
+        // Dünden önce aktivite yapılmışsa streak reset
+        user.setCurrentStreak(1);
+        user.setLastActivityDate(today);
+        if (user.getLongestStreak() < 1) {
+            user.setLongestStreak(1);
+        }
+        userRepository.save(user);
+        log.info("User {} streak reset to 1 (last activity: {})",
+                user.getUsername(), lastActivity);
+    }
+
+    /**
      * Kullanıcının streak (günlük giriş serisi) bilgisini döndürür
      * 
      * @param userId Kullanıcı ID
-     * @return StreakResponse (currentStreak, longestStreak, lastLoginDate,
+     * @return StreakResponse (currentStreak, longestStreak, lastActivityDate,
      *         loggedInToday)
      */
     @Transactional(readOnly = true)
     public StreakResponse getStreak(Long userId) {
         User user = userService.getUserById(userId);
         LocalDate today = LocalDate.now();
-        LocalDate lastLogin = user.getLastLoginDate();
+        LocalDate lastActivity = user.getLastActivityDate() != null
+                ? user.getLastActivityDate()
+                : user.getLastLoginDate(); // Fallback
 
-        boolean loggedInToday = lastLogin != null && lastLogin.equals(today);
+        boolean loggedInToday = lastActivity != null && lastActivity.equals(today);
 
         return StreakResponse.builder()
                 .currentStreak(user.getCurrentStreak() != null ? user.getCurrentStreak() : 0)
                 .longestStreak(user.getLongestStreak() != null ? user.getLongestStreak() : 0)
-                .lastLoginDate(lastLogin != null ? lastLogin.toString() : null)
+                .lastLoginDate(lastActivity != null ? lastActivity.toString() : null)
                 .loggedInToday(loggedInToday)
                 .build();
     }

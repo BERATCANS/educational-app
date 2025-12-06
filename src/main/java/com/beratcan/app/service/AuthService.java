@@ -13,8 +13,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDate;
-
 /**
  * Authentication Service
  * Login, token refresh ve logout işlemlerini yönetir
@@ -45,8 +43,8 @@ public class AuthService {
         // yapabilir
         // Sadece bilgilendirme mesajı gönderilecek
 
-        // Streak güncelleme mantığı - o gün ilk giriş mi kontrol et
-        boolean streakUpdated = updateStreak(user);
+        // Streak güncelleme artık ProfileService.getCurrentUser() içinde yapılıyor
+        // (Her uygulama açılışında profile/me çağrıldığında otomatik güncellenir)
 
         // Token'ları oluştur
         String accessToken = jwtUtil.generateAccessToken(user.getUsername(), user.getId());
@@ -63,89 +61,16 @@ public class AuthService {
         response.setEmail(user.getEmail());
         response.setRole(user.getRole().name());
 
-        // Streak güncellendi mi? Frontend bu flag'i görürse /api/profile/streak
-        // endpoint'ini çağırabilir
-        response.setStreakUpdated(streakUpdated);
-
         // Email doğrulanmamışsa bilgilendirme mesajı ekle
         if (!user.getEmailVerified()) {
             response.setEmailVerificationMessage(
                     "Email adresinizi doğrulamanız gerekiyor. Email doğrulama linki almak için uygulama içindeki 'Email Gönder' butonuna tıklayın.");
         }
 
-        if (streakUpdated) {
-            log.info("User logged in successfully: {} (ID: {}), Streak updated: {}",
-                    user.getUsername(), user.getId(), user.getCurrentStreak());
-        } else {
-            log.info("User logged in successfully: {} (ID: {}), Streak unchanged: {}",
-                    user.getUsername(), user.getId(), user.getCurrentStreak());
-        }
+        log.info("User logged in successfully: {} (ID: {})",
+                user.getUsername(), user.getId());
 
         return response;
-    }
-
-    /**
-     * Kullanıcının streak (günlük giriş serisi) bilgisini günceller
-     * - İlk giriş: streak = 1
-     * - Bugün zaten giriş yapılmışsa: streak değişmez
-     * - Dün giriş yapılmışsa: streak += 1
-     * - Dünden önce giriş yapılmışsa: streak = 1 (reset)
-     * 
-     * @param user Kullanıcı entity
-     * @return true eğer streak güncellendiyse (o gün ilk giriş), false eğer
-     *         değişmediyse
-     */
-    private boolean updateStreak(User user) {
-        LocalDate today = LocalDate.now();
-        LocalDate lastLogin = user.getLastLoginDate();
-
-        // İlk giriş veya lastLogin null ise
-        if (lastLogin == null) {
-            user.setCurrentStreak(1);
-            user.setLastLoginDate(today);
-            if (user.getLongestStreak() < 1) {
-                user.setLongestStreak(1);
-            }
-            userRepository.save(user);
-            log.debug("First login for user {}: streak set to 1", user.getUsername());
-            return true; // Streak güncellendi
-        }
-
-        // Bugün zaten giriş yapılmışsa streak değişmez
-        if (lastLogin.equals(today)) {
-            log.debug("User {} already logged in today, streak unchanged: {}",
-                    user.getUsername(), user.getCurrentStreak());
-            return false; // Streak değişmedi
-        }
-
-        // Dün giriş yapılmışsa streak artır
-        LocalDate yesterday = today.minusDays(1);
-        if (lastLogin.equals(yesterday)) {
-            int newStreak = user.getCurrentStreak() + 1;
-            user.setCurrentStreak(newStreak);
-            user.setLastLoginDate(today);
-
-            // En uzun streak'i güncelle
-            if (newStreak > user.getLongestStreak()) {
-                user.setLongestStreak(newStreak);
-            }
-
-            userRepository.save(user);
-            log.info("User {} streak increased: {} -> {}",
-                    user.getUsername(), user.getCurrentStreak() - 1, newStreak);
-            return true; // Streak güncellendi
-        }
-
-        // Dünden önce giriş yapılmışsa streak reset
-        user.setCurrentStreak(1);
-        user.setLastLoginDate(today);
-        if (user.getLongestStreak() < 1) {
-            user.setLongestStreak(1);
-        }
-        userRepository.save(user);
-        log.info("User {} streak reset to 1 (last login: {})",
-                user.getUsername(), lastLogin);
-        return true; // Streak güncellendi (reset)
     }
 
     /**
