@@ -2,6 +2,8 @@ package com.beratcan.app.repository;
 
 import com.beratcan.app.entity.User;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
 
 import java.util.Optional;
 
@@ -26,4 +28,14 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     // Email doğrulama için
     Optional<User> findByEmailVerificationToken(String token);
+
+    /**
+     * Tüm kullanıcıların günlük çözülen soru sayısını sıfırla
+     * Her gece yarısı scheduled job tarafından çağrılır
+     * 
+     * @return Güncellenen kullanıcı sayısı
+     */
+    @Modifying(clearAutomatically = true)
+    @Query("UPDATE User u SET u.dailySolvedQuestions = 0")
+    int resetAllDailySolvedQuestions();
 }

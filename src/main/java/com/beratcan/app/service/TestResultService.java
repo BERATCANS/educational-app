@@ -126,7 +126,27 @@ public class TestResultService {
         testResult.setTotalQuestions(totalQuestions);
         testResult.calculateSuccessRate();
 
-        return testResultRepository.save(testResult);
+        TestResult savedTestResult = testResultRepository.save(testResult);
+
+        // Kullanıcının günlük çözülen soru sayısını güncelle
+        updateDailySolvedQuestions(user, totalQuestions);
+
+        return savedTestResult;
+    }
+
+    /**
+     * Kullanıcının günlük çözülen soru sayısını günceller
+     * Sadece bugünkü sayıya ekler, tarih kontrolü yapmaz
+     * (Tarih kontrolü getCurrentUser/getQuestionTarget'da yapılır)
+     * 
+     * @param user            Kullanıcı entity
+     * @param solvedQuestions Çözülen soru sayısı
+     */
+    private void updateDailySolvedQuestions(User user, int solvedQuestions) {
+        // Sadece bugünkü sayıya ekle (tarih kontrolü yapmadan)
+        int currentSolved = user.getDailySolvedQuestions() != null ? user.getDailySolvedQuestions() : 0;
+        user.setDailySolvedQuestions(currentSolved + solvedQuestions);
+        userRepository.save(user);
     }
 
     /**

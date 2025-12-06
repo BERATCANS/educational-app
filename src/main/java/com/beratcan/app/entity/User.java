@@ -72,16 +72,17 @@ public class User {
         private Integer dailyQuestionTarget = 200;
 
         @Column(nullable = false, columnDefinition = "INT DEFAULT 0")
+        private Integer dailySolvedQuestions = 0; // Bugün çözülen soru sayısı (Her gece yarısı otomatik sıfırlanır)
+
+        @Column(nullable = false, columnDefinition = "INT DEFAULT 0")
         private Integer currentStreak = 0; // Mevcut günlük giriş serisi
 
         @Column(nullable = false, columnDefinition = "INT DEFAULT 0")
         private Integer longestStreak = 0; // En uzun günlük giriş serisi
 
         @Column
-        private LocalDate lastLoginDate; // Son giriş tarihi (nullable - ilk girişte null olabilir)
-
-        @Column
-        private LocalDate lastActivityDate; // Son aktivite tarihi (nullable - uygulama açma, soru çözme vb.)
+        private LocalDate lastActivityDate; // Son aktivite tarihi (nullable - uygulama açma, soru çözme vb.) - Streak
+                                            // takibi için kullanılır
 
         // Email doğrulama alanları
         @Column(nullable = false, columnDefinition = "BOOLEAN DEFAULT FALSE")

@@ -11,7 +11,6 @@ import com.beratcan.app.entity.enums.ExamType;
 import com.beratcan.app.exception.BadRequestException;
 import com.beratcan.app.exception.ConflictException;
 import com.beratcan.app.repository.UserRepository;
-import com.beratcan.app.repository.TestResultRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -20,8 +19,6 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.LocalTime;
 
 @Service
 @RequiredArgsConstructor
@@ -30,7 +27,6 @@ public class ProfileService {
 
     private final UserService userService;
     private final UserRepository userRepository;
-    private final TestResultRepository testResultRepository;
     private final BCryptPasswordEncoder passwordEncoder;
     private final EmailVerificationService emailVerificationService;
 
@@ -268,12 +264,8 @@ public class ProfileService {
     public QuestionTargetResponse getQuestionTarget(Long userId) {
         User user = userService.getUserById(userId);
         LocalDate today = LocalDate.now();
-        LocalDateTime start = today.atStartOfDay();
-        LocalDateTime end = today.atTime(LocalTime.MAX);
-
-        Long solved = testResultRepository.sumSolvedQuestionsBetween(userId, start, end);
         int target = user.getDailyQuestionTarget() != null ? user.getDailyQuestionTarget() : 0;
-        int solvedToday = solved != null ? solved.intValue() : 0;
+        int solvedToday = user.getDailySolvedQuestions() != null ? user.getDailySolvedQuestions() : 0;
         int remaining = Math.max(target - solvedToday, 0);
         double completion = target > 0 ? Math.min((solvedToday * 100.0) / target, 100.0) : 0.0;
 
@@ -309,9 +301,7 @@ public class ProfileService {
      */
     private boolean updateStreak(User user) {
         LocalDate today = LocalDate.now();
-        LocalDate lastActivity = user.getLastActivityDate() != null
-                ? user.getLastActivityDate()
-                : user.getLastLoginDate(); // Fallback: eğer lastActivityDate null ise lastLoginDate kullan
+        LocalDate lastActivity = user.getLastActivityDate();
 
         // İlk aktivite veya lastActivity null ise
         if (lastActivity == null) {
