@@ -7,8 +7,9 @@ import jakarta.validation.ConstraintValidatorContext;
 
 /**
  * Validates academic info based on exam type
- * - YKS: fieldType ve schoolType zorunlu
- * - LGS veya diğerleri: fieldType ve schoolType null olmalı
+ * - YKS: fieldType, gradeLevel ve schoolType zorunlu
+ * - LGS: sadece gradeLevel zorunlu
+ * - KPSS ve DIGER: hiçbir şey zorunlu değil
  */
 public class AcademicInfoValidator implements ConstraintValidator<ValidAcademicInfo, UpdateAcademicInfoRequest> {
 
@@ -30,28 +31,49 @@ public class AcademicInfoValidator implements ConstraintValidator<ValidAcademicI
             return true;
         }
 
-        // YKS seçildiyse fieldType ve schoolType zorunlu
+        context.disableDefaultConstraintViolation();
+
+        // YKS: fieldType, gradeLevel ve schoolType zorunlu
         if (examType == ExamType.YKS) {
-            if (request.getFieldType() == null || request.getSchoolType() == null) {
-                context.disableDefaultConstraintViolation();
-                context.buildConstraintViolationWithTemplate(
-                        "YKS için alan türü (fieldType) ve okul türü (schoolType) zorunludur")
+            boolean hasError = false;
+
+            if (request.getFieldType() == null) {
+                context.buildConstraintViolationWithTemplate("YKS için alan türü (fieldType) zorunludur")
+                        .addPropertyNode("fieldType")
+                        .addConstraintViolation();
+                hasError = true;
+            }
+
+            if (request.getGradeLevel() == null) {
+                context.buildConstraintViolationWithTemplate("YKS için sınıf seviyesi (gradeLevel) zorunludur")
+                        .addPropertyNode("gradeLevel")
+                        .addConstraintViolation();
+                hasError = true;
+            }
+
+            if (request.getSchoolType() == null) {
+                context.buildConstraintViolationWithTemplate("YKS için okul türü (schoolType) zorunludur")
+                        .addPropertyNode("schoolType")
+                        .addConstraintViolation();
+                hasError = true;
+            }
+
+            return !hasError;
+        }
+
+        // LGS: sadece gradeLevel zorunlu
+        if (examType == ExamType.LGS) {
+            if (request.getGradeLevel() == null) {
+                context.buildConstraintViolationWithTemplate("LGS için sınıf seviyesi (gradeLevel) zorunludur")
+                        .addPropertyNode("gradeLevel")
                         .addConstraintViolation();
                 return false;
             }
             return true;
         }
 
-        // YKS dışındaki sınav türleri için fieldType ve schoolType null olmalı
-        if (request.getFieldType() != null || request.getSchoolType() != null) {
-            context.disableDefaultConstraintViolation();
-            context.buildConstraintViolationWithTemplate(
-                    examType.name() + " için alan türü (fieldType) ve okul türü (schoolType) boş olmalıdır")
-                    .addConstraintViolation();
-            return false;
-        }
-
+        // KPSS ve DIGER: hiçbir şey zorunlu değil
+        // Validasyon geçer, zorunlu olmayan alanlar service katmanında temizlenecek
         return true;
     }
 }
-

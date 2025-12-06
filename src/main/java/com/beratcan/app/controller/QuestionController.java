@@ -1,8 +1,9 @@
 package com.beratcan.app.controller;
 
 import com.beratcan.app.annotation.RateLimit;
-import com.beratcan.app.dto.request.QuestionRequest;
+import com.beratcan.app.dto.request.CreateQuestionRequest;
 import com.beratcan.app.dto.request.UpdateAnalysisRequest;
+import com.beratcan.app.dto.request.UpdateQuestionRequest;
 import com.beratcan.app.dto.response.QuestionResponse;
 import com.beratcan.app.service.QuestionService;
 import jakarta.validation.Valid;
@@ -12,7 +13,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 import java.util.Map;
@@ -32,15 +32,9 @@ public class QuestionController {
     @PreAuthorize("hasRole('ADMIN')")
     @RateLimit(requestsPerMinute = 10, keyType = "USER", message = "Too many question creation requests. Please try again later.")
     public QuestionResponse addQuestion(
-            @RequestParam("file") MultipartFile file,
-            @RequestParam("testId") Long testId,
-            @RequestParam("correctAnswer") String correctAnswer,
-            @RequestParam(value = "answerNumber", defaultValue = "5") int answerNumber,
-            @RequestParam(value = "videoUrl", required = false) String videoUrl,
-            @RequestParam(value = "sequenceNumber", required = false) Integer sequenceNumber) {
+            @Valid @ModelAttribute CreateQuestionRequest request) {
 
-        return questionService.addQuestionWithImageAndAI(
-                file, testId, correctAnswer, answerNumber, videoUrl, sequenceNumber);
+        return questionService.addQuestionWithImageAndAI(request);
     }
 
     // READ
@@ -58,7 +52,7 @@ public class QuestionController {
     @PreAuthorize("hasRole('ADMIN')")
     @PutMapping("/{questionId}")
     public QuestionResponse updateQuestion(@PathVariable Long questionId,
-            @Valid @RequestBody QuestionRequest request) {
+            @Valid @ModelAttribute UpdateQuestionRequest request) {
         return questionService.updateQuestion(questionId, request);
     }
 

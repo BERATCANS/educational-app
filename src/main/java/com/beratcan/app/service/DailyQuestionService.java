@@ -9,7 +9,6 @@ import com.beratcan.app.entity.User;
 import com.beratcan.app.entity.enums.OptionLetter;
 import com.beratcan.app.exception.BadRequestException;
 import com.beratcan.app.exception.ConflictException;
-import com.beratcan.app.exception.FileStorageException;
 import com.beratcan.app.exception.ResourceNotFoundException;
 import com.beratcan.app.exception.UnauthorizedOperationException;
 import com.beratcan.app.exception.UserNotFoundException;
@@ -17,13 +16,9 @@ import com.beratcan.app.repository.DailyQuestionRepository;
 import com.beratcan.app.repository.DailyQuestionAnswerRepository;
 import com.beratcan.app.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -32,16 +27,15 @@ import java.util.List;
 import java.time.format.DateTimeFormatter;
 import java.util.Map;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class DailyQuestionService {
 
-    @Value("${app.upload.dir:uploads}")
-    private String uploadDir;
-
     private final DailyQuestionRepository dailyQuestionRepository;
     private final DailyQuestionAnswerRepository answerRepository;
     private final UserRepository userRepository;
+    private final FileService fileService;
 
     public DailyQuestionResponse getCurrentQuestion(Long userId) {
         if (userId == null) {
@@ -117,20 +111,20 @@ public class DailyQuestionService {
 
     @Transactional
     public DailyQuestion createDailyQuestion(CreateDailyQuestionRequest request) {
-        // Resmi kaydet
-        String filename = System.currentTimeMillis() + "_" + request.getImage().getOriginalFilename();
-        Path filePath = Paths.get(uploadDir, filename);
-        try {
-            Files.createDirectories(filePath.getParent());
-            Files.write(filePath, request.getImage().getBytes());
-        } catch (IOException e) {
-            throw new FileStorageException("Günlük soru görseli kaydedilemedi.", e);
+        if (request == null) {
+            throw new BadRequestException("CreateDailyQuestionRequest cannot be null");
         }
-        String imageUrl = "/api/files/" + filename;
 
-        // Yeni soru oluştur
+        log.info("Günlük soru oluşturma başlatıldı: displayDate={}, correctAnswer={}",
+                request.getDisplayDate(), request.getCorrectAnswer());
+
+        // 1. Görseli kaydet (FileService kullan)
+        String imageUrl = fileService.saveFile(request.getImage());
+        log.info("Görsel kaydedildi: {}", imageUrl);
+
+        // 2. Yeni soru oluştur
         DailyQuestion question = new DailyQuestion();
-        question.setImageUrl(imageUrl);
+        question.setImageUrl(imageUrl); // FileService'ten gelen filename
         question.setAnswerNumber(request.getAnswerNumber());
         question.setCorrectAnswer(request.getCorrectAnswer());
         question.setVideoUrl(request.getVideoUrl());
@@ -140,7 +134,9 @@ public class DailyQuestionService {
         question.setEndTime(request.getEndTime());
         question.setActive(false); // Başlangıçta pasif, scheduler aktifleştirecek
 
-        return dailyQuestionRepository.save(question);
+        DailyQuestion saved = dailyQuestionRepository.save(question);
+        log.info("Günlük soru oluşturuldu: questionId={}", saved.getId());
+        return saved;
     }
 
     private DailyQuestionResponse toDailyQuestionResponse(DailyQuestion question, Long userId) {

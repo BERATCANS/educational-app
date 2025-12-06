@@ -3,14 +3,12 @@ package com.beratcan.app.service;
 import com.beratcan.app.dto.request.TopicRequest;
 import com.beratcan.app.dto.response.TopicResponse;
 import com.beratcan.app.entity.Book;
-import com.beratcan.app.entity.Test;
 import com.beratcan.app.entity.Topic;
 import com.beratcan.app.exception.BadRequestException;
 import com.beratcan.app.exception.BookNotFoundException;
 import com.beratcan.app.exception.ConflictException;
 import com.beratcan.app.exception.TopicNotFoundException;
 import com.beratcan.app.repository.BookRepository;
-import com.beratcan.app.repository.TestRepository;
 import com.beratcan.app.repository.TopicRepository;
 import org.springframework.stereotype.Service;
 import lombok.RequiredArgsConstructor;
@@ -23,7 +21,6 @@ public class TopicService {
 
     private final TopicRepository topicRepository;
     private final BookRepository bookRepository;
-    private final TestRepository testRepository;
     private final BookAdminService bookAdminService;
 
     // Helper: Topic -> TopicResponse
@@ -86,17 +83,6 @@ public class TopicService {
         Integer sequenceNumber = getNextSequenceNumber(bookId, request.getSequenceNumber());
         topic.setSequenceNumber(sequenceNumber);
 
-        if (request.getTests() != null) {
-            for (String testTitle : request.getTests()) {
-                if (testTitle != null && !testTitle.trim().isEmpty()) {
-                    Test test = new Test();
-                    test.setTitle(testTitle);
-                    test.setTopic(topic);
-                    testRepository.save(test);
-                    topic.getTests().add(test);
-                }
-            }
-        }
         Topic saved = topicRepository.save(topic);
         bookAdminService.countBookData(saved.getBook().getId());
         return toTopicResponse(saved);
@@ -112,18 +98,6 @@ public class TopicService {
 
         if (request.getTitle() != null && !request.getTitle().trim().isEmpty()) {
             topic.setTitle(request.getTitle());
-        }
-
-        if (request.getTests() != null) {
-            for (String testTitle : request.getTests()) {
-                if (testTitle != null && !testTitle.trim().isEmpty()) {
-                    Test test = new Test();
-                    test.setTitle(testTitle);
-                    test.setTopic(topic);
-                    testRepository.save(test);
-                    topic.getTests().add(test);
-                }
-            }
         }
 
         Topic updated = topicRepository.save(topic);

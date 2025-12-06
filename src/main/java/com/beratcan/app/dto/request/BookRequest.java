@@ -10,7 +10,6 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
 import java.math.BigDecimal;
-import java.util.List;
 
 @Data
 public class BookRequest {
@@ -33,8 +32,6 @@ public class BookRequest {
     private String coverImageUrl;
 
     private boolean paid;
-
-    private List<String> topics;
 
     @NotNull(message = "Sınıf seviyesi boş olamaz")
     private GradeLevel gradeLevel;

@@ -47,28 +47,35 @@ public class ProfileService {
         }
         User user = userService.getUserById(userId);
 
+        ExamType examType = request.getExamType();
+
         // ExamType güncelle
-        if (request.getExamType() != null) {
-            user.setExamType(request.getExamType());
-        } else {
-            user.setExamType(null);
-        }
+        user.setExamType(examType);
 
-        // GradeLevel güncelle
-        if (request.getGradeLevel() != null) {
+        // YKS: fieldType, gradeLevel ve schoolType zorunlu (validator kontrol etti)
+        if (examType == ExamType.YKS) {
             user.setGradeLevel(request.getGradeLevel());
-        } else {
-            user.setGradeLevel(null);
-        }
-
-        // YKS için özel kontroller (validator zaten kontrol ediyor, burada sadece set
-        // ediyoruz)
-        if (user.getExamType() == ExamType.YKS) {
-            // Validator zaten null kontrolü yaptı, burada direkt set edebiliriz
             user.setFieldType(request.getFieldType());
             user.setSchoolType(request.getSchoolType());
-        } else {
-            // YKS değilse (LGS, KPSS, DIGER) bu alanları temizle
+        }
+        // LGS: sadece gradeLevel zorunlu (validator kontrol etti)
+        else if (examType == ExamType.LGS) {
+            user.setGradeLevel(request.getGradeLevel());
+            // LGS için fieldType ve schoolType null olmalı
+            user.setFieldType(null);
+            user.setSchoolType(null);
+        }
+        // KPSS ve DIGER: hiçbir şey zorunlu değil
+        else if (examType == ExamType.KPSS || examType == ExamType.DIGER) {
+            // GradeLevel opsiyonel, gönderilmişse set et
+            user.setGradeLevel(request.getGradeLevel());
+            // KPSS ve DIGER için fieldType ve schoolType null olmalı
+            user.setFieldType(null);
+            user.setSchoolType(null);
+        }
+        // ExamType null ise tüm alanları temizle
+        else {
+            user.setGradeLevel(null);
             user.setFieldType(null);
             user.setSchoolType(null);
         }

@@ -11,16 +11,18 @@ import java.lang.annotation.Target;
 
 /**
  * Custom validation annotation for academic info
- * YKS seçildiğinde fieldType ve schoolType zorunlu
- * LGS veya diğer sınav türleri seçildiğinde fieldType ve schoolType null olmalı
+ * - YKS: fieldType, gradeLevel ve schoolType zorunlu
+ * - LGS: sadece gradeLevel zorunlu
+ * - KPSS ve DIGER: hiçbir şey zorunlu değil
  */
 @Documented
 @Constraint(validatedBy = AcademicInfoValidator.class)
-@Target({ElementType.TYPE})
+@Target({ ElementType.TYPE })
 @Retention(RetentionPolicy.RUNTIME)
 public @interface ValidAcademicInfo {
-    String message() default "YKS için alan ve okul türü zorunludur. Diğer sınav türleri için bu alanlar boş olmalıdır.";
+    String message() default "Akademik bilgi validasyon hatası";
+
     Class<?>[] groups() default {};
+
     Class<? extends Payload>[] payload() default {};
 }
-

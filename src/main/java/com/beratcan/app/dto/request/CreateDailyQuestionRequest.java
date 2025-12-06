@@ -1,6 +1,7 @@
 package com.beratcan.app.dto.request;
 
 import com.beratcan.app.entity.enums.OptionLetter;
+import com.beratcan.app.validation.ValidImageFile;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
@@ -14,6 +15,7 @@ import java.time.LocalTime;
 @Data
 public class CreateDailyQuestionRequest {
     @NotNull(message = "Görsel dosyası boş olamaz")
+    @ValidImageFile(message = "Geçersiz görsel dosyası")
     private MultipartFile image;
 
     @NotNull(message = "Cevap sayısı boş olamaz")

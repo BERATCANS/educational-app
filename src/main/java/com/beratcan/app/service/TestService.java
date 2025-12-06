@@ -1,16 +1,13 @@
 package com.beratcan.app.service;
 
-import com.beratcan.app.dto.request.QuestionRequest;
 import com.beratcan.app.dto.request.TestRequest;
 import com.beratcan.app.dto.response.TestResponse;
-import com.beratcan.app.entity.Question;
 import com.beratcan.app.entity.Test;
 import com.beratcan.app.entity.Topic;
 import com.beratcan.app.exception.BadRequestException;
 import com.beratcan.app.exception.ConflictException;
 import com.beratcan.app.exception.TestNotFoundException;
 import com.beratcan.app.exception.TopicNotFoundException;
-import com.beratcan.app.repository.QuestionRepository;
 import com.beratcan.app.repository.TestRepository;
 import com.beratcan.app.repository.TopicRepository;
 import lombok.RequiredArgsConstructor;
@@ -25,7 +22,6 @@ public class TestService {
 
     private final TestRepository testRepository;
     private final TopicRepository topicRepository;
-    private final QuestionRepository questionRepository;
     private final BookAdminService bookAdminService;
 
     // CREATE
@@ -49,23 +45,6 @@ public class TestService {
         test.setSequenceNumber(sequenceNumber);
 
         test = testRepository.save(test);
-
-        if (request.getQuestions() != null) {
-            for (QuestionRequest qr : request.getQuestions()) {
-                if (qr == null) {
-                    continue;
-                }
-                Question question = new Question();
-                question.setTest(test);
-                question.setImageUrl(qr.getImageUrl());
-                question.setCorrectAnswer(qr.getCorrectAnswer());
-                question.setAnswerNumber(qr.getAnswerNumber() == 0 ? 5 : qr.getAnswerNumber());
-                question.setVideoUrl(qr.getVideoUrl());
-                questionRepository.save(question);
-                test.getQuestions().add(question);
-            }
-            test = testRepository.save(test);
-        }
         bookAdminService.countBookData(test.getTopic().getBook().getId());
         return toTestResponse(test);
     }
@@ -97,22 +76,6 @@ public class TestService {
                 throw new BadRequestException("Test title cannot be empty");
             }
             test.setTitle(request.getTitle());
-        }
-
-        if (request.getQuestions() != null) {
-            for (QuestionRequest qr : request.getQuestions()) {
-                if (qr == null) {
-                    continue;
-                }
-                Question question = new Question();
-                question.setTest(test);
-                question.setImageUrl(qr.getImageUrl());
-                question.setCorrectAnswer(qr.getCorrectAnswer());
-                question.setAnswerNumber(qr.getAnswerNumber() == 0 ? 5 : qr.getAnswerNumber());
-                question.setVideoUrl(qr.getVideoUrl());
-                questionRepository.save(question);
-                test.getQuestions().add(question);
-            }
         }
 
         test = testRepository.save(test);

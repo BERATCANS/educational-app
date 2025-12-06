@@ -57,20 +57,6 @@ public class BookAdminService {
         }
 
         Book savedBook = bookRepository.save(book);
-
-        List<String> topics = request.getTopics();
-        if (topics != null && !topics.isEmpty()) {
-            for (String topicName : topics) {
-                Topic topic = new Topic();
-                topic.setTitle(topicName);
-                topic.setBook(savedBook);
-                topic = topicRepository.save(topic);
-                savedBook.getTopics().add(topic);
-            }
-
-            savedBook = bookRepository.save(savedBook);
-        }
-
         countBookData(savedBook.getId());
         return savedBook;
     }

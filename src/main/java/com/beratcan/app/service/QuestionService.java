@@ -1,6 +1,8 @@
 package com.beratcan.app.service;
 
+import com.beratcan.app.dto.request.CreateQuestionRequest;
 import com.beratcan.app.dto.request.QuestionRequest;
+import com.beratcan.app.dto.request.UpdateQuestionRequest;
 import com.beratcan.app.dto.response.QuestionAnalysisResult;
 import com.beratcan.app.dto.response.QuestionResponse;
 import com.beratcan.app.dto.response.TestResponse;
@@ -8,7 +10,6 @@ import com.beratcan.app.entity.Explanation;
 import com.beratcan.app.entity.Hint;
 import com.beratcan.app.entity.Question;
 import com.beratcan.app.entity.Test;
-import com.beratcan.app.entity.enums.OptionLetter;
 import com.beratcan.app.exception.BadRequestException;
 import com.beratcan.app.exception.ConflictException;
 import com.beratcan.app.exception.QuestionNotFoundException;
@@ -20,7 +21,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-import org.springframework.web.multipart.MultipartFile;
 
 import java.io.File;
 import java.util.List;
@@ -79,27 +79,59 @@ public class QuestionService {
     }
 
     // UPDATE
-    public QuestionResponse updateQuestion(Long questionId, QuestionRequest request) {
+    @Transactional
+    public QuestionResponse updateQuestion(Long questionId, UpdateQuestionRequest request) {
         if (request == null) {
-            throw new BadRequestException("Question request cannot be null");
+            throw new BadRequestException("UpdateQuestionRequest cannot be null");
         }
+
         Question question = questionRepository.findById(questionId)
                 .orElseThrow(() -> new QuestionNotFoundException(questionId));
 
-        if (request.getImageUrl() != null) {
-            question.setImageUrl(request.getImageUrl());
+        // ✅ Yeni görsel yüklenecekse
+        if (request.getImage() != null && !request.getImage().isEmpty()) {
+            // Eski dosyayı sil
+            if (question.getImageUrl() != null) {
+                try {
+                    fileService.deleteFile(question.getImageUrl());
+                    log.info("Eski görsel silindi: {}", question.getImageUrl());
+                } catch (Exception e) {
+                    log.warn("Eski görsel silinirken hata oluştu: {}", question.getImageUrl(), e);
+                    // Devam et, yeni dosyayı yükle
+                }
+            }
+            // Yeni dosyayı yükle
+            String newImageUrl = fileService.saveFile(request.getImage());
+            question.setImageUrl(newImageUrl);
+            log.info("Yeni görsel yüklendi: {}", newImageUrl);
         }
+
+        // ✅ Diğer alanları güncelle (partial update - sadece null değilse)
         if (request.getCorrectAnswer() != null) {
             question.setCorrectAnswer(request.getCorrectAnswer());
         }
-        if (request.getAnswerNumber() > 0) {
+        if (request.getAnswerNumber() != null && request.getAnswerNumber() > 0) {
             question.setAnswerNumber(request.getAnswerNumber());
         }
         if (request.getVideoUrl() != null) {
             question.setVideoUrl(request.getVideoUrl());
         }
+        if (request.getSequenceNumber() != null) {
+            // Sequence number validasyonu - aynı test içinde unique olmalı
+            Long testId = question.getTest().getId();
+            if (questionRepository.existsByTestIdAndSequenceNumber(testId, request.getSequenceNumber())) {
+                // Mevcut sorunun sequence number'ı değiştiriliyorsa ve başka bir soru bu
+                // numarayı kullanıyorsa
+                if (!request.getSequenceNumber().equals(question.getSequenceNumber())) {
+                    throw new ConflictException("Sequence number " + request.getSequenceNumber()
+                            + " is already in use for this test. Please choose a different sequence number.");
+                }
+            }
+            question.setSequenceNumber(request.getSequenceNumber());
+        }
 
         question = questionRepository.save(question);
+        log.info("Soru güncellendi: questionId={}", questionId);
         return toQuestionResponse(question);
     }
 
@@ -277,39 +309,32 @@ public class QuestionService {
     /**
      * Soru oluştur (görsel ile) + Otomatik AI analiz yap
      * 
-     * @param file           Görsel dosyası
-     * @param testId         Test ID
-     * @param correctAnswer  Doğru cevap
-     * @param answerNumber   Cevap sayısı
-     * @param videoUrl       Video URL (opsiyonel)
-     * @param sequenceNumber Sequence number (opsiyonel)
+     * @param request CreateQuestionRequest DTO (görsel, testId, correctAnswer, vb.)
      * @return QuestionResponse (hints ve explanation dahil)
      */
     @Transactional
-    public QuestionResponse addQuestionWithImageAndAI(
-            MultipartFile file,
-            Long testId,
-            String correctAnswer,
-            int answerNumber,
-            String videoUrl,
-            Integer sequenceNumber) {
+    public QuestionResponse addQuestionWithImageAndAI(CreateQuestionRequest request) {
+        if (request == null) {
+            throw new BadRequestException("CreateQuestionRequest cannot be null");
+        }
 
-        log.info("Soru oluşturma başlatıldı: testId={}, correctAnswer={}", testId, correctAnswer);
+        log.info("Soru oluşturma başlatıldı: testId={}, correctAnswer={}",
+                request.getTestId(), request.getCorrectAnswer());
 
         // 1. Görseli kaydet
-        String filename = fileService.saveFile(file);
-        log.info("Görsel kaydedildi: {}", filename);
+        String imageUrl = fileService.saveFile(request.getImage());
+        log.info("Görsel kaydedildi: {}", imageUrl);
 
         // 2. QuestionRequest oluştur
-        QuestionRequest request = new QuestionRequest();
-        request.setImageUrl(filename);
-        request.setCorrectAnswer(OptionLetter.valueOf(correctAnswer.toUpperCase()));
-        request.setAnswerNumber(answerNumber);
-        request.setVideoUrl(videoUrl);
-        request.setSequenceNumber(sequenceNumber);
+        QuestionRequest questionRequest = new QuestionRequest();
+        questionRequest.setImageUrl(imageUrl);
+        questionRequest.setCorrectAnswer(request.getCorrectAnswer());
+        questionRequest.setAnswerNumber(request.getAnswerNumber());
+        questionRequest.setVideoUrl(request.getVideoUrl());
+        questionRequest.setSequenceNumber(request.getSequenceNumber());
 
         // 3. Soruyu oluştur
-        QuestionResponse question = addQuestion(testId, request);
+        QuestionResponse question = addQuestion(request.getTestId(), questionRequest);
         log.info("Soru oluşturuldu: questionId={}", question.getId());
 
         // 4. Otomatik AI analiz yap ve hints/explanation ekle
