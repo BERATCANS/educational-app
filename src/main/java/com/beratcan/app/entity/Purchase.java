@@ -49,6 +49,7 @@ public class Purchase {
     @Column(unique = true, length = 100)
     private String transactionId; // Ödeme işlem numarası (unique - duplicate önleme için)
 
+    @Column(length = 50)
     private String paymentMethod; // Kredi kartı, havale, vb. (isteğe bağlı)
 
     @PrePersist

@@ -30,6 +30,7 @@ public class Question {
     private int answerNumber = 5;
 
     @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
     private OptionLetter correctAnswer;
 
     @ElementCollection

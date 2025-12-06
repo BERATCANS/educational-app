@@ -29,14 +29,15 @@ public class Book {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(length = 200)
+    @Column(nullable = false, length = 200)
     private String title;
 
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "publisher_id")
     private Publisher publisher;
 
-    private String description; // Kitap açıklaması
+    @Column(columnDefinition = "TEXT")
+    private String description; // Kitap açıklaması (max 2000 karakter)
 
     @Enumerated(EnumType.STRING)
     private GradeLevel gradeLevel; // Kitap hangi sınıf için?
@@ -50,7 +51,8 @@ public class Book {
     @Column(length = 500)
     private String coverImageUrl; // Kitap kapak fotoğrafı URL'si
 
-    private boolean paid; // Kitap paralı mı?
+    @Column(nullable = false)
+    private boolean paid = false; // Kitap paralı mı?
 
     @Column(precision = 10, scale = 2)
     private BigDecimal price; // Kitap fiyatı (TL)
@@ -76,11 +78,14 @@ public class Book {
     @OneToMany(mappedBy = "book", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<BookReview> reviews = new ArrayList<>();
 
-    private Integer numberOfTopics;
+    @Column(nullable = false, columnDefinition = "INT DEFAULT 0")
+    private Integer numberOfTopics = 0;
 
-    private Integer numberOfTests;
+    @Column(nullable = false, columnDefinition = "INT DEFAULT 0")
+    private Integer numberOfTests = 0;
 
-    private Integer numberOfQuestions;
+    @Column(nullable = false, columnDefinition = "INT DEFAULT 0")
+    private Integer numberOfQuestions = 0;
 
     @Column(nullable = false, columnDefinition = "REAL DEFAULT 0.0")
     private Double averageRating = 0.0; // Ortalama puan (1-5 arası)

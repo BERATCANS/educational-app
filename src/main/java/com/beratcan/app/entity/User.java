@@ -37,8 +37,8 @@ public class User {
         @Column(nullable = false, unique = true, length = 100)
         private String email;
 
-        @Column(nullable = false, unique = true)
-        private String phoneNumber;
+        @Column(nullable = false, unique = true, length = 20)
+        private String phoneNumber; // Format: +?[0-9]{10,13} (max 14 karakter: + işareti + 13 rakam)
 
         @Column(nullable = false, unique = true, length = 30)
         private String username; // unique username
