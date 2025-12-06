@@ -49,7 +49,7 @@ public class UserController {
         response.setEmail(user.getEmail());
         response.setEmailVerified(user.getEmailVerified());
         response.setMessage(
-                "Kayıt başarılı! Lütfen email adresinizi doğrulayın. Email kutunuzu kontrol edin ve doğrulama linkine tıklayın.");
+                "Kayıt başarılı! Email doğrulama linki email adresinize gönderildi. Lütfen email kutunuzu kontrol edin ve doğrulama linkine tıklayın. Email gelmediyse uygulama içindeki 'Email Tekrar Gönder' butonuna tıklayın.");
 
         return ResponseEntity.ok(response);
     }

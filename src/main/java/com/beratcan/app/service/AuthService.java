@@ -70,7 +70,7 @@ public class AuthService {
         // Email doğrulanmamışsa bilgilendirme mesajı ekle
         if (!user.getEmailVerified()) {
             response.setEmailVerificationMessage(
-                    "Lütfen email adresinizi doğrulayın. Email kutunuzu kontrol edin ve doğrulama linkine tıklayın.");
+                    "Email adresinizi doğrulamanız gerekiyor. Email doğrulama linki almak için uygulama içindeki 'Email Gönder' butonuna tıklayın.");
         }
 
         if (streakUpdated) {

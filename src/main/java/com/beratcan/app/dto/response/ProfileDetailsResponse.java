@@ -12,6 +12,7 @@ public class ProfileDetailsResponse {
     private String username;
     private String gender;
     private String city;
+    private Boolean emailVerified;
 
     public static ProfileDetailsResponse fromUser(User user) {
         ProfileDetailsResponse response = new ProfileDetailsResponse();
@@ -22,6 +23,7 @@ public class ProfileDetailsResponse {
         response.setUsername(user.getUsername());
         response.setGender(user.getGender() != null ? user.getGender().name() : null);
         response.setCity(user.getCity() != null ? user.getCity().name() : null);
+        response.setEmailVerified(user.getEmailVerified());
         return response;
     }
 }
