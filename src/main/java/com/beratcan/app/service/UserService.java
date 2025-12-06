@@ -153,7 +153,6 @@ public class UserService {
 
     /**
      * Kullanıcı kimlik bilgilerini doğrular (email/username + password)
-     * Token oluşturma ve streak güncelleme AuthService'de yapılıyor
      * 
      * @param request Login request (identifier, password)
      * @return User entity (doğrulama başarılıysa)

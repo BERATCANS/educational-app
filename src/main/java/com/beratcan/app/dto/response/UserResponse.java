@@ -19,6 +19,8 @@ public class UserResponse {
     private String gender;
     private String city;
     private Boolean streakUpdated; // Streak güncellenip güncellenmediği bilgisi
+    private Integer currentStreak; // Mevcut günlük giriş serisi (kaç gün)
+    private Integer longestStreak; // En uzun günlük giriş serisi
 
     public UserResponse(User user) {
         this.id = user.getId();
@@ -35,6 +37,8 @@ public class UserResponse {
         this.gender = user.getGender() != null ? user.getGender().name() : null;
         this.city = user.getCity() != null ? user.getCity().name() : null;
         this.streakUpdated = false; // Default false, setter ile set edilecek
+        this.currentStreak = user.getCurrentStreak() != null ? user.getCurrentStreak() : 0;
+        this.longestStreak = user.getLongestStreak() != null ? user.getLongestStreak() : 0;
     }
 
     public UserResponse(User user, Boolean streakUpdated) {
