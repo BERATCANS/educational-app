@@ -3,6 +3,7 @@ package com.beratcan.app.controller;
 import com.beratcan.app.annotation.RateLimit;
 import com.beratcan.app.dto.request.DailyQuestionAnswerRequest;
 import com.beratcan.app.dto.request.CreateDailyQuestionRequest;
+import com.beratcan.app.dto.request.UpdateDailyQuestionRequest;
 import com.beratcan.app.dto.response.DailyQuestionResponse;
 import com.beratcan.app.entity.DailyQuestion;
 import com.beratcan.app.service.DailyQuestionService;
@@ -12,6 +13,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/daily-questions")
@@ -43,5 +46,50 @@ public class DailyQuestionController {
         Long userId = Long.parseLong(authentication.getName());
         DailyQuestionResponse response = dailyQuestionService.submitAnswer(userId, request);
         return ResponseEntity.ok(response);
+    }
+
+    // ADMIN ENDPOINTS
+
+    /**
+     * Tekil günlük soru getir (Admin) - Zaman kontrolü yapmadan tüm bilgileri
+     * gösterir
+     */
+    @PreAuthorize("hasRole('ADMIN')")
+    @GetMapping("/{questionId}")
+    public ResponseEntity<DailyQuestionResponse> getDailyQuestionById(@PathVariable Long questionId) {
+        DailyQuestionResponse response = dailyQuestionService.getDailyQuestionByIdForAdmin(questionId);
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Tüm günlük soruları getir (Admin)
+     */
+    @PreAuthorize("hasRole('ADMIN')")
+    @GetMapping("/all")
+    public ResponseEntity<List<DailyQuestionResponse>> getAllDailyQuestions() {
+        List<DailyQuestionResponse> questions = dailyQuestionService.getAllDailyQuestions();
+        return ResponseEntity.ok(questions);
+    }
+
+    /**
+     * Günlük soruyu güncelle (Admin)
+     */
+    @PreAuthorize("hasRole('ADMIN')")
+    @PutMapping("/{questionId}")
+    public ResponseEntity<DailyQuestionResponse> updateDailyQuestion(
+            @PathVariable Long questionId,
+            @Valid @ModelAttribute UpdateDailyQuestionRequest request) {
+        DailyQuestionResponse response = dailyQuestionService.updateDailyQuestion(questionId, request);
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Günlük soruyu sil (Admin)
+     */
+    @PreAuthorize("hasRole('ADMIN')")
+    @DeleteMapping("/{questionId}")
+    public ResponseEntity<Void> deleteDailyQuestion(@PathVariable Long questionId) {
+        dailyQuestionService.deleteDailyQuestion(questionId);
+        return ResponseEntity.noContent().build();
     }
 }

@@ -2,6 +2,7 @@ package com.beratcan.app.service;
 
 import com.beratcan.app.dto.request.DailyQuestionAnswerRequest;
 import com.beratcan.app.dto.request.CreateDailyQuestionRequest;
+import com.beratcan.app.dto.request.UpdateDailyQuestionRequest;
 import com.beratcan.app.dto.response.DailyQuestionResponse;
 import com.beratcan.app.entity.DailyQuestion;
 import com.beratcan.app.entity.DailyQuestionAnswer;
@@ -24,6 +25,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
+import java.util.stream.Collectors;
 import java.time.format.DateTimeFormatter;
 import java.util.Map;
 
@@ -139,6 +141,115 @@ public class DailyQuestionService {
         return saved;
     }
 
+    /**
+     * Admin için tekil günlük soru getir (Zaman kontrolü yapmadan, tüm bilgileri
+     * gösterir)
+     */
+    @Transactional(readOnly = true)
+    public DailyQuestionResponse getDailyQuestionByIdForAdmin(Long questionId) {
+        DailyQuestion question = dailyQuestionRepository.findById(questionId)
+                .orElseThrow(() -> new ResourceNotFoundException("Günlük soru bulunamadı: " + questionId));
+
+        // Admin için özel response - zaman kontrolü yapmadan tüm bilgileri göster
+        return toDailyQuestionResponseForAdmin(question);
+    }
+
+    /**
+     * Tüm günlük soruları getir (Admin için)
+     */
+    @Transactional(readOnly = true)
+    public List<DailyQuestionResponse> getAllDailyQuestions() {
+        List<DailyQuestion> questions = dailyQuestionRepository.findAll();
+        return questions.stream()
+                .map(question -> toDailyQuestionResponse(question, null))
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Günlük soruyu güncelle (Admin için)
+     */
+    @Transactional
+    public DailyQuestionResponse updateDailyQuestion(Long questionId, UpdateDailyQuestionRequest request) {
+        if (request == null) {
+            throw new BadRequestException("UpdateDailyQuestionRequest cannot be null");
+        }
+
+        DailyQuestion question = dailyQuestionRepository.findById(questionId)
+                .orElseThrow(() -> new ResourceNotFoundException("Günlük soru bulunamadı: " + questionId));
+
+        log.info("Günlük soru güncelleme başlatıldı: questionId={}", questionId);
+
+        // Görsel güncelleme (opsiyonel)
+        if (request.getImage() != null && !request.getImage().isEmpty()) {
+            // Eski görseli sil
+            if (question.getImageUrl() != null && !question.getImageUrl().isEmpty()) {
+                fileService.deleteFile(question.getImageUrl());
+            }
+            // Yeni görseli kaydet
+            String newImageUrl = fileService.saveFile(request.getImage());
+            question.setImageUrl(newImageUrl);
+            log.info("Görsel güncellendi: {}", newImageUrl);
+        }
+
+        // Diğer alanları güncelle (sadece null değilse)
+        if (request.getAnswerNumber() != null) {
+            question.setAnswerNumber(request.getAnswerNumber());
+        }
+        if (request.getCorrectAnswer() != null) {
+            question.setCorrectAnswer(request.getCorrectAnswer());
+        }
+        if (request.getVideoUrl() != null) {
+            question.setVideoUrl(request.getVideoUrl());
+        }
+        if (request.getExplanation() != null) {
+            question.setExplanation(request.getExplanation());
+        }
+        if (request.getDisplayDate() != null) {
+            question.setDisplayDate(request.getDisplayDate());
+        }
+        if (request.getStartTime() != null) {
+            question.setStartTime(request.getStartTime());
+        }
+        if (request.getEndTime() != null) {
+            question.setEndTime(request.getEndTime());
+        }
+        if (request.getActive() != null) {
+            question.setActive(request.getActive());
+        }
+
+        DailyQuestion updated = dailyQuestionRepository.save(question);
+        log.info("Günlük soru güncellendi: questionId={}", updated.getId());
+
+        return toDailyQuestionResponse(updated, null);
+    }
+
+    /**
+     * Günlük soruyu sil (Admin için)
+     */
+    @Transactional
+    public void deleteDailyQuestion(Long questionId) {
+        DailyQuestion question = dailyQuestionRepository.findById(questionId)
+                .orElseThrow(() -> new ResourceNotFoundException("Günlük soru bulunamadı: " + questionId));
+
+        log.info("Günlük soru silme başlatıldı: questionId={}", questionId);
+
+        // Görseli sil
+        if (question.getImageUrl() != null && !question.getImageUrl().isEmpty()) {
+            fileService.deleteFile(question.getImageUrl());
+        }
+
+        // İlişkili cevapları sil
+        List<DailyQuestionAnswer> answers = answerRepository.findByDailyQuestionId(questionId);
+        if (!answers.isEmpty()) {
+            answerRepository.deleteAll(answers);
+            log.info("{} adet cevap silindi", answers.size());
+        }
+
+        // Soruyu sil
+        dailyQuestionRepository.delete(question);
+        log.info("Günlük soru silindi: questionId={}", questionId);
+    }
+
     private DailyQuestionResponse toDailyQuestionResponse(DailyQuestion question, Long userId) {
         DailyQuestionResponse response = new DailyQuestionResponse();
         response.setId(question.getId());
@@ -191,6 +302,53 @@ public class DailyQuestionService {
 
             response.setAfterEndTime(afterEndTime);
         }
+
+        return response;
+    }
+
+    /**
+     * Admin için özel response - Zaman kontrolü yapmadan tüm bilgileri gösterir
+     */
+    private DailyQuestionResponse toDailyQuestionResponseForAdmin(DailyQuestion question) {
+        DailyQuestionResponse response = new DailyQuestionResponse();
+        response.setId(question.getId());
+
+        // Görsel URL'i oluştur
+        String imageUrl = question.getImageUrl();
+        if (imageUrl != null && !imageUrl.isEmpty() && !imageUrl.startsWith("/api/files/")) {
+            response.setImageUrl("/api/files/" + imageUrl);
+        } else {
+            response.setImageUrl(imageUrl);
+        }
+
+        response.setAnswerNumber(question.getAnswerNumber());
+        response.setVideoUrl(question.getVideoUrl());
+        response.setDisplayDate(question.getDisplayDate());
+        response.setStartTime(question.getStartTime());
+        response.setEndTime(question.getEndTime());
+        response.setActive(question.isActive());
+
+        // Admin için her zaman doğru cevap, açıklama ve istatistikleri göster
+        DailyQuestionResponse.AfterEndTimeInfo afterEndTime = new DailyQuestionResponse.AfterEndTimeInfo();
+        afterEndTime.setCorrectAnswer(question.getCorrectAnswer());
+        afterEndTime.setExplanation(question.getExplanation());
+
+        // İstatistikler
+        DailyQuestionResponse.AnswerStatistics statistics = new DailyQuestionResponse.AnswerStatistics();
+        statistics.setTotalAnswers(answerRepository.countAnswersByQuestionId(question.getId()));
+
+        // Answer distribution
+        Map<OptionLetter, Long> distribution = new HashMap<>();
+        List<Object[]> distributionData = answerRepository.getAnswerDistribution(question.getId());
+        for (Object[] row : distributionData) {
+            OptionLetter option = (OptionLetter) row[0];
+            Long count = (Long) row[1];
+            distribution.put(option, count);
+        }
+        statistics.setDistribution(distribution);
+        afterEndTime.setStatistics(statistics);
+
+        response.setAfterEndTime(afterEndTime);
 
         return response;
     }
