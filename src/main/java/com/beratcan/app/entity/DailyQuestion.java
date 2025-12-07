@@ -15,7 +15,7 @@ public class DailyQuestion {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false)
+    @Column(nullable = false, length = 500)
     private String imageUrl;
 
     @Column(nullable = false)
@@ -25,6 +25,7 @@ public class DailyQuestion {
     @Enumerated(EnumType.STRING)
     private OptionLetter correctAnswer;
 
+    @Column(length = 500)
     private String videoUrl;
 
     @Column(columnDefinition = "TEXT")

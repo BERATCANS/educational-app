@@ -13,7 +13,6 @@ import java.util.List;
 @Getter
 @Setter
 @Table(name = "questions")
-// email verify ekle
 public class Question {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -24,13 +23,14 @@ public class Question {
     @JsonBackReference
     private Test test;
 
-    @Column(nullable = false)
+    @Column(nullable = false, length = 500)
     private String imageUrl;
 
     @Column(nullable = false)
     private int answerNumber = 5;
 
     @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
     private OptionLetter correctAnswer;
 
     @ElementCollection
@@ -40,7 +40,7 @@ public class Question {
     @Embedded
     private Explanation explanation;
 
-    @Column
+    @Column(length = 500)
     private String videoUrl;
 
     @Column(name = "sequence_number")

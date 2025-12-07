@@ -1,10 +1,12 @@
 package com.beratcan.app.controller;
 
+import com.beratcan.app.annotation.RateLimit;
 import com.beratcan.app.dto.request.AddToCartRequest;
 import com.beratcan.app.dto.response.CartResponse;
 import com.beratcan.app.dto.response.PurchaseResponse;
 import com.beratcan.app.service.CartService;
 import com.beratcan.app.service.PurchaseService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -27,16 +29,13 @@ public class CartController {
      * POST /api/cart/add
      */
     @PostMapping("/add")
+    @RateLimit(requestsPerMinute = 30, keyType = "USER", message = "Too many cart operations. Please try again later.")
     public ResponseEntity<?> addToCart(
-            @RequestBody AddToCartRequest request,
+            @Valid @RequestBody AddToCartRequest request,
             Authentication authentication) {
-        try {
-            Long userId = Long.parseLong(authentication.getName());
-            CartResponse response = cartService.addToCart(userId, request.getBookId());
-            return ResponseEntity.ok(response);
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
+        Long userId = Long.parseLong(authentication.getName());
+        CartResponse response = cartService.addToCart(userId, request.getBookId());
+        return ResponseEntity.ok(response);
     }
 
     /**
@@ -47,13 +46,9 @@ public class CartController {
     public ResponseEntity<?> removeFromCart(
             @PathVariable Long cartItemId,
             Authentication authentication) {
-        try {
-            Long userId = Long.parseLong(authentication.getName());
-            CartResponse response = cartService.removeFromCart(userId, cartItemId);
-            return ResponseEntity.ok(response);
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
+        Long userId = Long.parseLong(authentication.getName());
+        CartResponse response = cartService.removeFromCart(userId, cartItemId);
+        return ResponseEntity.ok(response);
     }
 
     /**
@@ -73,13 +68,9 @@ public class CartController {
      */
     @DeleteMapping("/clear")
     public ResponseEntity<?> clearCart(Authentication authentication) {
-        try {
-            Long userId = Long.parseLong(authentication.getName());
-            cartService.clearCart(userId);
-            return ResponseEntity.ok(Map.of("message", "Sepet başarıyla temizlendi"));
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
+        Long userId = Long.parseLong(authentication.getName());
+        cartService.clearCart(userId);
+        return ResponseEntity.ok(Map.of("message", "Sepet başarıyla temizlendi"));
     }
 
     /**
@@ -98,16 +89,28 @@ public class CartController {
      * POST /api/cart/checkout
      */
     @PostMapping("/checkout")
+    @RateLimit(requestsPerMinute = 3, keyType = "USER", message = "Too many checkout attempts. Please try again later.")
     public ResponseEntity<?> checkout(Authentication authentication) {
-        try {
-            Long userId = Long.parseLong(authentication.getName());
-            List<PurchaseResponse> purchases = purchaseService.checkoutCart(userId);
-            return ResponseEntity.status(HttpStatus.CREATED).body(Map.of(
-                    "message", "Sepetteki tüm kitaplar başarıyla satın alındı",
-                    "purchases", purchases,
-                    "totalItems", purchases.size()));
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
+        Long userId = Long.parseLong(authentication.getName());
+        List<PurchaseResponse> purchases = purchaseService.checkoutCart(userId);
+        return ResponseEntity.status(HttpStatus.CREATED).body(Map.of(
+                "message", "Sepetteki tüm kitaplar başarıyla satın alındı",
+                "purchases", purchases,
+                "totalItems", purchases.size()));
+    }
+
+    @PostMapping("/apply-discount")
+    @RateLimit(requestsPerMinute = 10, keyType = "USER", message = "Too many discount code attempts. Please try again later.")
+    public ResponseEntity<CartResponse> applyDiscountCode(
+            @RequestParam String code,
+            Authentication authentication) {
+        Long userId = Long.parseLong(authentication.getName());
+        return ResponseEntity.ok(cartService.applyDiscountCode(userId, code));
+    }
+
+    @DeleteMapping("/remove-discount")
+    public ResponseEntity<CartResponse> removeDiscountCode(Authentication authentication) {
+        Long userId = Long.parseLong(authentication.getName());
+        return ResponseEntity.ok(cartService.removeDiscountCode(userId));
     }
 }

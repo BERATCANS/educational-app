@@ -18,7 +18,7 @@ public class Topic {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-    @Column(name = "title", nullable = false)
+    @Column(name = "title", nullable = false, length = 100)
     private String title;
 
     @ManyToOne
@@ -30,10 +30,10 @@ public class Topic {
     @JsonManagedReference
     private List<Test> tests = new ArrayList<>();
 
-    @Column(name = "number_of_tests")
+    @Column(name = "number_of_tests", nullable = false, columnDefinition = "INT DEFAULT 0")
     private Integer numberOfTests = 0;
 
-    @Column(name = "number_of_questions")
+    @Column(name = "number_of_questions", nullable = false, columnDefinition = "INT DEFAULT 0")
     private Integer numberOfQuestions = 0;
 
     @Column(name = "sequence_number")

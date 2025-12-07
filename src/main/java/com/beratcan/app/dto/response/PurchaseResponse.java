@@ -20,10 +20,16 @@ public class PurchaseResponse {
     private Long bookId;
     private String bookTitle;
     private String bookCoverImageUrl;
+    private String bookPublisher;
     private BigDecimal price;
     private LocalDateTime purchaseDate;
     private PurchaseStatus status;
     private String transactionId;
     private String paymentMethod;
     private String infoMessage; // Bilgilendirme mesajı (error değil)
+    
+    // İndirim bilgileri
+    private String discountCode; // Kullanılan indirim kodu (varsa)
+    private BigDecimal discountAmount; // Uygulanan indirim tutarı
+    private BigDecimal finalPrice; // İndirim sonrası ödenen tutar
 }

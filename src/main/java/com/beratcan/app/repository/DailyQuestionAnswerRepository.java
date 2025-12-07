@@ -10,17 +10,20 @@ import java.util.Optional;
 
 @Repository
 public interface DailyQuestionAnswerRepository extends JpaRepository<DailyQuestionAnswer, Long> {
-    
+
     Optional<DailyQuestionAnswer> findByDailyQuestionIdAndUserId(Long dailyQuestionId, Long userId);
-    
+
     boolean existsByDailyQuestionIdAndUserId(Long dailyQuestionId, Long userId);
-    
+
     @Query("SELECT COUNT(dqa) FROM DailyQuestionAnswer dqa WHERE dqa.dailyQuestion.id = :questionId")
     long countAnswersByQuestionId(@Param("questionId") Long questionId);
-    
+
     @Query("SELECT dqa.selectedAnswer, COUNT(dqa) " +
-           "FROM DailyQuestionAnswer dqa " +
-           "WHERE dqa.dailyQuestion.id = :questionId " +
-           "GROUP BY dqa.selectedAnswer")
+            "FROM DailyQuestionAnswer dqa " +
+            "WHERE dqa.dailyQuestion.id = :questionId " +
+            "GROUP BY dqa.selectedAnswer")
     List<Object[]> getAnswerDistribution(@Param("questionId") Long questionId);
+
+    @Query("SELECT dqa FROM DailyQuestionAnswer dqa WHERE dqa.dailyQuestion.id = :questionId")
+    List<DailyQuestionAnswer> findByDailyQuestionId(@Param("questionId") Long questionId);
 }

@@ -18,6 +18,9 @@ public class CartResponse {
     private Long userId;
     private List<CartItemResponse> items;
     private BigDecimal totalPrice; // Toplam fiyat
+    private BigDecimal discountAmount; // Uygulanan indirim tutarı
+    private BigDecimal totalPriceAfterDiscount; // İndirim sonrası toplam
+    private String appliedDiscountCode; // Uygulanan indirim kodu
     private int itemCount; // Toplam ürün sayısı
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

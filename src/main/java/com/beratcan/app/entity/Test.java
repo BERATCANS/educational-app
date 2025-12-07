@@ -19,6 +19,7 @@ public class Test {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Column(nullable = false, length = 200)
     private String title;
 
     @ManyToOne
@@ -30,7 +31,7 @@ public class Test {
     @JsonManagedReference
     private List<Question> questions = new ArrayList<>();
 
-    @Column(name = "number_of_questions")
+    @Column(name = "number_of_questions", nullable = false, columnDefinition = "INT DEFAULT 0")
     private Integer numberOfQuestions = 0;
 
     @Column(name = "sequence_number")

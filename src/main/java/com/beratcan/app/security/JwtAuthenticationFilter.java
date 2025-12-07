@@ -4,45 +4,128 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.MediaType;
+import org.springframework.lang.NonNull;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 
+/**
+ * JWT Authentication Filter
+ * Her request'te JWT token'ı kontrol eder
+ * Token geçerliyse kullanıcıyı SecurityContext'e ekler
+ * Role-based authorization için authorities (roles) bilgisini de ekler
+ */
 @Component
+@Slf4j
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtUtil jwtUtil;
+    private final UserDetailsService userDetailsService;
 
-    public JwtAuthenticationFilter(JwtUtil jwtUtil) {
+    public JwtAuthenticationFilter(JwtUtil jwtUtil, UserDetailsService userDetailsService) {
         this.jwtUtil = jwtUtil;
+        this.userDetailsService = userDetailsService;
     }
 
     @Override
-    protected void doFilterInternal(HttpServletRequest request,
-            HttpServletResponse response,
-            FilterChain filterChain) throws ServletException, IOException {
-        String header = request.getHeader("Authorization");
+    protected void doFilterInternal(@NonNull HttpServletRequest request,
+            @NonNull HttpServletResponse response,
+            @NonNull FilterChain filterChain) throws ServletException, IOException {
 
-        if (header != null && header.startsWith("Bearer ")) {
-            String token = header.substring(7);
+        try {
+            String header = request.getHeader("Authorization");
 
-            if (jwtUtil.validateToken(token)) {
-                Long userId = jwtUtil.extractUserId(token);
+            if (header != null && header.startsWith("Bearer ")) {
+                String token = header.substring(7);
 
-                UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(userId.toString(),
-                        null, null);
+                // Token blacklist'te mi kontrol et (validateToken içinde de var ama açıkça
+                // kontrol edelim)
+                if (jwtUtil.isTokenBlacklisted(token)) {
+                    log.warn("Attempted to use blacklisted token from IP: {}", request.getRemoteAddr());
+                    sendUnauthorizedResponse(response, "Token has been invalidated (logged out)");
+                    return;
+                }
 
-                authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+                // Önce access token olarak kontrol et
+                boolean isAccessToken = jwtUtil.isAccessToken(token);
+                boolean isRefreshToken = jwtUtil.isRefreshToken(token);
 
-                // SecurityContext'e kullanıcıyı ekle
-                SecurityContextHolder.getContext().setAuthentication(authentication);
+                // Access token geçerli mi kontrol et
+                if (isAccessToken && jwtUtil.validateToken(token)) {
+                    String username = jwtUtil.extractUsername(token);
+                    Long userId = jwtUtil.extractUserId(token);
+
+                    log.debug("Authenticated request for user: {} (ID: {})", username, userId);
+
+                    // UserDetailsService ile kullanıcıyı yükle (role bilgisi ile birlikte)
+                    UserDetails userDetails = userDetailsService.loadUserByUsername(username);
+
+                    // Authorities (role'ler) ile authentication oluştur
+                    UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
+                            userId.toString(), // Principal (userId)
+                            null, // Credentials (şifre gerekmez)
+                            userDetails.getAuthorities() // ✅ Authorities (role'ler) eklendi!
+                    );
+
+                    authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+
+                    // SecurityContext'e kullanıcıyı ekle
+                    SecurityContextHolder.getContext().setAuthentication(authentication);
+
+                    log.debug("User authenticated with roles: {}", userDetails.getAuthorities());
+                }
+                // Access token expire olmuşsa ama refresh token geçerliyse, authenticate et
+                // (Sadece /api/users/refresh endpoint'i için)
+                else if (isRefreshToken && jwtUtil.validateToken(token) &&
+                        request.getRequestURI().equals("/api/users/refresh")) {
+                    String username = jwtUtil.extractUsername(token);
+                    Long userId = jwtUtil.extractUserId(token);
+
+                    log.debug("Authenticated refresh request for user: {} (ID: {})", username, userId);
+
+                    // UserDetailsService ile kullanıcıyı yükle (role bilgisi ile birlikte)
+                    UserDetails userDetails = userDetailsService.loadUserByUsername(username);
+
+                    // Authorities (role'ler) ile authentication oluştur
+                    UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
+                            userId.toString(), // Principal (userId)
+                            null, // Credentials (şifre gerekmez)
+                            userDetails.getAuthorities() // ✅ Authorities (role'ler) eklendi!
+                    );
+
+                    authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+
+                    // SecurityContext'e kullanıcıyı ekle
+                    SecurityContextHolder.getContext().setAuthentication(authentication);
+
+                    log.debug("User authenticated with refresh token for refresh endpoint");
+                } else {
+                    log.warn("Invalid or expired token from IP: {}", request.getRemoteAddr());
+                }
             }
+        } catch (Exception e) {
+            log.error("Cannot set user authentication: {}", e.getMessage());
         }
 
         filterChain.doFilter(request, response);
+    }
+
+    /**
+     * Unauthorized response gönder
+     */
+    private void sendUnauthorizedResponse(HttpServletResponse response, String message) throws IOException {
+        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+        response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+        response.getWriter().write(String.format(
+                "{\"status\": 401, \"error\": \"Unauthorized\", \"message\": \"%s\"}",
+                message));
     }
 }

@@ -1,18 +1,20 @@
 package com.beratcan.app.controller;
 
+import com.beratcan.app.annotation.RateLimit;
 import com.beratcan.app.dto.request.DailyQuestionAnswerRequest;
 import com.beratcan.app.dto.request.CreateDailyQuestionRequest;
+import com.beratcan.app.dto.request.UpdateDailyQuestionRequest;
 import com.beratcan.app.dto.response.DailyQuestionResponse;
 import com.beratcan.app.entity.DailyQuestion;
-import com.beratcan.app.entity.enums.OptionLetter;
-import java.time.LocalDate;
-import java.time.LocalTime;
 import com.beratcan.app.service.DailyQuestionService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
-import org.springframework.http.HttpStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.multipart.MultipartFile;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/daily-questions")
@@ -21,67 +23,73 @@ public class DailyQuestionController {
 
     private final DailyQuestionService dailyQuestionService;
 
+    @PreAuthorize("hasRole('ADMIN')")
     @PostMapping("/create")
     public ResponseEntity<?> createDailyQuestion(
-            @RequestParam("image") MultipartFile image,
-            @RequestParam("answerNumber") Integer answerNumber,
-            @RequestParam("correctAnswer") String correctAnswer,
-            @RequestParam(value = "videoUrl", required = false) String videoUrl,
-            @RequestParam("explanation") String explanation,
-            @RequestParam("displayDate") String displayDate,
-            @RequestParam("startTime") String startTime,
-            @RequestParam("endTime") String endTime) {
-        try {
-            CreateDailyQuestionRequest request = new CreateDailyQuestionRequest();
-            request.setImage(image);
-            request.setAnswerNumber(answerNumber);
-            request.setCorrectAnswer(OptionLetter.valueOf(correctAnswer));
-            request.setVideoUrl(videoUrl);
-            request.setExplanation(explanation);
-            request.setDisplayDate(LocalDate.parse(displayDate));
-            request.setStartTime(LocalTime.parse(startTime));
-            request.setEndTime(LocalTime.parse(endTime));
-
-            DailyQuestion question = dailyQuestionService.createDailyQuestion(request);
-            return ResponseEntity.ok(new DailyQuestionResponse(question, null));
-        } catch (Exception e) {
-            return ResponseEntity
-                    .status(HttpStatus.BAD_REQUEST)
-                    .body(new DailyQuestionResponse(null, e.getMessage()));
-        }
+            @Valid @ModelAttribute CreateDailyQuestionRequest request) {
+        DailyQuestion question = dailyQuestionService.createDailyQuestion(request);
+        return ResponseEntity.ok(new DailyQuestionResponse(question, null));
     }
 
     @GetMapping("/current")
-    public ResponseEntity<DailyQuestionResponse> getCurrentQuestion(@RequestParam Long userId) {
-        try {
-            DailyQuestionResponse response = dailyQuestionService.getCurrentQuestion(userId);
-            return ResponseEntity.ok(response);
-        } catch (RuntimeException e) {
-            return ResponseEntity
-                .status(HttpStatus.NOT_FOUND)
-                .body(new DailyQuestionResponse(null, e.getMessage()));
-        } catch (Exception e) {
-            return ResponseEntity
-                .status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(new DailyQuestionResponse(null, "Günün sorusu alınırken bir hata oluştu"));
-        }
+    public ResponseEntity<DailyQuestionResponse> getCurrentQuestion(Authentication authentication) {
+        Long userId = Long.parseLong(authentication.getName());
+        DailyQuestionResponse response = dailyQuestionService.getCurrentQuestion(userId);
+        return ResponseEntity.ok(response);
     }
 
     @PostMapping("/answer")
+    @RateLimit(requestsPerMinute = 3, keyType = "USER", message = "Too many answer submissions. Please try again later.")
     public ResponseEntity<DailyQuestionResponse> submitAnswer(
-            @RequestParam Long userId,
-            @RequestBody DailyQuestionAnswerRequest request) {
-        try {
-            DailyQuestionResponse response = dailyQuestionService.submitAnswer(userId, request);
-            return ResponseEntity.ok(response);
-        } catch (RuntimeException e) {
-            return ResponseEntity
-                .status(HttpStatus.BAD_REQUEST)
-                .body(new DailyQuestionResponse(null, e.getMessage()));
-        } catch (Exception e) {
-            return ResponseEntity
-                .status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(new DailyQuestionResponse(null, "Cevap gönderilirken bir hata oluştu"));
-        }
+            @Valid @RequestBody DailyQuestionAnswerRequest request,
+            Authentication authentication) {
+        Long userId = Long.parseLong(authentication.getName());
+        DailyQuestionResponse response = dailyQuestionService.submitAnswer(userId, request);
+        return ResponseEntity.ok(response);
+    }
+
+    // ADMIN ENDPOINTS
+
+    /**
+     * Tekil günlük soru getir (Admin) - Zaman kontrolü yapmadan tüm bilgileri
+     * gösterir
+     */
+    @PreAuthorize("hasRole('ADMIN')")
+    @GetMapping("/{questionId}")
+    public ResponseEntity<DailyQuestionResponse> getDailyQuestionById(@PathVariable Long questionId) {
+        DailyQuestionResponse response = dailyQuestionService.getDailyQuestionByIdForAdmin(questionId);
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Tüm günlük soruları getir (Admin)
+     */
+    @PreAuthorize("hasRole('ADMIN')")
+    @GetMapping("/all")
+    public ResponseEntity<List<DailyQuestionResponse>> getAllDailyQuestions() {
+        List<DailyQuestionResponse> questions = dailyQuestionService.getAllDailyQuestions();
+        return ResponseEntity.ok(questions);
+    }
+
+    /**
+     * Günlük soruyu güncelle (Admin)
+     */
+    @PreAuthorize("hasRole('ADMIN')")
+    @PutMapping("/{questionId}")
+    public ResponseEntity<DailyQuestionResponse> updateDailyQuestion(
+            @PathVariable Long questionId,
+            @Valid @ModelAttribute UpdateDailyQuestionRequest request) {
+        DailyQuestionResponse response = dailyQuestionService.updateDailyQuestion(questionId, request);
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Günlük soruyu sil (Admin)
+     */
+    @PreAuthorize("hasRole('ADMIN')")
+    @DeleteMapping("/{questionId}")
+    public ResponseEntity<Void> deleteDailyQuestion(@PathVariable Long questionId) {
+        dailyQuestionService.deleteDailyQuestion(questionId);
+        return ResponseEntity.noContent().build();
     }
 }

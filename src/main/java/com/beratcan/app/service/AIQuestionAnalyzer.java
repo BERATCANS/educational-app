@@ -1,8 +1,10 @@
 package com.beratcan.app.service;
 
+import com.beratcan.app.constants.AppConstants;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.beratcan.app.dto.response.QuestionAnalysisResult;
+import com.beratcan.app.exception.ExternalServiceException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import okhttp3.*;
@@ -12,6 +14,7 @@ import org.springframework.stereotype.Service;
 import java.io.File;
 import java.nio.file.Files;
 import java.util.*;
+import java.util.concurrent.TimeUnit;
 
 @Slf4j
 @Service
@@ -20,9 +23,9 @@ public class AIQuestionAnalyzer {
 
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final OkHttpClient httpClient = new OkHttpClient.Builder()
-            .connectTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
-            .writeTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
-            .readTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
+            .connectTimeout(AppConstants.HTTP_CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+            .writeTimeout(AppConstants.HTTP_WRITE_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+            .readTimeout(AppConstants.HTTP_READ_TIMEOUT_SECONDS, TimeUnit.SECONDS)
             .build();
 
     @Value("${openai.api.key}")
@@ -35,20 +38,26 @@ public class AIQuestionAnalyzer {
      * Soru görselinden 3 ipucu ve tam çözüm üretir
      */
     public QuestionAnalysisResult analyzeQuestion(File imageFile) {
-        try {
-            log.info("AI analizi başlatılıyor: {}", imageFile.getName());
+        long startTime = System.currentTimeMillis();
+        long imageSizeKB = imageFile.length() / 1024;
 
+        log.info("AI analysis started: file={}, size={}KB, model={}",
+                imageFile.getName(), imageSizeKB, model);
+
+        try {
             // Görseli base64'e çevir
             byte[] imageBytes = Files.readAllBytes(imageFile.toPath());
             String base64Image = Base64.getEncoder().encodeToString(imageBytes);
 
             // Prompt hazırla
             String prompt = createPrompt();
+            int promptLength = prompt.length();
 
             // OpenAI Vision API isteği (HTTP direkt)
             String requestBody = createVisionApiRequest(prompt, base64Image);
 
-            log.info("OpenAI Vision API isteği gönderiliyor...");
+            log.info("Calling OpenAI API: model={}, imageSize={}KB, promptLength={} chars",
+                    model, imageSizeKB, promptLength);
 
             Request request = new Request.Builder()
                     .url("https://api.openai.com/v1/chat/completions")
@@ -59,29 +68,53 @@ public class AIQuestionAnalyzer {
 
             // Response al
             try (Response response = httpClient.newCall(request).execute()) {
+                long duration = System.currentTimeMillis() - startTime;
+
                 if (!response.isSuccessful()) {
                     String errorBody = response.body() != null ? response.body().string() : "No error body";
-                    log.error("OpenAI API Error: {} - {}", response.code(), errorBody);
-                    throw new RuntimeException("OpenAI API hatası: " + response.code() + " - " + errorBody);
+                    log.error("OpenAI API failed: status={}, duration={}ms, model={}, imageSize={}KB, error={}",
+                            response.code(), duration, model, imageSizeKB, errorBody);
+                    throw new ExternalServiceException(
+                            String.format("OpenAI API hatası: HTTP %d - %s", response.code(), errorBody));
                 }
 
                 String responseBody = response.body().string();
-                log.debug("OpenAI Response: {}", responseBody);
 
                 // Parse response
                 JsonNode jsonResponse = objectMapper.readTree(responseBody);
                 String content = jsonResponse.get("choices").get(0).get("message").get("content").asText();
 
-                log.info("AI yanıtı alındı: {} karakterlik yanıt", content.length());
-                log.debug("AI Yanıtı: {}", content);
+                // Extract token usage if available
+                String tokenInfo = extractTokenUsage(jsonResponse);
+
+                // Calculate estimated cost
+                double estimatedCost = estimateCost(model, imageSizeKB);
+
+                log.info(
+                        "AI analysis completed: duration={}ms, responseLength={} chars, model={}, cost=~${}, tokens={}",
+                        duration, content.length(), model, String.format("%.3f", estimatedCost), tokenInfo);
+
+                // Performance warning
+                if (duration > 30000) {
+                    log.warn("Slow AI response detected: duration={}ms, threshold=30000ms, model={}, imageSize={}KB",
+                            duration, model, imageSizeKB);
+                }
 
                 // Parse et
                 return parseAIResponse(content);
             }
 
+        } catch (ExternalServiceException e) {
+            long duration = System.currentTimeMillis() - startTime;
+            log.error(
+                    "AI analysis failed (ExternalServiceException): file={}, duration={}ms, model={}, imageSize={}KB, error={}",
+                    imageFile.getName(), duration, model, imageSizeKB, e.getMessage(), e);
+            throw e; // ExternalServiceException'ı olduğu gibi fırlat
         } catch (Exception e) {
-            log.error("AI analiz hatası: ", e);
-            throw new RuntimeException("Soru analizi başarısız oldu: " + e.getMessage(), e);
+            long duration = System.currentTimeMillis() - startTime;
+            log.error("AI analysis error: file={}, duration={}ms, model={}, imageSize={}KB",
+                    imageFile.getName(), duration, model, imageSizeKB, e);
+            throw new ExternalServiceException("Soru analizi başarısız oldu: " + e.getMessage(), e);
         }
     }
 
@@ -129,13 +162,14 @@ public class AIQuestionAnalyzer {
         try {
             return objectMapper.writeValueAsString(requestMap);
         } catch (Exception e) {
-            throw new RuntimeException("Request body oluşturulamadı", e);
+            log.error("Failed to create request body for OpenAI API", e);
+            throw new ExternalServiceException("OpenAI API için request body oluşturulamadı", e);
         }
     }
 
     private String createPrompt() {
         return """
-                Bu TYT matematik sorusunu analiz et ve şu formatta JSON döndür:
+                Bu YKS sınavındaki konularla alakalı olan soruyu analiz et ve şu formatta JSON döndür:
 
                 {
                   "hint1": "İlk ipucu - Sorunun hangi konuyla ilgili olduğunu belirt",
@@ -176,7 +210,8 @@ public class AIQuestionAnalyzer {
             int endIndex = aiResponse.lastIndexOf('}');
 
             if (startIndex == -1 || endIndex == -1) {
-                throw new RuntimeException("JSON bulunamadı: " + aiResponse);
+                throw new ExternalServiceException("OpenAI yanıtında JSON bulunamadı: "
+                        + aiResponse.substring(0, Math.min(200, aiResponse.length())));
             }
 
             String jsonString = aiResponse.substring(startIndex, endIndex + 1);
@@ -185,24 +220,87 @@ public class AIQuestionAnalyzer {
 
             // Validasyon
             if (result.getHint1() == null || result.getHint1().isEmpty()) {
-                throw new RuntimeException("İpucu 1 bulunamadı");
+                throw new ExternalServiceException("OpenAI yanıtında ipucu 1 bulunamadı");
             }
             if (result.getHint2() == null || result.getHint2().isEmpty()) {
-                throw new RuntimeException("İpucu 2 bulunamadı");
+                throw new ExternalServiceException("OpenAI yanıtında ipucu 2 bulunamadı");
             }
             if (result.getHint3() == null || result.getHint3().isEmpty()) {
-                throw new RuntimeException("İpucu 3 bulunamadı");
+                throw new ExternalServiceException("OpenAI yanıtında ipucu 3 bulunamadı");
             }
             if (result.getSolution() == null || result.getSolution().isEmpty()) {
-                throw new RuntimeException("Çözüm bulunamadı");
+                throw new ExternalServiceException("OpenAI yanıtında çözüm bulunamadı");
             }
 
-            log.info("AI yanıtı başarıyla parse edildi");
+            log.info("AI response parsed successfully: hints=3, solutionLength={} chars",
+                    result.getSolution().length());
+
             return result;
 
+        } catch (ExternalServiceException e) {
+            throw e; // ExternalServiceException'ı olduğu gibi fırlat
         } catch (Exception e) {
-            log.error("JSON parse hatası. AI Yanıtı: {}", aiResponse, e);
-            throw new RuntimeException("AI yanıtı parse edilemedi: " + e.getMessage());
+            log.error("JSON parse error: responseLength={}, error={}", aiResponse.length(), e.getMessage(), e);
+            throw new ExternalServiceException("OpenAI yanıtı parse edilemedi: " + e.getMessage(), e);
         }
+    }
+
+    /**
+     * Model ve görsel boyutuna göre tahmini maliyet hesaplar
+     * 
+     * @param modelName   Model adı (gpt-4o-mini, gpt-4o, gpt-4)
+     * @param imageSizeKB Görsel boyutu (KB)
+     * @return Tahmini maliyet (USD)
+     */
+    private double estimateCost(String modelName, long imageSizeKB) {
+        // OpenAI Vision API pricing (approximate):
+        // gpt-4o-mini: ~$0.01 per image
+        // gpt-4o: ~$0.04 per image
+        // gpt-4-vision-preview: ~$0.05 per image
+
+        double baseCost;
+        if (modelName.contains("mini")) {
+            baseCost = 0.01;
+        } else if (modelName.contains("gpt-4o")) {
+            baseCost = 0.04;
+        } else if (modelName.contains("gpt-4")) {
+            baseCost = 0.05;
+        } else {
+            baseCost = 0.02; // Default estimate
+        }
+
+        // Large images may cost slightly more (size multiplier)
+        double sizeMultiplier = 1.0;
+        if (imageSizeKB > 1024) { // > 1MB
+            sizeMultiplier = 1.2;
+        } else if (imageSizeKB > 512) { // > 512KB
+            sizeMultiplier = 1.1;
+        }
+
+        return baseCost * sizeMultiplier;
+    }
+
+    /**
+     * OpenAI response'dan token kullanım bilgisini çıkartır
+     * 
+     * @param jsonResponse OpenAI API response
+     * @return Token kullanım bilgisi (prompt/completion/total)
+     */
+    private String extractTokenUsage(JsonNode jsonResponse) {
+        try {
+            JsonNode usage = jsonResponse.get("usage");
+            if (usage != null) {
+                int promptTokens = usage.has("prompt_tokens") ? usage.get("prompt_tokens").asInt() : 0;
+                int completionTokens = usage.has("completion_tokens") ? usage.get("completion_tokens").asInt() : 0;
+                int totalTokens = usage.has("total_tokens") ? usage.get("total_tokens").asInt() : 0;
+
+                return String.format("prompt=%d, completion=%d, total=%d",
+                        promptTokens, completionTokens, totalTokens);
+            }
+        } catch (Exception e) {
+            log.debug("Could not extract token usage from response", e);
+        }
+
+        return "N/A";
     }
 }

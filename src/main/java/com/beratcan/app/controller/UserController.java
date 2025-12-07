@@ -1,168 +1,133 @@
 package com.beratcan.app.controller;
 
+import com.beratcan.app.annotation.RateLimit;
 import com.beratcan.app.dto.response.JwtResponse;
-import com.beratcan.app.dto.response.UserResponse;
-import com.beratcan.app.dto.response.FlaggedResponse;
 import com.beratcan.app.dto.request.LoginRequest;
 import com.beratcan.app.dto.request.UserRequest;
-import com.beratcan.app.entity.Question;
 import com.beratcan.app.entity.User;
 import com.beratcan.app.entity.enums.City;
+import com.beratcan.app.service.AuthService;
+import com.beratcan.app.service.EmailVerificationService;
 import com.beratcan.app.service.UserService;
-import com.beratcan.app.security.JwtUtil;
+import com.beratcan.app.dto.response.RegisterResponse;
 
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
-import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/users")
+@Slf4j
 public class UserController {
 
     private final UserService userService;
-    private final JwtUtil jwtUtil;
+    private final AuthService authService;
+    private final EmailVerificationService emailVerificationService;
 
     @PostMapping("/register")
-    public ResponseEntity<?> register(@RequestBody UserRequest userRequest) {
-        try {
-            User user = userService.registerUser(userRequest);
-            return ResponseEntity.ok(user);
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
-        }
-    }
+    @RateLimit(requestsPerMinute = 3, keyType = "IP", message = "Too many registration attempts. Please try again later.")
+    public ResponseEntity<RegisterResponse> register(
+            @Valid @RequestBody UserRequest userRequest) {
+        User user = userService.registerUser(userRequest);
 
-    @PostMapping("/login")
-    public ResponseEntity<?> login(@RequestBody LoginRequest request) {
-        try {
-            User user = userService.login(request, jwtUtil);
-            String token = jwtUtil.generateToken(user.getUsername(), user.getId());
-            return ResponseEntity.ok(new JwtResponse(token, user.getUsername(), user.getRole().name()));
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
-        }
-    }
+        // Email doğrulanmamışsa özel response döner
+        com.beratcan.app.dto.response.RegisterResponse response = new com.beratcan.app.dto.response.RegisterResponse();
+        response.setUserId(user.getId());
+        response.setEmail(user.getEmail());
+        response.setEmailVerified(user.getEmailVerified());
+        response.setMessage(
+                "Kayıt başarılı! Email doğrulama linki email adresinize gönderildi. Lütfen email kutunuzu kontrol edin ve doğrulama linkine tıklayın. Email gelmediyse uygulama içindeki 'Email Tekrar Gönder' butonuna tıklayın.");
 
-    @PostMapping("/{userId}/flag/{questionId}")
-    public ResponseEntity<?> flagQuestion(@PathVariable Long userId, @PathVariable Long questionId) {
-        try {
-            userService.flagQuestion(userId, questionId);
-            return ResponseEntity.ok(Map.of("message", "Question flagged successfully."));
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
-    }
-
-    // Flag kaldırma
-    @DeleteMapping("/{userId}/flag/{questionId}")
-    public ResponseEntity<?> unflagQuestion(@PathVariable Long userId, @PathVariable Long questionId) {
-        try {
-            userService.unflagQuestion(userId, questionId);
-            return ResponseEntity.ok(Map.of("message", "Question unflagged successfully."));
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
-    }
-
-    // Kullanıcının çözemediği sorular
-    @GetMapping("/{userId}/flagged")
-    public ResponseEntity<List<FlaggedResponse>> getFlaggedQuestions(@PathVariable Long userId) {
-        Set<Question> flaggedQuestions = userService.getFlaggedQuestions(userId);
-        List<FlaggedResponse> response = flaggedQuestions.stream()
-                .map(question -> {
-                    FlaggedResponse fr = new FlaggedResponse();
-                    fr.setQuestionId(question.getId());
-                    fr.setImageUrl(question.getImageUrl());
-                    fr.setAnswerNumber(question.getAnswerNumber());
-                    fr.setCorrectAnswer(question.getCorrectAnswer().name());
-                    fr.setVideoUrl(question.getVideoUrl());
-
-                    // Hints ve explanation
-                    fr.setHints(question.getHints() != null
-                            ? question.getHints().stream().map(hint -> hint.getText()).toList()
-                            : List.of());
-                    fr.setExplanation(question.getExplanation() != null ? question.getExplanation().getText() : "");
-
-                    // Navigation ve display bilgileri
-                    if (question.getTest() != null) {
-                        fr.setTestId(question.getTest().getId());
-                        fr.setTestTitle(question.getTest().getTitle());
-
-                        if (question.getTest().getTopic() != null) {
-                            fr.setTopicId(question.getTest().getTopic().getId());
-                            fr.setTopicTitle(question.getTest().getTopic().getTitle());
-
-                            if (question.getTest().getTopic().getBook() != null) {
-                                fr.setBookId(question.getTest().getTopic().getBook().getId());
-                                fr.setBookTitle(question.getTest().getTopic().getBook().getTitle());
-                            }
-                        }
-                    }
-
-                    return fr;
-                })
-                .toList();
         return ResponseEntity.ok(response);
     }
 
-    // Tek soru için flagged bilgileri - navigation için book, topic, test ID'leri
-    // dahil
-    @GetMapping("/flagged/{questionId}")
-    public ResponseEntity<FlaggedResponse> getFlaggedQuestionById(@PathVariable Long questionId) {
-        try {
-            // Question'ı direkt repository'den al
-            Question question = userService.getQuestionById(questionId);
-
-            if (question == null) {
-                return ResponseEntity.notFound().build();
-            }
-
-            FlaggedResponse fr = new FlaggedResponse();
-            fr.setQuestionId(question.getId());
-            fr.setImageUrl(question.getImageUrl());
-            fr.setAnswerNumber(question.getAnswerNumber());
-            fr.setCorrectAnswer(question.getCorrectAnswer().name());
-            fr.setVideoUrl(question.getVideoUrl());
-
-            fr.setHints(question.getHints() != null ? question.getHints().stream().map(hint -> hint.getText()).toList()
-                    : List.of());
-            fr.setExplanation(question.getExplanation() != null ? question.getExplanation().getText() : "");
-
-            if (question.getTest() != null) {
-                fr.setTestId(question.getTest().getId());
-                fr.setTestTitle(question.getTest().getTitle());
-
-                if (question.getTest().getTopic() != null) {
-                    fr.setTopicId(question.getTest().getTopic().getId());
-                    fr.setTopicTitle(question.getTest().getTopic().getTitle());
-
-                    if (question.getTest().getTopic().getBook() != null) {
-                        fr.setBookId(question.getTest().getTopic().getBook().getId());
-                        fr.setBookTitle(question.getTest().getTopic().getBook().getTitle());
-                    }
-                }
-            }
-
-            return ResponseEntity.ok(fr);
-        } catch (Exception e) {
-            return ResponseEntity.status(500).body(null);
-        }
+    @PostMapping("/login")
+    @RateLimit(requestsPerMinute = 5, keyType = "IP", message = "Too many login attempts. Please try again later.")
+    public ResponseEntity<JwtResponse> login(@Valid @RequestBody LoginRequest request) {
+        // AuthService'e delegate et - tüm business logic orada
+        JwtResponse response = authService.login(request);
+        return ResponseEntity.ok(response);
     }
 
-    // Kullanıcı profile bilgileri
-    @GetMapping("/{userId}/profile")
-    public ResponseEntity<UserResponse> getUserProfile(@PathVariable Long userId) {
-        User user = userService.getUserById(userId);
-        return ResponseEntity.ok(new UserResponse(user));
+    /**
+     * Logout endpoint
+     * Token'ı blacklist'e ekler, böylece bir daha kullanılamaz
+     * POST /api/users/logout
+     */
+    @PostMapping("/logout")
+    public ResponseEntity<Map<String, String>> logout(HttpServletRequest request) {
+        String token = extractTokenFromRequest(request);
+
+        // AuthService'e delegate et - tüm business logic orada
+        authService.logout(token);
+
+        return ResponseEntity.ok(Map.of(
+                "message", "Logout successful",
+                "status", "success"));
+    }
+
+    /**
+     * Token Refresh Endpoint
+     * Expired access token'ı yenilemek için kullanılır
+     * Authenticated endpoint: Refresh token Authorization header'da olmalı
+     * POST /api/users/refresh
+     */
+    @PostMapping("/refresh")
+    @RateLimit(requestsPerMinute = 10, keyType = "USER", message = "Too many token refresh attempts. Please try later.")
+    public ResponseEntity<JwtResponse> refreshToken(
+            Authentication authentication,
+            HttpServletRequest httpRequest) {
+        // Refresh token'ı Authorization header'dan al
+        String refreshToken = extractTokenFromRequest(httpRequest);
+
+        if (refreshToken == null || refreshToken.trim().isEmpty()) {
+            throw new com.beratcan.app.exception.BadRequestException(
+                    "Refresh token is required in Authorization header");
+        }
+
+        // AuthService'e delegate et - tüm business logic orada
+        JwtResponse response = authService.refreshToken(refreshToken);
+        return ResponseEntity.ok(response);
+    }
+
+    private String extractTokenFromRequest(HttpServletRequest request) {
+        String headerAuth = request.getHeader("Authorization");
+        if (headerAuth != null && headerAuth.startsWith("Bearer ")) {
+            return headerAuth.substring(7);
+        }
+        return null;
     }
 
     @GetMapping("/cities")
+    @Cacheable("cities")
     public City[] getCities() {
         return City.values();
     }
+
+    /**
+     * Email doğrulama endpoint'i
+     * GET /api/users/verify-email?token=xxx
+     */
+    @GetMapping("/verify-email")
+    @RateLimit(requestsPerMinute = 3, keyType = "IP", message = "Too many verification attempts. Please try again later.")
+    public ResponseEntity<Map<String, String>> verifyEmail(@RequestParam String token) {
+        emailVerificationService.verifyEmail(token);
+        return ResponseEntity.ok(Map.of(
+                "message", "Email başarıyla doğrulandı",
+                "status", "success"));
+    }
+
 }

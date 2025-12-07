@@ -1,8 +1,10 @@
 package com.beratcan.app.controller;
 
+import com.beratcan.app.annotation.RateLimit;
 import com.beratcan.app.dto.request.PurchaseRequest;
 import com.beratcan.app.dto.response.PurchaseResponse;
 import com.beratcan.app.service.PurchaseService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -23,22 +25,19 @@ public class PurchaseController {
      * POST /api/purchases/buy/{bookId}
      */
     @PostMapping("/buy/{bookId}")
+    @RateLimit(requestsPerMinute = 5, keyType = "USER", message = "Too many purchase attempts. Please try again later.")
     public ResponseEntity<?> buyBook(
             @PathVariable Long bookId,
-            @RequestBody(required = false) PurchaseRequest request,
+            @Valid @RequestBody(required = false) PurchaseRequest request,
             Authentication authentication) {
-        try {
-            Long userId = Long.parseLong(authentication.getName());
+        Long userId = Long.parseLong(authentication.getName());
 
-            if (request == null) {
-                request = new PurchaseRequest();
-            }
-
-            PurchaseResponse response = purchaseService.buyBook(userId, bookId, request);
-            return ResponseEntity.status(HttpStatus.CREATED).body(response);
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
+        if (request == null) {
+            request = new PurchaseRequest();
         }
+
+        PurchaseResponse response = purchaseService.buyBook(userId, bookId, request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
     /**
@@ -71,12 +70,8 @@ public class PurchaseController {
     public ResponseEntity<?> getPurchaseById(
             @PathVariable Long purchaseId,
             Authentication authentication) {
-        try {
-            Long userId = Long.parseLong(authentication.getName());
-            PurchaseResponse response = purchaseService.getPurchaseById(purchaseId, userId);
-            return ResponseEntity.ok(response);
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
-        }
+        Long userId = Long.parseLong(authentication.getName());
+        PurchaseResponse response = purchaseService.getPurchaseById(purchaseId, userId);
+        return ResponseEntity.ok(response);
     }
 }
