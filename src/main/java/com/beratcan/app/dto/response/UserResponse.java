@@ -21,8 +21,6 @@ public class UserResponse {
     private Boolean streakUpdated; // Streak güncellenip güncellenmediği bilgisi
     private Integer currentStreak; // Mevcut günlük giriş serisi (kaç gün)
     private Integer longestStreak; // En uzun günlük giriş serisi
-    private Integer dailyQuestionTarget; // Günlük hedef soru sayısı
-    private Integer dailySolvedQuestions; // Bugün çözülen soru sayısı
 
     public UserResponse(User user) {
         this.id = user.getId();
@@ -41,8 +39,6 @@ public class UserResponse {
         this.streakUpdated = false; // Default false, setter ile set edilecek
         this.currentStreak = user.getCurrentStreak() != null ? user.getCurrentStreak() : 0;
         this.longestStreak = user.getLongestStreak() != null ? user.getLongestStreak() : 0;
-        this.dailyQuestionTarget = user.getDailyQuestionTarget() != null ? user.getDailyQuestionTarget() : 0;
-        this.dailySolvedQuestions = user.getDailySolvedQuestions() != null ? user.getDailySolvedQuestions() : 0;
     }
 
     public UserResponse(User user, Boolean streakUpdated) {
