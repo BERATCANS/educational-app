@@ -4,7 +4,10 @@ import com.beratcan.app.constants.AppConstants;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.beratcan.app.dto.response.QuestionAnalysisResult;
+import com.beratcan.app.entity.Question;
+import com.beratcan.app.entity.enums.ExamType;
 import com.beratcan.app.exception.ExternalServiceException;
+import com.beratcan.app.repository.QuestionRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import okhttp3.*;
@@ -21,6 +24,7 @@ import java.util.concurrent.TimeUnit;
 @RequiredArgsConstructor
 public class AIQuestionAnalyzer {
 
+    private final QuestionRepository questionRepository;
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final OkHttpClient httpClient = new OkHttpClient.Builder()
             .connectTimeout(AppConstants.HTTP_CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
@@ -36,8 +40,11 @@ public class AIQuestionAnalyzer {
 
     /**
      * Soru görselinden 3 ipucu ve tam çözüm üretir
+     * 
+     * @param imageFile  Görsel dosyası
+     * @param questionId Soru ID (ExamType algılamak için)
      */
-    public QuestionAnalysisResult analyzeQuestion(File imageFile) {
+    public QuestionAnalysisResult analyzeQuestion(File imageFile, Long questionId) {
         long startTime = System.currentTimeMillis();
         long imageSizeKB = imageFile.length() / 1024;
 
@@ -49,8 +56,9 @@ public class AIQuestionAnalyzer {
             byte[] imageBytes = Files.readAllBytes(imageFile.toPath());
             String base64Image = Base64.getEncoder().encodeToString(imageBytes);
 
-            // Prompt hazırla
-            String prompt = createPrompt();
+            // ExamType algıla ve prompt hazırla
+            ExamType examType = getExamTypeFromQuestion(questionId);
+            String prompt = createHintAndSolutionPrompt(examType);
             int promptLength = prompt.length();
 
             // OpenAI Vision API isteği (HTTP direkt)
@@ -167,12 +175,51 @@ public class AIQuestionAnalyzer {
         }
     }
 
-    private String createPrompt() {
+    /**
+     * Question'dan ExamType çıkar (denormalized field'dan direkt okur)
+     * Performans için: Question entity'sinde examType field'ı var
+     */
+    private ExamType getExamTypeFromQuestion(Long questionId) {
+        if (questionId == null) {
+            return ExamType.DIGER; // Default
+        }
+
+        try {
+            Question question = questionRepository.findById(questionId).orElse(null);
+            if (question == null) {
+                return ExamType.DIGER;
+            }
+
+            // Denormalized field'dan direkt oku (hızlı)
+            ExamType examType = question.getExamType();
+            return examType != null ? examType : ExamType.DIGER;
+        } catch (Exception e) {
+            log.warn("ExamType algılanamadı, questionId={}, error={}", questionId, e.getMessage());
+            return ExamType.DIGER;
+        }
+    }
+
+    /**
+     * ExamType'a göre hint ve solution prompt'u oluştur
+     */
+    private String createHintAndSolutionPrompt(ExamType examType) {
+        return switch (examType) {
+            case YKS -> createYKSHintPrompt();
+            case LGS -> createLGShintPrompt();
+            case KPSS -> createKPSSHintPrompt();
+            default -> createDIGERHintPrompt();
+        };
+    }
+
+    /**
+     * YKS için hint ve solution prompt'u
+     */
+    private String createYKSHintPrompt() {
         return """
-                Bu YKS sınavındaki konularla alakalı olan soruyu analiz et ve şu formatta JSON döndür:
+                Bu YKS (Yükseköğretim Kurumları Sınavı) sınavındaki konularla alakalı olan soruyu analiz et ve şu formatta JSON döndür:
 
                 {
-                  "hint1": "İlk ipucu - Sorunun hangi konuyla ilgili olduğunu belirt",
+                  "hint1": "İlk ipucu - Soru hangi konuyla ilgiliyse ve soruda o konunun hangi kısmı kullanılıyorsa o kısım ile ilgili bilgi ver. olduğunu belirt",
                   "hint2": "İkinci ipucu - Çözüm stratejisinin ilk adımını anlat",
                   "hint3": "Üçüncü ipucu - Neredeyse çözüme götürecek kritik bilgi",
                   "solution": "Tam çözüm - Adım adım detaylı açıklama"
@@ -187,6 +234,139 @@ public class AIQuestionAnalyzer {
                 6. Çözümde formülleri açıkça yaz
                 7. İpuçları özlü ve net olmalı (maksimum 2-3 cümle)
                 8. Çözüm detaylı adım adım olmalı
+
+                ÖRNEKLENDİRME:
+                İPUÇU 1: "Bu soru ikinci dereceden bir denklem ve kök sayısını belirleme konusuyla ilgilidir. Kök sayısını bulmak için diskriminant kavramı kullanılır.
+                İPUÇU 2: "Denklemi önce standart forma getir: ax² + bx + c = 0. Sonra a, b ve c katsayılarını belirleyip diskriminantı Δ = b² - 4ac formülüyle hesaplamayı düşün."
+                İPUÇU 3: "Bu denklem için a = 2, b = -5, c = 3 değerlerini Δ = b² - 4ac formülüne yerleştir: Δ = (-5)² - 4·2·3. Δ > 0 çıkarsa denklemin iki farklı gerçek kökü olduğunu unutma."
+                ÇÖZÜM: "Adım 1: Denklemi standart forma getir: 2x² - 5x + 3 = 0
+                Adım 2: Katsayıları belirle: a=2, b=-5, c=3
+                Adım 3: Diskriminantı hesapla: Δ = b² - 4ac = (-5)² - 4(2)(3) = 25 - 24 = 1
+                Adım 4: Δ > 0 olduğu için 2 farklı gerçek kök vardır
+                Adım 5: Kökleri bul: x = (5 ± √1) / 4 = (5 ± 1) / 4
+                x₁ = 6/4 = 3/2, x₂ = 4/4 = 1
+                Cevap: x = 3/2 veya x = 1"
+
+                YKS ÖZEL NOTLAR:
+                - Üniversite sınavı seviyesinde açıklamalar yap
+                - Formülleri akademik düzeyde açıkla
+                - Matematiksel terminolojiyi doğru kullan
+                - Çözümde her adımı detaylı ve kesin açıkla
+                """;
+    }
+
+    /**
+     * LGS için hint ve solution prompt'u
+     */
+    private String createLGShintPrompt() {
+        return """
+                Bu LGS (Liselere Geçiş Sistemi) sınavındaki konularla alakalı olan soruyu analiz et ve şu formatta JSON döndür:
+
+                {
+                  "hint1": "İlk ipucu - Soru hangi konuyla ilgiliyse ve soruda o konunun hangi kısmı kullanılıyorsa o kısım ile ilgili bilgi ver. olduğunu belirt",
+                  "hint2": "İkinci ipucu - Çözüm stratejisinin ilk adımını anlat",
+                  "hint3": "Üçüncü ipucu - Neredeyse çözüme götürecek kritik bilgi",
+                  "solution": "Tam çözüm - Adım adım detaylı açıklama"
+                }
+
+                KURALLAR:
+                1. Her zaman 3 ipucu üret
+                2. İpuçları kademeli olarak zorlaşmalı (kolay → orta → zor)
+                3. Her ipucu öncekinden daha fazla bilgi vermeli
+                4. Çözüm matematiksel olarak kesinlikle doğru olmalı
+                5. Türkçe kullan
+                6. Sadece JSON döndür, ekstra yorum yapma
+                7. Çözümde formülleri açıkça yaz ve açıkla
+                8. İpuçları özlü ve net olmalı (maksimum 2-3 cümle)
+                9. Çözüm adım adım detaylı ve açıklama odaklı olmalı
+
+                LGS ÖZEL NOTLAR:
+                - Ortaokul seviyesinde açıklamalar yap
+                - Daha basit terimler kullan
+                - Görsel açıklamalar öner (mümkünse)
+                - Her adımı çok net ve anlaşılır açıkla
+                - Öğrencinin seviyesine uygun örnekler ver
+
+                ÖRNEKLENDİRME:
+                İPUÇU 1: "Bu soruda bir denklem var"
+                İPUÇU 2: "Denklemi çözmek için önce bilinmeyeni yalnız bırakmalısın"
+                İPUÇU 3: "x'i yalnız bırakmak için her iki taraftan 5 çıkar: x = 10 - 5 = 5"
+                ÇÖZÜM: "Adım 1: Denklemi incele: x + 5 = 10
+                Adım 2: x'i yalnız bırakmak için eşitliğin her iki tarafından 5 çıkaralım
+                Adım 3: x + 5 - 5 = 10 - 5
+                Adım 4: x = 5
+                Cevap: x = 5"
+                """;
+    }
+
+    /**
+     * KPSS için hint ve solution prompt'u
+     */
+    private String createKPSSHintPrompt() {
+        return """
+                Bu KPSS (Kamu Personeli Seçme Sınavı) sınavındaki konularla alakalı olan soruyu analiz et ve şu formatta JSON döndür:
+
+                {
+                  "hint1": "İlk ipucu - Soru hangi konuyla ilgiliyse ve soruda o konunun hangi kısmı kullanılıyorsa o kısım ile ilgili bilgi ver. olduğunu belirt",
+                  "hint2": "İkinci ipucu - Çözüm stratejisinin ilk adımını anlat",
+                  "hint3": "Üçüncü ipucu - Neredeyse çözüme götürecek kritik bilgi",
+                  "solution": "Tam çözüm - Adım adım detaylı açıklama"
+                }
+
+                KURALLAR:
+                1. Her zaman 3 ipucu üret
+                2. İpuçları kademeli olarak zorlaşmalı (kolay → orta → zor)
+                3. Her ipucu öncekinden daha fazla bilgi vermeli
+                4. Çözüm matematiksel olarak kesinlikle doğru olmalı
+                5. Türkçe kullan
+                6. Sadece JSON döndür, ekstra yorum yapma
+                7. Çözümde formülleri açıkça yaz ve açıkla
+                8. İpuçları özlü ve net olmalı (maksimum 2-3 cümle)
+                9. Çözüm adım adım detaylı ve açıklama odaklı olmalı
+
+                KPSS ÖZEL NOTLAR:
+                - Genel kültür ve genel yetenek odaklı açıklamalar
+                - Pratik çözüm yolları öner
+                - Hızlı çözüm teknikleri belirt (zaman yönetimi için)
+                - Her adımı net ve anlaşılır açıkla
+
+                ÖRNEKLENDİRME:
+                İPUÇU 1: "Bu tür sorularda önce verilen bilgileri düzenle"
+                İPUÇU 2: "Oran-orantı kullanarak çözebilirsin"
+                İPUÇU 3: "3/5 = x/10 orantısını kur: x = (3 × 10) / 5 = 6"
+                ÇÖZÜM: "Adım 1: Verilen oran: 3/5
+                Adım 2: Bilinmeyen değer için orantı kur: 3/5 = x/10
+                Adım 3: Çapraz çarpım yap: 3 × 10 = 5 × x
+                Adım 4: 30 = 5x
+                Adım 5: x = 30 / 5 = 6
+                Cevap: x = 6"
+                """;
+    }
+
+    /**
+     * Diğer sınav türleri için genel hint ve solution prompt'u
+     */
+    private String createDIGERHintPrompt() {
+        return """
+                Bu soruyu analiz et ve şu formatta JSON döndür:
+
+                {
+                  "hint1": "İlk ipucu - Soru hangi konuyla ilgiliyse ve soruda o konunun hangi kısmı kullanılıyorsa o kısım ile ilgili bilgi ver. olduğunu belirt",
+                  "hint2": "İkinci ipucu - Çözüm stratejisinin ilk adımını anlat",
+                  "hint3": "Üçüncü ipucu - Neredeyse çözüme götürecek kritik bilgi",
+                  "solution": "Tam çözüm - Adım adım detaylı açıklama"
+                }
+
+                KURALLAR:
+                1. Her zaman 3 ipucu üret
+                2. İpuçları kademeli olarak zorlaşmalı (kolay → orta → zor)
+                3. Her ipucu öncekinden daha fazla bilgi vermeli
+                4. Çözüm matematiksel olarak kesinlikle doğru olmalı
+                5. Türkçe kullan
+                6. Sadece JSON döndür, ekstra yorum yapma
+                7. Çözümde formülleri açıkça yaz ve açıkla
+                8. İpuçları özlü ve net olmalı (maksimum 2-3 cümle)
+                9. Çözüm adım adım detaylı ve açıklama odaklı olmalı
 
                 ÖRNEKLENDİRME:
                 İPUÇU 1: "Bu bir ikinci dereceden denklem problemidir"

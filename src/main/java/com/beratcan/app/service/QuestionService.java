@@ -10,6 +10,7 @@ import com.beratcan.app.entity.Explanation;
 import com.beratcan.app.entity.Hint;
 import com.beratcan.app.entity.Question;
 import com.beratcan.app.entity.Test;
+import com.beratcan.app.entity.enums.ExamType;
 import com.beratcan.app.exception.BadRequestException;
 import com.beratcan.app.exception.ConflictException;
 import com.beratcan.app.exception.QuestionNotFoundException;
@@ -58,6 +59,10 @@ public class QuestionService {
         // Sequence number atama
         Integer sequenceNumber = getNextSequenceNumber(testId, request.getSequenceNumber());
         question.setSequenceNumber(sequenceNumber);
+
+        // ExamType'ı denormalize olarak set et (performans için)
+        ExamType examType = extractExamTypeFromTest(test);
+        question.setExamType(examType);
 
         question = questionRepository.save(question);
         bookAdminService.countBookData(test.getTopic().getBook().getId());
@@ -185,6 +190,17 @@ public class QuestionService {
         }
 
         questionRepository.save(question);
+    }
+
+    /**
+     * Test'ten ExamType çıkar (Test → Topic → Book → ExamType)
+     */
+    private ExamType extractExamTypeFromTest(Test test) {
+        if (test == null || test.getTopic() == null || test.getTopic().getBook() == null) {
+            return ExamType.DIGER; // Default
+        }
+        ExamType examType = test.getTopic().getBook().getExamType();
+        return examType != null ? examType : ExamType.DIGER;
     }
 
     // Helper: Otomatik sequenceNumber atama
@@ -363,8 +379,8 @@ public class QuestionService {
                 throw new BadRequestException("Görsel dosyası bulunamadı: " + question.getImageUrl());
             }
 
-            // 2. AI analiz yap
-            QuestionAnalysisResult analysis = aiAnalyzer.analyzeQuestion(imageFile);
+            // 2. AI analiz yap (questionId ile ExamType algılanacak)
+            QuestionAnalysisResult analysis = aiAnalyzer.analyzeQuestion(imageFile, questionId);
             log.info("AI analiz tamamlandı: questionId={}", questionId);
 
             // 3. Mevcut hints'i temizle
