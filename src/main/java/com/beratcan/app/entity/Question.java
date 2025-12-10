@@ -1,5 +1,6 @@
 package com.beratcan.app.entity;
 
+import com.beratcan.app.entity.enums.ExamType;
 import com.beratcan.app.entity.enums.OptionLetter;
 import com.fasterxml.jackson.annotation.JsonBackReference;
 import jakarta.persistence.*;
@@ -50,5 +51,9 @@ public class Question {
 
     @Column(name = "sequence_number")
     private Integer sequenceNumber;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "exam_type")
+    private ExamType examType; // Denormalized: Test → Topic → Book → ExamType
 
 }
