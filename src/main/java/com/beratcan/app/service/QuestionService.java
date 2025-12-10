@@ -417,11 +417,21 @@ public class QuestionService {
 
         try {
             // ApplicationContext üzerinden çağır (transaction'ın düzgün çalışması için)
+            // @Async zaten proxy üzerinden çalışır, ama @Transactional metod için proxy
+            // gerekli
             QuestionService self = applicationContext.getBean(QuestionService.class);
             self.analyzeQuestionWithAIInternal(questionId);
+            log.info("AI analiz tamamlandı (asenkron): questionId={}", questionId);
             return CompletableFuture.completedFuture(null);
         } catch (Exception e) {
-            log.error("AI analiz hatası (asenkron): questionId={}", questionId, e);
+            log.error("AI analiz hatası (asenkron): questionId={}, error={}", questionId, e.getMessage(), e);
+            // Hata durumunda status'u FAILED olarak güncelle
+            try {
+                QuestionService self = applicationContext.getBean(QuestionService.class);
+                self.updateAIAnalysisStatus(questionId, AIAnalysisStatus.FAILED);
+            } catch (Exception ex) {
+                log.error("Status güncelleme hatası (asenkron): questionId={}", questionId, ex);
+            }
             return CompletableFuture.completedFuture(null);
         }
     }
@@ -432,6 +442,8 @@ public class QuestionService {
      */
     @Transactional
     public void analyzeQuestionWithAIInternal(Long questionId) {
+        log.info("AI analiz internal metod başlatıldı: questionId={}", questionId);
+
         Question question = questionRepository.findById(questionId)
                 .orElseThrow(() -> new QuestionNotFoundException(questionId));
 
@@ -439,48 +451,93 @@ public class QuestionService {
             // 1. Görseli oku
             File imageFile = new File(uploadDir + question.getImageUrl());
             if (!imageFile.exists()) {
-                question.setAiAnalysisStatus(AIAnalysisStatus.FAILED);
-                questionRepository.save(question);
-                log.error("Görsel dosyası bulunamadı: questionId={}, imageUrl={}", questionId, question.getImageUrl());
+                log.error("Görsel dosyası bulunamadı: questionId={}, imageUrl={}, fullPath={}",
+                        questionId, question.getImageUrl(), uploadDir + question.getImageUrl());
+                updateAIAnalysisStatus(questionId, AIAnalysisStatus.FAILED);
                 return;
             }
+
+            log.info("Görsel dosyası bulundu: questionId={}, fileSize={} bytes",
+                    questionId, imageFile.length());
 
             // 2. AI analiz yap (questionId ile ExamType algılanacak)
             QuestionAnalysisResult analysis = aiAnalyzer.analyzeQuestion(imageFile, questionId);
             log.info("AI analiz tamamlandı: questionId={}", questionId);
 
-            // 3. Mevcut hints'i temizle
-            question.getHints().clear();
-
-            // 4. Yeni hints ekle
-            addHint(questionId, analysis.getHint1());
-            addHint(questionId, analysis.getHint2());
-            addHint(questionId, analysis.getHint3());
-            log.info("3 ipucu eklendi: questionId={}", questionId);
-
-            // 5. Explanation ekle/güncelle
-            addExplanation(questionId, analysis.getSolution());
-            log.info("Çözüm eklendi: questionId={}", questionId);
-
-            // 6. Status'u COMPLETED olarak güncelle
+            // 3. Question'ı tekrar yükle (transaction içinde fresh state için)
             question = questionRepository.findById(questionId)
                     .orElseThrow(() -> new QuestionNotFoundException(questionId));
+
+            // 4. Mevcut hints'i temizle
+            question.getHints().clear();
+
+            // 5. Yeni hints ekle (transaction içinde)
+            if (analysis.getHint1() != null && !analysis.getHint1().trim().isEmpty()) {
+                Hint hint1 = new Hint();
+                hint1.setText(analysis.getHint1().trim());
+                hint1.setSequenceNumber(0);
+                hint1.setLikes(0);
+                hint1.setDislikes(0);
+                question.getHints().add(hint1);
+            }
+            if (analysis.getHint2() != null && !analysis.getHint2().trim().isEmpty()) {
+                Hint hint2 = new Hint();
+                hint2.setText(analysis.getHint2().trim());
+                hint2.setSequenceNumber(1);
+                hint2.setLikes(0);
+                hint2.setDislikes(0);
+                question.getHints().add(hint2);
+            }
+            if (analysis.getHint3() != null && !analysis.getHint3().trim().isEmpty()) {
+                Hint hint3 = new Hint();
+                hint3.setText(analysis.getHint3().trim());
+                hint3.setSequenceNumber(2);
+                hint3.setLikes(0);
+                hint3.setDislikes(0);
+                question.getHints().add(hint3);
+            }
+            log.info("3 ipucu eklendi: questionId={}, hintCount={}", questionId, question.getHints().size());
+
+            // 6. Explanation ekle/güncelle
+            if (analysis.getSolution() != null && !analysis.getSolution().trim().isEmpty()) {
+                if (question.getExplanation() == null) {
+                    Explanation explanation = new Explanation();
+                    explanation.setText(analysis.getSolution().trim());
+                    explanation.setLikes(0);
+                    explanation.setDislikes(0);
+                    question.setExplanation(explanation);
+                } else {
+                    question.getExplanation().setText(analysis.getSolution().trim());
+                }
+            }
+            log.info("Çözüm eklendi: questionId={}", questionId);
+
+            // 7. Status'u COMPLETED olarak güncelle
             question.setAiAnalysisStatus(AIAnalysisStatus.COMPLETED);
             questionRepository.save(question);
-            log.info("AI analiz başarıyla tamamlandı: questionId={}", questionId);
+            log.info("AI analiz başarıyla tamamlandı: questionId={}, status=COMPLETED", questionId);
 
         } catch (Exception e) {
-            log.error("AI analiz hatası: questionId={}", questionId, e);
-
+            log.error("AI analiz hatası (internal): questionId={}, error={}", questionId, e.getMessage(), e);
             // Status'u FAILED olarak güncelle
-            try {
-                question = questionRepository.findById(questionId)
-                        .orElseThrow(() -> new QuestionNotFoundException(questionId));
-                question.setAiAnalysisStatus(AIAnalysisStatus.FAILED);
-                questionRepository.save(question);
-            } catch (Exception ex) {
-                log.error("Status güncelleme hatası: questionId={}", questionId, ex);
-            }
+            updateAIAnalysisStatus(questionId, AIAnalysisStatus.FAILED);
+            // Exception'ı tekrar fırlatma, async metod zaten yakalayacak
+        }
+    }
+
+    /**
+     * AI analiz status'unu güncelle (transaction içinde)
+     */
+    @Transactional
+    public void updateAIAnalysisStatus(Long questionId, AIAnalysisStatus status) {
+        try {
+            Question question = questionRepository.findById(questionId)
+                    .orElseThrow(() -> new QuestionNotFoundException(questionId));
+            question.setAiAnalysisStatus(status);
+            questionRepository.save(question);
+            log.info("AI analiz status güncellendi: questionId={}, status={}", questionId, status);
+        } catch (Exception e) {
+            log.error("Status güncelleme hatası: questionId={}, status={}", questionId, status, e);
         }
     }
 
