@@ -1,6 +1,5 @@
 package com.beratcan.app.entity;
 
-import com.beratcan.app.entity.enums.ExamType;
 import com.beratcan.app.entity.enums.OptionLetter;
 import com.fasterxml.jackson.annotation.JsonBackReference;
 import jakarta.persistence.*;
@@ -39,6 +38,11 @@ public class Question {
     private List<Hint> hints = new ArrayList<>();
 
     @Embedded
+    @AttributeOverrides({
+            @AttributeOverride(name = "text", column = @Column(name = "explanation_text", columnDefinition = "TEXT")),
+            @AttributeOverride(name = "likes", column = @Column(name = "explanation_likes")),
+            @AttributeOverride(name = "dislikes", column = @Column(name = "explanation_dislikes"))
+    })
     private Explanation explanation;
 
     @Column(length = 500)
@@ -46,9 +50,5 @@ public class Question {
 
     @Column(name = "sequence_number")
     private Integer sequenceNumber;
-
-    @Enumerated(EnumType.STRING)
-    @Column(name = "exam_type")
-    private ExamType examType; // Denormalized: Test → Topic → Book → ExamType
 
 }
