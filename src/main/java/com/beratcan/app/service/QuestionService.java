@@ -13,6 +13,7 @@ import com.beratcan.app.entity.Question;
 import com.beratcan.app.entity.Test;
 import com.beratcan.app.entity.enums.AIAnalysisStatus;
 import com.beratcan.app.entity.enums.ExamType;
+import com.beratcan.app.event.QuestionCreatedEvent;
 import com.beratcan.app.exception.BadRequestException;
 import com.beratcan.app.exception.ConflictException;
 import com.beratcan.app.exception.QuestionNotFoundException;
@@ -25,8 +26,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationContext;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.event.TransactionPhase;
+import org.springframework.transaction.event.TransactionalEventListener;
 
 import java.io.File;
 import java.util.List;
@@ -46,6 +50,9 @@ public class QuestionService {
 
     @Autowired
     private ApplicationContext applicationContext;
+
+    @Autowired
+    private ApplicationEventPublisher eventPublisher;
 
     @Value("${file.upload.dir:uploads/}")
     private String uploadDir;
@@ -396,10 +403,10 @@ public class QuestionService {
         questionEntity.setAiAnalysisStatus(AIAnalysisStatus.PROCESSING);
         questionRepository.save(questionEntity);
 
-        // 5. AI analizini arka planda başlat (asenkron)
-        // ApplicationContext üzerinden çağır (self-invocation sorununu çözmek için)
-        QuestionService self = applicationContext.getBean(QuestionService.class);
-        self.analyzeQuestionWithAIAsync(question.getId());
+        // 5. Transaction commit edildikten sonra AI analiz başlatmak için event yayınla
+        // Bu sayede asenkron thread soruyu görebilecek
+        eventPublisher.publishEvent(new QuestionCreatedEvent(this, question.getId()));
+        log.info("QuestionCreatedEvent yayınlandı: questionId={}", question.getId());
 
         // 6. Hemen response dön (hints ve explanation henüz yok, status PROCESSING)
         return getQuestionById(question.getId());
@@ -641,5 +648,21 @@ public class QuestionService {
         questionRepository.save(question);
         log.info("Analysis güncellendi: questionId={}, hintsCount={}",
                 questionId, hints != null ? hints.size() : 0);
+    }
+
+    /**
+     * Soru oluşturulduğunda transaction commit edildikten sonra çağrılır
+     * AI analiz işlemini asenkron olarak başlatır
+     * 
+     * @param event QuestionCreatedEvent
+     */
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void handleQuestionCreated(QuestionCreatedEvent event) {
+        Long questionId = event.getQuestionId();
+        log.info("Transaction commit edildi, AI analiz başlatılıyor: questionId={}", questionId);
+        
+        // ApplicationContext üzerinden çağır (self-invocation sorununu çözmek için)
+        QuestionService self = applicationContext.getBean(QuestionService.class);
+        self.analyzeQuestionWithAIAsync(questionId);
     }
 }
