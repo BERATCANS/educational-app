@@ -22,7 +22,9 @@ import com.beratcan.app.repository.TestRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationContext;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
@@ -41,6 +43,9 @@ public class QuestionService {
     private final BookAdminService bookAdminService;
     private final AIQuestionAnalyzer aiAnalyzer;
     private final FileService fileService;
+
+    @Autowired
+    private ApplicationContext applicationContext;
 
     @Value("${file.upload.dir:uploads/}")
     private String uploadDir;
@@ -392,7 +397,9 @@ public class QuestionService {
         questionRepository.save(questionEntity);
 
         // 5. AI analizini arka planda başlat (asenkron)
-        analyzeQuestionWithAIAsync(question.getId());
+        // ApplicationContext üzerinden çağır (self-invocation sorununu çözmek için)
+        QuestionService self = applicationContext.getBean(QuestionService.class);
+        self.analyzeQuestionWithAIAsync(question.getId());
 
         // 6. Hemen response dön (hints ve explanation henüz yok, status PROCESSING)
         return getQuestionById(question.getId());
@@ -405,12 +412,28 @@ public class QuestionService {
      * @return CompletableFuture<Void>
      */
     @Async("aiAnalysisExecutor")
-    @Transactional
     public CompletableFuture<Void> analyzeQuestionWithAIAsync(Long questionId) {
+        log.info("AI analiz başlatıldı (asenkron): questionId={}", questionId);
+
+        try {
+            // ApplicationContext üzerinden çağır (transaction'ın düzgün çalışması için)
+            QuestionService self = applicationContext.getBean(QuestionService.class);
+            self.analyzeQuestionWithAIInternal(questionId);
+            return CompletableFuture.completedFuture(null);
+        } catch (Exception e) {
+            log.error("AI analiz hatası (asenkron): questionId={}", questionId, e);
+            return CompletableFuture.completedFuture(null);
+        }
+    }
+
+    /**
+     * AI analiz işlemini gerçekleştir (transaction içinde)
+     * Public yapıldı - ApplicationContext üzerinden çağrılabilmesi için
+     */
+    @Transactional
+    public void analyzeQuestionWithAIInternal(Long questionId) {
         Question question = questionRepository.findById(questionId)
                 .orElseThrow(() -> new QuestionNotFoundException(questionId));
-
-        log.info("AI analiz başlatıldı (asenkron): questionId={}", questionId);
 
         try {
             // 1. Görseli oku
@@ -419,7 +442,7 @@ public class QuestionService {
                 question.setAiAnalysisStatus(AIAnalysisStatus.FAILED);
                 questionRepository.save(question);
                 log.error("Görsel dosyası bulunamadı: questionId={}, imageUrl={}", questionId, question.getImageUrl());
-                return CompletableFuture.completedFuture(null);
+                return;
             }
 
             // 2. AI analiz yap (questionId ile ExamType algılanacak)
@@ -446,8 +469,6 @@ public class QuestionService {
             questionRepository.save(question);
             log.info("AI analiz başarıyla tamamlandı: questionId={}", questionId);
 
-            return CompletableFuture.completedFuture(null);
-
         } catch (Exception e) {
             log.error("AI analiz hatası: questionId={}", questionId, e);
 
@@ -460,8 +481,6 @@ public class QuestionService {
             } catch (Exception ex) {
                 log.error("Status güncelleme hatası: questionId={}", questionId, ex);
             }
-
-            return CompletableFuture.completedFuture(null);
         }
     }
 
