@@ -1,5 +1,6 @@
 package com.beratcan.app.dto.response;
 
+import com.beratcan.app.entity.enums.AIAnalysisStatus;
 import com.beratcan.app.entity.enums.OptionLetter;
 import lombok.Data;
 
@@ -16,5 +17,6 @@ public class QuestionResponse {
     private String videoUrl;
     private TestResponse test; // Test bilgisini ekle
     private Integer sequenceNumber;
+    private AIAnalysisStatus aiAnalysisStatus; // AI analiz durumu
 
 }

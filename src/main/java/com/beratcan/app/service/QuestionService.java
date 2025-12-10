@@ -3,6 +3,7 @@ package com.beratcan.app.service;
 import com.beratcan.app.dto.request.CreateQuestionRequest;
 import com.beratcan.app.dto.request.QuestionRequest;
 import com.beratcan.app.dto.request.UpdateQuestionRequest;
+import com.beratcan.app.dto.response.AIAnalysisStatusResponse;
 import com.beratcan.app.dto.response.QuestionAnalysisResult;
 import com.beratcan.app.dto.response.QuestionResponse;
 import com.beratcan.app.dto.response.TestResponse;
@@ -10,6 +11,7 @@ import com.beratcan.app.entity.Explanation;
 import com.beratcan.app.entity.Hint;
 import com.beratcan.app.entity.Question;
 import com.beratcan.app.entity.Test;
+import com.beratcan.app.entity.enums.AIAnalysisStatus;
 import com.beratcan.app.entity.enums.ExamType;
 import com.beratcan.app.exception.BadRequestException;
 import com.beratcan.app.exception.ConflictException;
@@ -21,10 +23,12 @@ import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 import java.io.File;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -81,6 +85,30 @@ public class QuestionService {
         Question question = questionRepository.findById(questionId)
                 .orElseThrow(() -> new QuestionNotFoundException(questionId));
         return toQuestionResponse(question);
+    }
+
+    /**
+     * Soru için AI analiz durumunu getir
+     * 
+     * @param questionId Soru ID
+     * @return AIAnalysisStatusResponse
+     */
+    public AIAnalysisStatusResponse getAIAnalysisStatus(Long questionId) {
+        Question question = questionRepository.findById(questionId)
+                .orElseThrow(() -> new QuestionNotFoundException(questionId));
+
+        AIAnalysisStatus status = question.getAiAnalysisStatus() != null
+                ? question.getAiAnalysisStatus()
+                : AIAnalysisStatus.PENDING;
+
+        String message = switch (status) {
+            case PENDING -> "AI analiz henüz başlamadı";
+            case PROCESSING -> "AI analiz devam ediyor, lütfen bekleyin";
+            case COMPLETED -> "AI analiz tamamlandı";
+            case FAILED -> "AI analiz başarısız oldu";
+        };
+
+        return new AIAnalysisStatusResponse(questionId, status, message);
     }
 
     // UPDATE
@@ -249,6 +277,9 @@ public class QuestionService {
         response.setAnswerNumber(question.getAnswerNumber());
         response.setVideoUrl(question.getVideoUrl());
         response.setSequenceNumber(question.getSequenceNumber());
+        response.setAiAnalysisStatus(question.getAiAnalysisStatus() != null
+                ? question.getAiAnalysisStatus()
+                : AIAnalysisStatus.PENDING);
 
         // Test bilgisini ekle
         if (question.getTest() != null) {
@@ -323,10 +354,11 @@ public class QuestionService {
     }
 
     /**
-     * Soru oluştur (görsel ile) + Otomatik AI analiz yap
+     * Soru oluştur (görsel ile) + Asenkron AI analiz başlat
      * 
      * @param request CreateQuestionRequest DTO (görsel, testId, correctAnswer, vb.)
-     * @return QuestionResponse (hints ve explanation dahil)
+     * @return QuestionResponse (AI analiz henüz tamamlanmamış olabilir, status
+     *         kontrol edilmeli)
      */
     @Transactional
     public QuestionResponse addQuestionWithImageAndAI(CreateQuestionRequest request) {
@@ -353,20 +385,94 @@ public class QuestionService {
         QuestionResponse question = addQuestion(request.getTestId(), questionRequest);
         log.info("Soru oluşturuldu: questionId={}", question.getId());
 
-        // 4. Otomatik AI analiz yap ve hints/explanation ekle
-        analyzeQuestionWithAI(question.getId());
+        // 4. AI analiz durumunu PROCESSING olarak işaretle
+        Question questionEntity = questionRepository.findById(question.getId())
+                .orElseThrow(() -> new QuestionNotFoundException(question.getId()));
+        questionEntity.setAiAnalysisStatus(AIAnalysisStatus.PROCESSING);
+        questionRepository.save(questionEntity);
 
-        // 5. Güncel soruyu getir (hints ve explanation dahil)
+        // 5. AI analizini arka planda başlat (asenkron)
+        analyzeQuestionWithAIAsync(question.getId());
+
+        // 6. Hemen response dön (hints ve explanation henüz yok, status PROCESSING)
         return getQuestionById(question.getId());
     }
 
     /**
-     * Soru için AI analiz yap ve hints/explanation ekle
+     * Soru için AI analiz yap ve hints/explanation ekle (asenkron)
+     * 
+     * @param questionId Soru ID
+     * @return CompletableFuture<Void>
+     */
+    @Async("aiAnalysisExecutor")
+    @Transactional
+    public CompletableFuture<Void> analyzeQuestionWithAIAsync(Long questionId) {
+        Question question = questionRepository.findById(questionId)
+                .orElseThrow(() -> new QuestionNotFoundException(questionId));
+
+        log.info("AI analiz başlatıldı (asenkron): questionId={}", questionId);
+
+        try {
+            // 1. Görseli oku
+            File imageFile = new File(uploadDir + question.getImageUrl());
+            if (!imageFile.exists()) {
+                question.setAiAnalysisStatus(AIAnalysisStatus.FAILED);
+                questionRepository.save(question);
+                log.error("Görsel dosyası bulunamadı: questionId={}, imageUrl={}", questionId, question.getImageUrl());
+                return CompletableFuture.completedFuture(null);
+            }
+
+            // 2. AI analiz yap (questionId ile ExamType algılanacak)
+            QuestionAnalysisResult analysis = aiAnalyzer.analyzeQuestion(imageFile, questionId);
+            log.info("AI analiz tamamlandı: questionId={}", questionId);
+
+            // 3. Mevcut hints'i temizle
+            question.getHints().clear();
+
+            // 4. Yeni hints ekle
+            addHint(questionId, analysis.getHint1());
+            addHint(questionId, analysis.getHint2());
+            addHint(questionId, analysis.getHint3());
+            log.info("3 ipucu eklendi: questionId={}", questionId);
+
+            // 5. Explanation ekle/güncelle
+            addExplanation(questionId, analysis.getSolution());
+            log.info("Çözüm eklendi: questionId={}", questionId);
+
+            // 6. Status'u COMPLETED olarak güncelle
+            question = questionRepository.findById(questionId)
+                    .orElseThrow(() -> new QuestionNotFoundException(questionId));
+            question.setAiAnalysisStatus(AIAnalysisStatus.COMPLETED);
+            questionRepository.save(question);
+            log.info("AI analiz başarıyla tamamlandı: questionId={}", questionId);
+
+            return CompletableFuture.completedFuture(null);
+
+        } catch (Exception e) {
+            log.error("AI analiz hatası: questionId={}", questionId, e);
+
+            // Status'u FAILED olarak güncelle
+            try {
+                question = questionRepository.findById(questionId)
+                        .orElseThrow(() -> new QuestionNotFoundException(questionId));
+                question.setAiAnalysisStatus(AIAnalysisStatus.FAILED);
+                questionRepository.save(question);
+            } catch (Exception ex) {
+                log.error("Status güncelleme hatası: questionId={}", questionId, ex);
+            }
+
+            return CompletableFuture.completedFuture(null);
+        }
+    }
+
+    /**
+     * Soru için AI analiz yap ve hints/explanation ekle (senkron - eski metod,
+     * geriye dönük uyumluluk için)
      * 
      * @param questionId Soru ID
      */
     @Transactional
-    private void analyzeQuestionWithAI(Long questionId) {
+    public void analyzeQuestionWithAI(Long questionId) {
         Question question = questionRepository.findById(questionId)
                 .orElseThrow(() -> new QuestionNotFoundException(questionId));
 
@@ -396,8 +502,14 @@ public class QuestionService {
             addExplanation(questionId, analysis.getSolution());
             log.info("Çözüm eklendi: questionId={}", questionId);
 
+            // 6. Status'u COMPLETED olarak güncelle
+            question.setAiAnalysisStatus(AIAnalysisStatus.COMPLETED);
+            questionRepository.save(question);
+
         } catch (Exception e) {
             log.error("AI analiz hatası: questionId={}", questionId, e);
+            question.setAiAnalysisStatus(AIAnalysisStatus.FAILED);
+            questionRepository.save(question);
             throw new BadRequestException("AI analiz başarısız: " + e.getMessage());
         }
     }

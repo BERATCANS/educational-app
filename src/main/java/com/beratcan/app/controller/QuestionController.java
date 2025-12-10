@@ -4,6 +4,7 @@ import com.beratcan.app.annotation.RateLimit;
 import com.beratcan.app.dto.request.CreateQuestionRequest;
 import com.beratcan.app.dto.request.UpdateAnalysisRequest;
 import com.beratcan.app.dto.request.UpdateQuestionRequest;
+import com.beratcan.app.dto.response.AIAnalysisStatusResponse;
 import com.beratcan.app.dto.response.QuestionResponse;
 import com.beratcan.app.service.QuestionService;
 import jakarta.validation.Valid;
@@ -46,6 +47,15 @@ public class QuestionController {
     @GetMapping("/{questionId}")
     public QuestionResponse getQuestionById(@PathVariable Long questionId) {
         return questionService.getQuestionById(questionId);
+    }
+
+    /**
+     * Soru için AI analiz durumunu getir
+     */
+    @GetMapping("/{questionId}/ai-status")
+    @RateLimit(requestsPerMinute = 60, keyType = "USER", message = "Too many status requests. Please try again later.")
+    public AIAnalysisStatusResponse getAIAnalysisStatus(@PathVariable Long questionId) {
+        return questionService.getAIAnalysisStatus(questionId);
     }
 
     // UPDATE

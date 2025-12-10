@@ -1,5 +1,6 @@
 package com.beratcan.app.entity;
 
+import com.beratcan.app.entity.enums.AIAnalysisStatus;
 import com.beratcan.app.entity.enums.ExamType;
 import com.beratcan.app.entity.enums.OptionLetter;
 import com.fasterxml.jackson.annotation.JsonBackReference;
@@ -55,5 +56,9 @@ public class Question {
     @Enumerated(EnumType.STRING)
     @Column(name = "exam_type")
     private ExamType examType; // Denormalized: Test → Topic → Book → ExamType
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "ai_analysis_status")
+    private AIAnalysisStatus aiAnalysisStatus = AIAnalysisStatus.PENDING; // AI analiz durumu
 
 }
