@@ -50,4 +50,22 @@ public interface UserRepository extends JpaRepository<User, Long> {
      */
     @Query("SELECT COUNT(ub) > 0 FROM User u JOIN u.ownedBooks ub WHERE u.id = :userId AND ub.id = :bookId")
     boolean existsByUserIdAndBookId(@Param("userId") Long userId, @Param("bookId") Long bookId);
+
+    /**
+     * Kullanıcıyı flaggedQuestions koleksiyonu ile birlikte getirir (JOIN FETCH)
+     * Question'ların Test, Topic, Book ilişkilerini de yükler
+     * LazyInitializationException önlemek için
+     * 
+     * @param userId Kullanıcı ID
+     * @return User entity with flaggedQuestions loaded
+     */
+    @Query("SELECT DISTINCT u FROM User u " +
+            "LEFT JOIN FETCH u.flaggedQuestions fq " +
+            "LEFT JOIN FETCH fq.test t " +
+            "LEFT JOIN FETCH t.topic tp " +
+            "LEFT JOIN FETCH tp.book b " +
+            "LEFT JOIN FETCH fq.hints h " +
+            "LEFT JOIN FETCH fq.explanation e " +
+            "WHERE u.id = :userId")
+    Optional<User> findByIdWithFlaggedQuestions(@Param("userId") Long userId);
 }

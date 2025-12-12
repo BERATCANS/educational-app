@@ -20,7 +20,7 @@ import com.beratcan.app.exception.QuestionNotFoundException;
 import com.beratcan.app.exception.TestNotFoundException;
 import com.beratcan.app.repository.QuestionRepository;
 import com.beratcan.app.repository.TestRepository;
-import jakarta.transaction.Transactional;
+import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -58,6 +58,7 @@ public class QuestionService {
     private String uploadDir;
 
     // CREATE
+    @Transactional
     public QuestionResponse addQuestion(Long testId, QuestionRequest request) {
         if (request == null) {
             throw new BadRequestException("Question request cannot be null");
@@ -86,6 +87,7 @@ public class QuestionService {
     }
 
     // READ
+    @Transactional(readOnly = true)
     public List<QuestionResponse> getQuestionsByTest(Long testId) {
         return questionRepository.findByTestIdOrderBySequenceNumberAsc(testId)
                 .stream()
@@ -93,6 +95,7 @@ public class QuestionService {
                 .collect(Collectors.toList());
     }
 
+    @Transactional(readOnly = true)
     public QuestionResponse getQuestionById(Long questionId) {
         Question question = questionRepository.findById(questionId)
                 .orElseThrow(() -> new QuestionNotFoundException(questionId));
@@ -660,7 +663,7 @@ public class QuestionService {
     public void handleQuestionCreated(QuestionCreatedEvent event) {
         Long questionId = event.getQuestionId();
         log.info("Transaction commit edildi, AI analiz başlatılıyor: questionId={}", questionId);
-        
+
         // ApplicationContext üzerinden çağır (self-invocation sorununu çözmek için)
         QuestionService self = applicationContext.getBean(QuestionService.class);
         self.analyzeQuestionWithAIAsync(questionId);

@@ -39,6 +39,7 @@ public class DailyQuestionService {
     private final UserRepository userRepository;
     private final FileService fileService;
 
+    @Transactional(readOnly = true)
     public DailyQuestionResponse getCurrentQuestion(Long userId) {
         if (userId == null) {
             throw new UnauthorizedOperationException("Kullanıcı ID'si gerekli");

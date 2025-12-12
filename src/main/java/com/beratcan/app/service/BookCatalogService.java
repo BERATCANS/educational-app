@@ -33,6 +33,7 @@ public class BookCatalogService {
         private final UserRepository userRepository;
         private final FilterLabelService filterLabelService;
 
+        @Transactional(readOnly = true)
         public PageResponse<BookStoreResponse> getBookStore(String query,
                         List<ExamType> examTypes,
                         List<GradeLevel> gradeLevels,

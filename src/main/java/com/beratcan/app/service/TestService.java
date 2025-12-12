@@ -12,6 +12,7 @@ import com.beratcan.app.repository.TestRepository;
 import com.beratcan.app.repository.TopicRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -64,6 +65,7 @@ public class TestService {
     }
 
     // UPDATE
+    @Transactional
     public TestResponse updateTest(Long testId, TestRequest request) {
         if (request == null) {
             throw new BadRequestException("Test request cannot be null");
@@ -84,6 +86,7 @@ public class TestService {
     }
 
     // DELETE
+    @Transactional
     public void deleteTest(Long testId) {
         Test test = testRepository.findById(testId)
                 .orElseThrow(() -> new TestNotFoundException(testId));

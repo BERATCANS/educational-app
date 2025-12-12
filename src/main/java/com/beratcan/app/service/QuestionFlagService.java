@@ -61,8 +61,10 @@ public class QuestionFlagService {
                 userId, questionId, user.getFlaggedQuestions().size());
     }
 
+    @Transactional(readOnly = true)
     public List<FlaggedResponse> getFlaggedQuestions(Long userId) {
-        var user = userRepository.findById(userId)
+        // JOIN FETCH ile flaggedQuestions ve tüm ilişkileri tek query'de yükle
+        var user = userRepository.findByIdWithFlaggedQuestions(userId)
                 .orElseThrow(() -> new UserNotFoundException(userId));
 
         Set<Question> flaggedQuestions = user.getFlaggedQuestions();
@@ -71,8 +73,10 @@ public class QuestionFlagService {
                 .toList();
     }
 
+    @Transactional(readOnly = true)
     public FlaggedResponse getFlaggedQuestionById(Long userId, Long questionId) {
-        var user = userRepository.findById(userId)
+        // JOIN FETCH ile flaggedQuestions ve tüm ilişkileri tek query'de yükle
+        var user = userRepository.findByIdWithFlaggedQuestions(userId)
                 .orElseThrow(() -> new UserNotFoundException(userId));
 
         // Kullanıcının işaretlediği sorular içinde arama yap

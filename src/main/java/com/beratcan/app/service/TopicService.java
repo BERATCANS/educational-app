@@ -11,6 +11,7 @@ import com.beratcan.app.exception.TopicNotFoundException;
 import com.beratcan.app.repository.BookRepository;
 import com.beratcan.app.repository.TopicRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -88,6 +89,7 @@ public class TopicService {
         return toTopicResponse(saved);
     }
 
+    @Transactional
     public TopicResponse updateTopic(Long topicId, TopicRequest request) {
         if (request == null) {
             throw new BadRequestException("Topic request cannot be null");
@@ -105,6 +107,7 @@ public class TopicService {
         return toTopicResponse(updated);
     }
 
+    @Transactional
     public void deleteTopic(Long topicId) {
         Topic topic = topicRepository.findById(topicId)
                 .orElseThrow(() -> new TopicNotFoundException(topicId));
