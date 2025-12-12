@@ -6,7 +6,6 @@ import com.beratcan.app.dto.request.TestSubmissionRequest;
 import com.beratcan.app.dto.response.PageResponse;
 import com.beratcan.app.dto.response.TestResultDetailResponse;
 import com.beratcan.app.dto.response.TestResultResponse;
-import com.beratcan.app.entity.TestResult;
 import com.beratcan.app.service.TestResultService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
@@ -30,11 +29,11 @@ public class TestResultController {
     // Test sonucunu kaydet
     @PostMapping("/submit")
     @RateLimit(requestsPerMinute = 10, keyType = "USER", message = "Too many test submissions. Please try again later.")
-    public ResponseEntity<TestResult> submitTest(
+    public ResponseEntity<TestResultDetailResponse> submitTest(
             @Valid @RequestBody TestSubmissionRequest request,
             Authentication authentication) {
         Long userId = Long.parseLong(authentication.getName());
-        TestResult result = testResultService.saveTestResult(
+        TestResultDetailResponse result = testResultService.saveTestResult(
                 userId, // Authentication'dan alınan userId
                 request.getTestId(),
                 request.getUserAnswers(),
@@ -44,22 +43,22 @@ public class TestResultController {
 
     // Kullanıcının kendi test sonuçları (pagination destekli)
     @GetMapping("/my-results")
-    public ResponseEntity<PageResponse<TestResult>> getMyTestResults(
+    public ResponseEntity<PageResponse<TestResultDetailResponse>> getMyTestResults(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "" + AppConstants.DEFAULT_PAGE_SIZE) int size,
             Authentication authentication) {
         Long userId = Long.parseLong(authentication.getName());
-        PageResponse<TestResult> results = testResultService.getUserTestResults(userId, page, size);
+        PageResponse<TestResultDetailResponse> results = testResultService.getUserTestResults(userId, page, size);
         return ResponseEntity.ok(results);
     }
 
     // Belirli test sonucu detayı (sadece kendi sonucuna erişebilir)
     @GetMapping("/{testResultId}")
-    public ResponseEntity<TestResult> getTestResult(
+    public ResponseEntity<TestResultDetailResponse> getTestResult(
             @PathVariable Long testResultId,
             Authentication authentication) {
         Long userId = Long.parseLong(authentication.getName());
-        TestResult result = testResultService.getTestResultById(testResultId, userId);
+        TestResultDetailResponse result = testResultService.getTestResultById(testResultId, userId);
         return ResponseEntity.ok(result);
     }
 
