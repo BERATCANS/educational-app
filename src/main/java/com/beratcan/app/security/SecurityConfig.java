@@ -57,6 +57,7 @@ public class SecurityConfig {
                         // /api/users/resend-verification ve /api/users/change-email artık authenticated
                         // (ProfileController'da)
                         .requestMatchers("/api/books/store").permitAll() // Kitap mağazası herkese açık
+                        .requestMatchers("/api/users/cities").permitAll() // Şehir listesi herkese açık
                         .anyRequest().authenticated() // ✅ DİĞER TÜM ENDPOINT'LER AUTH GEREKTİRİR!
                 )
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)); // JWT
