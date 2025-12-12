@@ -5,6 +5,7 @@ import com.beratcan.app.entity.enums.PurchaseStatus;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -31,4 +32,17 @@ public interface PurchaseRepository extends JpaRepository<Purchase, Long> {
     // Bir kitabın toplam satış sayısı
     @Query("SELECT COUNT(p) FROM Purchase p WHERE p.book.id = :bookId AND p.status = 'COMPLETED'")
     Long countCompletedPurchasesByBookId(Long bookId);
+
+    /**
+     * Purchase'ı User, Book, Publisher ve DiscountCode ile birlikte getirir (JOIN
+     * FETCH)
+     * LazyInitializationException önlemek için
+     */
+    @Query("SELECT p FROM Purchase p " +
+            "JOIN FETCH p.user u " +
+            "JOIN FETCH p.book b " +
+            "LEFT JOIN FETCH b.publisher pub " +
+            "LEFT JOIN FETCH p.discountCode d " +
+            "WHERE p.id = :purchaseId")
+    Optional<Purchase> findByIdWithUserAndBook(@Param("purchaseId") Long purchaseId);
 }

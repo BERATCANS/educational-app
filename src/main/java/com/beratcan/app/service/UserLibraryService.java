@@ -45,8 +45,7 @@ public class UserLibraryService {
         Book book = code.getBook();
 
         // Kullanıcının bu kitabı zaten sahip olup olmadığını kontrol et
-        boolean alreadyOwns = user.getOwnedBooks().stream()
-                .anyMatch(ownedBook -> ownedBook.getId().equals(book.getId()));
+        boolean alreadyOwns = userRepository.existsByUserIdAndBookId(userId, book.getId());
 
         if (alreadyOwns) {
             throw new ConflictException("Bu kitabı zaten sahipsiniz");

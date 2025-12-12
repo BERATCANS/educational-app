@@ -173,31 +173,21 @@ public class TestResultService {
 
     @Transactional
     public TestResult getTestResultById(Long testResultId) {
-        // JOIN FETCH ile test ve user ilişkilerini yükle (LazyInitializationException
-        // önlemek için)
-        return testResultRepository.findById(testResultId)
-                .map(testResult -> {
-                    // Lazy loading'i tetikle (transaction içinde)
-                    testResult.getTest().getId(); // Test'i yükle
-                    testResult.getUser().getId(); // User'ı yükle
-                    return testResult;
-                })
+        // JOIN FETCH ile test ve user ilişkilerini tek query'de yükle
+        return testResultRepository.findByIdWithTestAndUser(testResultId)
                 .orElseThrow(() -> new TestResultNotFoundException(testResultId));
     }
 
     @Transactional
     public TestResult getTestResultById(Long testResultId, Long userId) {
-        TestResult testResult = testResultRepository.findById(testResultId)
+        // JOIN FETCH ile test ve user ilişkilerini tek query'de yükle
+        TestResult testResult = testResultRepository.findByIdWithTestAndUser(testResultId)
                 .orElseThrow(() -> new TestResultNotFoundException(testResultId));
 
-        // Lazy loading'i tetikle (transaction içinde)
-        Long testResultUserId = testResult.getUser().getId();
-        if (!testResultUserId.equals(userId)) {
+        // Authorization kontrolü (User zaten JOIN FETCH ile yüklü)
+        if (!testResult.getUser().getId().equals(userId)) {
             throw new UnauthorizedOperationException("You can only access your own test results");
         }
-
-        // Test'i de yükle (JSON serialize için)
-        testResult.getTest().getId();
 
         return testResult;
     }
@@ -214,14 +204,12 @@ public class TestResultService {
     // Kullanıcının belirli bir test için sonucunu getir
     @Transactional
     public TestResult getUserTestResultByTestId(Long userId, Long testId) {
-        return testResultRepository.findFirstByUserIdAndTestIdOrderByCompletedAtDesc(userId, testId)
-                .map(testResult -> {
-                    // Lazy loading'i tetikle (transaction içinde)
-                    testResult.getTest().getId(); // Test'i yükle
-                    testResult.getUser().getId(); // User'ı yükle
-                    return testResult;
-                })
-                .orElse(null); // Eğer bulunamazsa null döner
+        // JOIN FETCH ile test ve user ilişkilerini tek query'de yükle
+        java.util.List<TestResult> results = testResultRepository
+                .findFirstByUserIdAndTestIdWithTestAndUser(userId, testId);
+
+        // En son sonucu döndür (ORDER BY completedAt DESC ile sıralı)
+        return results.isEmpty() ? null : results.get(0);
     }
 
     /**

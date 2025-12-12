@@ -30,6 +30,30 @@ public interface TestResultRepository extends JpaRepository<TestResult, Long> {
         // Kullanıcının belirli bir test için en son sonucu (Optional)
         Optional<TestResult> findFirstByUserIdAndTestIdOrderByCompletedAtDesc(Long userId, Long testId);
 
+        /**
+         * TestResult'ı Test ve User ile birlikte getirir (JOIN FETCH)
+         * LazyInitializationException önlemek için
+         */
+        @Query("SELECT tr FROM TestResult tr " +
+                        "JOIN FETCH tr.test t " +
+                        "JOIN FETCH tr.user u " +
+                        "WHERE tr.id = :testResultId")
+        Optional<TestResult> findByIdWithTestAndUser(@Param("testResultId") Long testResultId);
+
+        /**
+         * Kullanıcının belirli bir test için en son sonucunu Test ve User ile birlikte
+         * getirir (JOIN FETCH)
+         * LazyInitializationException önlemek için
+         */
+        @Query("SELECT tr FROM TestResult tr " +
+                        "JOIN FETCH tr.test t " +
+                        "JOIN FETCH tr.user u " +
+                        "WHERE tr.user.id = :userId AND tr.test.id = :testId " +
+                        "ORDER BY tr.completedAt DESC")
+        java.util.List<TestResult> findFirstByUserIdAndTestIdWithTestAndUser(
+                        @Param("userId") Long userId,
+                        @Param("testId") Long testId);
+
         // Kullanıcının genel istatistikleri
         @Query("SELECT AVG(tr.successRate) FROM TestResult tr WHERE tr.user.id = :userId")
         Double findAverageSuccessRateByUserId(@Param("userId") Long userId);

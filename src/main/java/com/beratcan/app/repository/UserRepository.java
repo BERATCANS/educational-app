@@ -4,6 +4,7 @@ import com.beratcan.app.entity.User;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.util.Optional;
 
@@ -38,4 +39,15 @@ public interface UserRepository extends JpaRepository<User, Long> {
     @Modifying(clearAutomatically = true)
     @Query("UPDATE User u SET u.dailySolvedQuestions = 0")
     int resetAllDailySolvedQuestions();
+
+    /**
+     * Kullanıcının belirli bir kitaba sahip olup olmadığını kontrol eder
+     * Sadece boolean döndürür, entity yüklemez (performans için optimize edilmiş)
+     * 
+     * @param userId Kullanıcı ID
+     * @param bookId Kitap ID
+     * @return true eğer kullanıcı kitaba sahipse, false değilse
+     */
+    @Query("SELECT COUNT(ub) > 0 FROM User u JOIN u.ownedBooks ub WHERE u.id = :userId AND ub.id = :bookId")
+    boolean existsByUserIdAndBookId(@Param("userId") Long userId, @Param("bookId") Long bookId);
 }
