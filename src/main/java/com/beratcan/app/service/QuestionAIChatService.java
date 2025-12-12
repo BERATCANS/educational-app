@@ -22,7 +22,10 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.io.File;
+import java.nio.file.Files;
 import java.util.*;
+import java.util.Base64;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
@@ -51,14 +54,14 @@ public class QuestionAIChatService {
     @Value("${ai.chat.prompt.temperature:0.5}")
     private double chatTemperature;
 
-    @Value("${ai.chat.max.attempts.before.reveal:5}")
-    private int maxAttemptsBeforeReveal;
-
     @Value("${ai.chat.response.max.words:200}")
     private int responseMaxWords;
 
     @Value("${ai.chat.response.medium.words:400}")
     private int responseMediumWords;
+
+    @Value("${file.upload.dir:uploads/}")
+    private String uploadDir;
 
     /**
      * Conversation getir veya oluştur
@@ -120,14 +123,31 @@ public class QuestionAIChatService {
         // Soru context'i oluştur (history ile birlikte)
         String context = buildStudentChatContext(question, history);
 
-        // Kullanıcı mesajını enhance et (hata türü, deneme sayısı vb.)
-        String enhancedUserMessage = enhanceUserMessage(userMessage, history, question);
+        // Soru görselini base64'e çevir
+        String base64Image = null;
+        try {
+            if (question.getImageUrl() != null && !question.getImageUrl().trim().isEmpty()) {
+                File imageFile = new File(uploadDir + question.getImageUrl());
+                if (imageFile.exists()) {
+                    byte[] imageBytes = Files.readAllBytes(imageFile.toPath());
+                    base64Image = Base64.getEncoder().encodeToString(imageBytes);
+                    log.debug("Soru görseli base64'e çevrildi: questionId={}, size={}KB",
+                            questionId, imageBytes.length / 1024);
+                } else {
+                    log.warn("Soru görseli bulunamadı: questionId={}, imageUrl={}",
+                            questionId, question.getImageUrl());
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Soru görseli okunamadı: questionId={}, error={}", questionId, e.getMessage());
+            // Görsel okunamazsa devam et, sadece text ile gönder
+        }
 
         // OpenAI API çağrısı
         String aiResponse;
         Integer tokenCount;
         try {
-            Map<String, Object> result = callOpenAIChatAPI(context, history, enhancedUserMessage);
+            Map<String, Object> result = callOpenAIChatAPI(context, history, userMessage, base64Image);
             aiResponse = (String) result.get("content");
             tokenCount = (Integer) result.get("tokenCount");
         } catch (Exception e) {
@@ -214,27 +234,14 @@ public class QuestionAIChatService {
         context.append("4. Öğrencinin seviyesine uygun dil kullan\n");
         context.append("5. Emoji kullanma, profesyonel kal\n\n");
 
-        // Özel durumlar
-        int userAttempts = countUserAttempts(history);
-        boolean shouldReveal = shouldRevealAnswer(userAttempts, history);
-
+        // Özel durumlar - AI kendi karar versin
         context.append("=== ÖZEL DURUMLAR ===\n");
-        context.append("Öğrenci Deneme Sayısı: ").append(userAttempts).append("\n");
-
-        if (shouldReveal) {
-            context.append("DOĞRU CEVAP VERİLMELİ: Öğrenci ").append(userAttempts)
-                    .append(" kez denedi. Doğru cevabı açıkça söyle ve detaylı açıkla.\n");
-        } else {
-            context.append("DOĞRU CEVAP VERİLMEMELİ: Öğrenci henüz ").append(userAttempts)
-                    .append(" kez denedi. İpuçları ver, doğru cevabı söyleme.\n");
-        }
-
-        context.append("\nHata Türü Algılama:\n");
-        context.append("- İşlem hatası (hesaplama, işaret hatası): Hemen düzelt, doğru işlemi göster\n");
-        context.append("- Konu hatası (kavram yanlışlığı): Önce düşündür, sonra açıkla\n");
-        context.append("- 'Anlamadım' durumu: Daha basit dil kullan, farklı yöntem dene\n");
-        context.append("- Doğru cevap bulunca: Tebrik et, konuyu pekiştir, benzer örnekler ver\n");
-        context.append("- Konu dışı sorular: Kısa cevap ver, soruya dön\n\n");
+        context.append("Öğrenci ile konuşurken şu durumları dikkate al:\n");
+        context.append("- Öğrenci doğru cevabı isterse (açıkça söylerse) verebilirsin\n");
+        context.append("- Hata türlerini (işlem hatası, konu hatası) kendin algıla ve ona göre yaklaş\n");
+        context.append("- Konu dışı soruları kendin tespit et ve uygun şekilde yanıtla\n");
+        context.append("- Öğrenci anlamadıysa daha basit dil kullan, farklı yöntemler dene\n");
+        context.append("- Doğru cevap bulunca tebrik et, konuyu pekiştir, benzer örnekler ver\n\n");
 
         // İpucu kullanım stratejisi
         context.append("=== İPUCU KULLANIM STRATEJİSİ ===\n");
@@ -260,127 +267,10 @@ public class QuestionAIChatService {
     }
 
     /**
-     * Kullanıcı mesajını enhance et (hata türü, deneme sayısı vb. ekle)
-     */
-    private String enhanceUserMessage(String userMessage, List<QuestionAIMessage> history, Question question) {
-        StringBuilder enhanced = new StringBuilder();
-
-        // Hata türü algıla
-        String errorType = detectErrorType(userMessage, history, question);
-        if (errorType != null) {
-            enhanced.append("[HATA TÜRÜ: ").append(errorType).append("] ");
-        }
-
-        // Deneme sayısı
-        int attempts = countUserAttempts(history);
-        if (attempts > 0) {
-            enhanced.append("[DENEME SAYISI: ").append(attempts).append("] ");
-        }
-
-        // Konu dışı kontrolü
-        if (isOffTopic(userMessage)) {
-            enhanced.append("[KONU DIŞI SORU] ");
-        }
-
-        // Orijinal mesaj
-        enhanced.append(userMessage);
-
-        return enhanced.toString();
-    }
-
-    /**
-     * Hata türünü algıla (işlem hatası vs konu hatası)
-     */
-    private String detectErrorType(String userMessage, List<QuestionAIMessage> history, Question question) {
-        String lowerMessage = userMessage.toLowerCase();
-
-        // İşlem hatası göstergeleri
-        if (lowerMessage.contains("hesaplama") || lowerMessage.contains("hesapladım") ||
-                lowerMessage.contains("işaret") || lowerMessage.contains("toplama") ||
-                lowerMessage.contains("çıkarma") || lowerMessage.contains("çarpma") ||
-                lowerMessage.contains("bölme") || lowerMessage.contains("sonuç")) {
-            return "İŞLEM_HATASI";
-        }
-
-        // Konu hatası göstergeleri
-        if (lowerMessage.contains("anlamadım") || lowerMessage.contains("bilmiyorum") ||
-                lowerMessage.contains("nasıl") || lowerMessage.contains("neden") ||
-                lowerMessage.contains("formül") || lowerMessage.contains("kural")) {
-            return "KONU_HATASI";
-        }
-
-        // Doğru cevap bulundu göstergeleri
-        if (lowerMessage.contains("doğru mu") || lowerMessage.contains("cevap") ||
-                lowerMessage.contains("buldum") || lowerMessage.contains("çözdüm")) {
-            return "DOĞRU_CEVAP_KONTROL";
-        }
-
-        return null;
-    }
-
-    /**
-     * Kullanıcı deneme sayısını hesapla
-     */
-    private int countUserAttempts(List<QuestionAIMessage> history) {
-        return (int) history.stream()
-                .filter(msg -> msg.getRole() == MessageRole.USER)
-                .count();
-    }
-
-    /**
-     * Doğru cevabı söylemeli mi?
-     */
-    private boolean shouldRevealAnswer(int userAttempts, List<QuestionAIMessage> history) {
-        // 5+ deneme varsa veya açıkça isteniyorsa
-        if (userAttempts >= maxAttemptsBeforeReveal) {
-            return true;
-        }
-
-        // Son mesajlarda "doğru cevap" veya "söyle" gibi ifadeler varsa
-        List<QuestionAIMessage> recentMessages = history.size() > 3
-                ? history.subList(history.size() - 3, history.size())
-                : history;
-
-        for (QuestionAIMessage msg : recentMessages) {
-            if (msg.getRole() == MessageRole.USER) {
-                String content = msg.getContent().toLowerCase();
-                if (content.contains("doğru cevap") || content.contains("söyle") ||
-                        content.contains("ne") || content.contains("cevap")) {
-                    return true;
-                }
-            }
-        }
-
-        return false;
-    }
-
-    /**
-     * Konu dışı mı?
-     */
-    private boolean isOffTopic(String userMessage) {
-        String lowerMessage = userMessage.toLowerCase();
-
-        // Konu dışı göstergeler
-        String[] offTopicKeywords = {
-                "başka", "farklı", "genel", "diğer", "ödev", "sınav", "not",
-                "hoca", "okul", "ders", "program", "uygulama"
-        };
-
-        for (String keyword : offTopicKeywords) {
-            if (lowerMessage.contains(keyword) &&
-                    !lowerMessage.contains("soru") &&
-                    !lowerMessage.contains("matematik")) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    /**
      * OpenAI Chat Completions API çağrısı
      */
-    private Map<String, Object> callOpenAIChatAPI(String context, List<QuestionAIMessage> history, String userMessage) {
+    private Map<String, Object> callOpenAIChatAPI(String context, List<QuestionAIMessage> history, String userMessage,
+            String base64Image) {
         long startTime = System.currentTimeMillis();
 
         try {
@@ -405,10 +295,33 @@ public class QuestionAIChatService {
                 messages.add(msgMap);
             }
 
-            // Yeni kullanıcı mesajı
+            // Yeni kullanıcı mesajı (görsel varsa image_url ile birlikte)
             Map<String, Object> newUserMessage = new HashMap<>();
             newUserMessage.put("role", "user");
-            newUserMessage.put("content", userMessage);
+
+            if (base64Image != null) {
+                // Görsel varsa content array olarak gönder
+                List<Map<String, Object>> content = new ArrayList<>();
+
+                // Text part
+                Map<String, Object> textPart = new HashMap<>();
+                textPart.put("type", "text");
+                textPart.put("text", userMessage);
+                content.add(textPart);
+
+                // Image part
+                Map<String, Object> imagePart = new HashMap<>();
+                imagePart.put("type", "image_url");
+                Map<String, String> imageUrl = new HashMap<>();
+                imageUrl.put("url", "data:image/png;base64," + base64Image);
+                imagePart.put("image_url", imageUrl);
+                content.add(imagePart);
+
+                newUserMessage.put("content", content);
+            } else {
+                // Görsel yoksa sadece text
+                newUserMessage.put("content", userMessage);
+            }
             messages.add(newUserMessage);
 
             // Request body
@@ -420,7 +333,8 @@ public class QuestionAIChatService {
 
             String requestBody = objectMapper.writeValueAsString(requestMap);
 
-            log.info("Calling OpenAI Chat API: model={}, messages={}", model, messages.size());
+            log.info("Calling OpenAI Chat API: model={}, messages={}, hasImage={}",
+                    model, messages.size(), base64Image != null);
 
             Request request = new Request.Builder()
                     .url("https://api.openai.com/v1/chat/completions")

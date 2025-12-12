@@ -47,16 +47,4 @@ public class QuestionAIChatController {
         return ResponseEntity.ok(response);
     }
 
-    /**
-     * Conversation geçmişini getir
-     */
-    @GetMapping("/messages")
-    @RateLimit(requestsPerMinute = 30, keyType = "USER", message = "Çok fazla istek gönderiliyor, lütfen daha sonra tekrar deneyin.")
-    public ResponseEntity<List<AIMessageResponse>> getMessages(
-            @PathVariable Long questionId,
-            Authentication authentication) {
-        Long userId = Long.parseLong(authentication.getName());
-        List<AIMessageResponse> messages = chatService.getMessages(questionId, userId);
-        return ResponseEntity.ok(messages);
-    }
 }
