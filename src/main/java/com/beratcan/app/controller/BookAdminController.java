@@ -9,8 +9,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
-
 @RestController
 @RequestMapping("/api/books")
 @RequiredArgsConstructor
@@ -46,14 +44,5 @@ public class BookAdminController {
     public ResponseEntity<String> countBookData(@PathVariable Long bookId) {
         bookAdminService.countBookData(bookId);
         return ResponseEntity.ok("Book ID " + bookId + " sayıları başarıyla güncellendi.");
-    }
-
-    @PreAuthorize("hasRole('ADMIN')")
-    @PostMapping("/add-codes")
-    public ResponseEntity<?> addCodes(
-            @RequestParam Long bookId,
-            @RequestBody List<String> codes) {
-        String result = bookAdminService.addCodes(bookId, codes);
-        return ResponseEntity.ok(java.util.Map.of("message", result));
     }
 }

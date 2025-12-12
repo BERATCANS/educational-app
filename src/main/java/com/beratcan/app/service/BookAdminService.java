@@ -2,14 +2,12 @@ package com.beratcan.app.service;
 
 import com.beratcan.app.dto.request.BookRequest;
 import com.beratcan.app.entity.Book;
-import com.beratcan.app.entity.BookCode;
 import com.beratcan.app.entity.Test;
 import com.beratcan.app.entity.Topic;
 import com.beratcan.app.entity.Publisher;
 import com.beratcan.app.exception.BadRequestException;
 import com.beratcan.app.exception.BookNotFoundException;
 import com.beratcan.app.exception.PublisherNotFoundException;
-import com.beratcan.app.repository.BookCodeRepository;
 import com.beratcan.app.repository.BookRepository;
 import com.beratcan.app.repository.TestRepository;
 import com.beratcan.app.repository.TopicRepository;
@@ -20,14 +18,12 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
-import java.util.List;
 
 @Service
 @RequiredArgsConstructor
 public class BookAdminService {
 
     private final BookRepository bookRepository;
-    private final BookCodeRepository bookCodeRepository;
     private final TopicRepository topicRepository;
     private final TestRepository testRepository;
     private final PublisherRepository publisherRepository;
@@ -137,62 +133,6 @@ public class BookAdminService {
         book.setNumberOfTests(totalTests);
         book.setNumberOfQuestions(totalQuestions);
         bookRepository.save(book);
-    }
-
-    @Transactional
-    public String addCodes(Long bookId, List<String> codes) {
-        Book book = bookRepository.findById(bookId)
-                .orElseThrow(() -> new BookNotFoundException(bookId));
-
-        if (codes == null || codes.isEmpty()) {
-            throw new BadRequestException("Eklenebilecek kod bulunamadı.");
-        }
-
-        // Duplicate ve yeni kodları ayır
-        List<String> duplicateCodes = codes.stream()
-                .filter(codeStr -> bookCodeRepository.existsByCode(codeStr))
-                .toList();
-
-        List<String> newCodes = codes.stream()
-                .filter(codeStr -> !bookCodeRepository.existsByCode(codeStr))
-                .toList();
-
-        // Yeni kodları ekle
-        if (!newCodes.isEmpty()) {
-            List<BookCode> bookCodes = newCodes.stream().map(codeStr -> {
-                BookCode code = new BookCode();
-                code.setCode(codeStr);
-                code.setBook(book);
-                code.setUsed(false);
-                return code;
-            }).toList();
-
-            book.getCodes().addAll(bookCodes);
-            bookCodeRepository.saveAll(bookCodes);
-        }
-
-        // Sonuç mesajı oluştur
-        StringBuilder result = new StringBuilder();
-
-        if (!newCodes.isEmpty()) {
-            result.append(newCodes.size()).append(" kod başarıyla eklendi");
-            if (!duplicateCodes.isEmpty()) {
-                result.append(". ");
-            }
-        }
-
-        if (!duplicateCodes.isEmpty()) {
-            if (newCodes.isEmpty()) {
-                result.append("Hiçbir kod eklenemedi. ");
-            }
-            result.append("Bu kodlar zaten mevcut: ").append(String.join(", ", duplicateCodes));
-        }
-
-        if (newCodes.isEmpty() && duplicateCodes.isEmpty()) {
-            result.append("Hiçbir kod belirtilmedi");
-        }
-
-        return result.toString();
     }
 
     private Publisher resolvePublisher(BookRequest request) {
