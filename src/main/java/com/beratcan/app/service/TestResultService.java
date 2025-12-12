@@ -131,6 +131,11 @@ public class TestResultService {
         // Kullanıcının günlük çözülen soru sayısını güncelle
         updateDailySolvedQuestions(user, totalQuestions);
 
+        // Lazy loading'i tetikle (transaction içinde, JSON serialize için)
+        // Test ve User zaten yüklü, ama emin olmak için initialize ediyoruz
+        savedTestResult.getTest().getId();
+        savedTestResult.getUser().getId();
+
         return savedTestResult;
     }
 
@@ -166,18 +171,33 @@ public class TestResultService {
                 testResultPage.getTotalElements());
     }
 
+    @Transactional
     public TestResult getTestResultById(Long testResultId) {
+        // JOIN FETCH ile test ve user ilişkilerini yükle (LazyInitializationException
+        // önlemek için)
         return testResultRepository.findById(testResultId)
+                .map(testResult -> {
+                    // Lazy loading'i tetikle (transaction içinde)
+                    testResult.getTest().getId(); // Test'i yükle
+                    testResult.getUser().getId(); // User'ı yükle
+                    return testResult;
+                })
                 .orElseThrow(() -> new TestResultNotFoundException(testResultId));
     }
 
+    @Transactional
     public TestResult getTestResultById(Long testResultId, Long userId) {
         TestResult testResult = testResultRepository.findById(testResultId)
                 .orElseThrow(() -> new TestResultNotFoundException(testResultId));
 
-        if (!testResult.getUser().getId().equals(userId)) {
+        // Lazy loading'i tetikle (transaction içinde)
+        Long testResultUserId = testResult.getUser().getId();
+        if (!testResultUserId.equals(userId)) {
             throw new UnauthorizedOperationException("You can only access your own test results");
         }
+
+        // Test'i de yükle (JSON serialize için)
+        testResult.getTest().getId();
 
         return testResult;
     }
@@ -192,8 +212,15 @@ public class TestResultService {
     }
 
     // Kullanıcının belirli bir test için sonucunu getir
+    @Transactional
     public TestResult getUserTestResultByTestId(Long userId, Long testId) {
         return testResultRepository.findFirstByUserIdAndTestIdOrderByCompletedAtDesc(userId, testId)
+                .map(testResult -> {
+                    // Lazy loading'i tetikle (transaction içinde)
+                    testResult.getTest().getId(); // Test'i yükle
+                    testResult.getUser().getId(); // User'ı yükle
+                    return testResult;
+                })
                 .orElse(null); // Eğer bulunamazsa null döner
     }
 
