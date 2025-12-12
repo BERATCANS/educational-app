@@ -4,6 +4,7 @@ import com.beratcan.app.annotation.RateLimit;
 import com.beratcan.app.constants.AppConstants;
 import com.beratcan.app.dto.request.TestSubmissionRequest;
 import com.beratcan.app.dto.response.PageResponse;
+import com.beratcan.app.dto.response.TestResultDetailResponse;
 import com.beratcan.app.dto.response.TestResultResponse;
 import com.beratcan.app.entity.TestResult;
 import com.beratcan.app.service.TestResultService;
@@ -83,7 +84,7 @@ public class TestResultController {
             @PathVariable Long testId,
             Authentication authentication) {
         Long userId = Long.parseLong(authentication.getName());
-        TestResult result = testResultService.getUserTestResultByTestId(userId, testId);
+        TestResultDetailResponse result = testResultService.getUserTestResultByTestId(userId, testId);
 
         Map<String, Object> response = new HashMap<>();
         if (result != null) {

@@ -1,6 +1,8 @@
 package com.beratcan.app.service;
 
 import com.beratcan.app.dto.response.PageResponse;
+import com.beratcan.app.dto.response.QuestionResultResponse;
+import com.beratcan.app.dto.response.TestResultDetailResponse;
 import com.beratcan.app.dto.response.TestResultResponse;
 import com.beratcan.app.entity.*;
 import com.beratcan.app.entity.enums.OptionLetter;
@@ -159,6 +161,7 @@ public class TestResultService {
      * DB seviyesinde pagination yapar, memory'ye yük bindirmez
      * JOIN FETCH ile N+1 query problemini önler
      */
+    @Transactional(readOnly = true)
     public PageResponse<TestResult> getUserTestResults(Long userId, int page, int size) {
         Pageable pageable = PageRequest.of(page, size);
         Page<TestResult> testResultPage = testResultRepository
@@ -202,14 +205,19 @@ public class TestResultService {
     }
 
     // Kullanıcının belirli bir test için sonucunu getir
-    @Transactional
-    public TestResult getUserTestResultByTestId(Long userId, Long testId) {
+    @Transactional(readOnly = true)
+    public TestResultDetailResponse getUserTestResultByTestId(Long userId, Long testId) {
         // JOIN FETCH ile test ve user ilişkilerini tek query'de yükle
         java.util.List<TestResult> results = testResultRepository
                 .findFirstByUserIdAndTestIdWithTestAndUser(userId, testId);
 
         // En son sonucu döndür (ORDER BY completedAt DESC ile sıralı)
-        return results.isEmpty() ? null : results.get(0);
+        if (results.isEmpty()) {
+            return null;
+        }
+
+        TestResult testResult = results.get(0);
+        return mapToDetailResponse(testResult);
     }
 
     /**
@@ -242,5 +250,45 @@ public class TestResultService {
                     return response;
                 })
                 .toList();
+    }
+
+    /**
+     * TestResult entity'sini TestResultDetailResponse DTO'suna çevirir
+     */
+    private TestResultDetailResponse mapToDetailResponse(TestResult testResult) {
+        TestResultDetailResponse response = new TestResultDetailResponse();
+        response.setId(testResult.getId());
+        response.setScore(testResult.getScore());
+        response.setTotalQuestions(testResult.getTotalQuestions());
+        response.setSuccessRate(testResult.getSuccessRate());
+        response.setTimeSpentSeconds(testResult.getTimeSpentSeconds());
+        response.setCompletedAt(testResult.getCompletedAt());
+
+        // Test bilgilerini direkt field'lara ekle (iç içe DTO yerine)
+        if (testResult.getTest() != null) {
+            response.setTestId(testResult.getTest().getId());
+            response.setTestTitle(testResult.getTest().getTitle());
+            response.setTestNumberOfQuestions(testResult.getTest().getNumberOfQuestions());
+            response.setTestSequenceNumber(testResult.getTest().getSequenceNumber());
+        }
+
+        // QuestionResults'ı DTO'ya çevir
+        if (testResult.getQuestionResults() != null && !testResult.getQuestionResults().isEmpty()) {
+            List<QuestionResultResponse> questionResultResponses = testResult.getQuestionResults().stream()
+                    .map(qr -> {
+                        QuestionResultResponse qrResponse = new QuestionResultResponse();
+                        qrResponse.setId(qr.getId());
+                        qrResponse.setQuestionId(qr.getQuestion() != null ? qr.getQuestion().getId() : null);
+                        qrResponse.setSelectedAnswer(qr.getSelectedAnswer());
+                        qrResponse.setIsCorrect(qr.getIsCorrect());
+                        qrResponse.setTimeSpentSeconds(qr.getTimeSpentSeconds());
+                        qrResponse.setAnsweredAt(qr.getAnsweredAt());
+                        return qrResponse;
+                    })
+                    .toList();
+            response.setQuestionResults(questionResultResponses);
+        }
+
+        return response;
     }
 }
