@@ -31,7 +31,8 @@ public class BookCodeService {
     @Transactional(readOnly = true)
     public List<BookCodeResponse> getAllBookCodes() {
         log.info("Tüm book code'lar getiriliyor");
-        List<BookCode> codes = bookCodeRepository.findAll();
+        // JOIN FETCH ile book ve usedBy ilişkilerini tek query'de yükle
+        List<BookCode> codes = bookCodeRepository.findAllWithBookAndUsedBy();
         return codes.stream()
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());
@@ -49,7 +50,8 @@ public class BookCodeService {
             throw new BookNotFoundException(bookId);
         }
 
-        List<BookCode> codes = bookCodeRepository.findByBookId(bookId);
+        // JOIN FETCH ile book ve usedBy ilişkilerini tek query'de yükle
+        List<BookCode> codes = bookCodeRepository.findByBookIdWithBookAndUsedBy(bookId);
         return codes.stream()
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());
@@ -62,7 +64,8 @@ public class BookCodeService {
     public BookCodeResponse updateBookCode(Long codeId, UpdateBookCodeRequest request) {
         log.info("Book code güncelleniyor: codeId={}", codeId);
 
-        BookCode bookCode = bookCodeRepository.findById(codeId)
+        // JOIN FETCH ile book ve usedBy ilişkilerini tek query'de yükle
+        BookCode bookCode = bookCodeRepository.findByIdWithBookAndUsedBy(codeId)
                 .orElseThrow(() -> new BookCodeNotFoundException(codeId));
 
         // Yeni kod zaten kullanılıyorsa ve farklı bir code ise hata ver

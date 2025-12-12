@@ -92,7 +92,8 @@ public class BookAdminService {
 
     @Transactional
     public void countBookData(Long bookId) {
-        Book book = bookRepository.findById(bookId)
+        // JOIN FETCH ile topics, tests ve questions ilişkilerini tek query'de yükle
+        Book book = bookRepository.findByIdWithTopicsAndTestsAndQuestions(bookId)
                 .orElseThrow(() -> new BookNotFoundException(bookId));
 
         int totalTopics = 0;

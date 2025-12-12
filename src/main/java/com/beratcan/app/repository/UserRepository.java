@@ -68,4 +68,18 @@ public interface UserRepository extends JpaRepository<User, Long> {
             "LEFT JOIN FETCH fq.explanation e " +
             "WHERE u.id = :userId")
     Optional<User> findByIdWithFlaggedQuestions(@Param("userId") Long userId);
+
+    /**
+     * Kullanıcıyı ownedBooks koleksiyonu ile birlikte getirir (JOIN FETCH)
+     * Book'ların Publisher ilişkilerini de yükler
+     * N+1 query problemini önlemek için
+     * 
+     * @param userId Kullanıcı ID
+     * @return User entity with ownedBooks and publishers loaded
+     */
+    @Query("SELECT DISTINCT u FROM User u " +
+            "LEFT JOIN FETCH u.ownedBooks b " +
+            "LEFT JOIN FETCH b.publisher p " +
+            "WHERE u.id = :userId")
+    Optional<User> findByIdWithOwnedBooks(@Param("userId") Long userId);
 }

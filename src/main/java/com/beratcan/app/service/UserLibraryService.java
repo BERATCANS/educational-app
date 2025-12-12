@@ -118,7 +118,8 @@ public class UserLibraryService {
      */
     @Transactional(readOnly = true)
     public List<BookResponse> getBooksForUser(Long userId) {
-        User user = userRepository.findById(userId)
+        // JOIN FETCH ile ownedBooks ve publisher ilişkilerini tek query'de yükle
+        User user = userRepository.findByIdWithOwnedBooks(userId)
                 .orElseThrow(() -> new UserNotFoundException(userId));
 
         List<Book> sortedOwnedBooks = user.getOwnedBooks().stream()

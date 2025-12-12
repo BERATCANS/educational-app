@@ -65,4 +65,18 @@ public interface BookRepository extends JpaRepository<Book, Long> {
         long countByPublisher_Id(Long publisherId);
 
         boolean existsByPublisher_Id(Long publisherId);
+
+        /**
+         * Book'u topics, tests ve questions ile birlikte getirir (JOIN FETCH)
+         * N+1 query problemini önlemek için
+         * 
+         * @param bookId Book ID
+         * @return Book entity with all relationships loaded
+         */
+        @Query("SELECT DISTINCT b FROM Book b " +
+                        "LEFT JOIN FETCH b.topics t " +
+                        "LEFT JOIN FETCH t.tests ts " +
+                        "LEFT JOIN FETCH ts.questions q " +
+                        "WHERE b.id = :bookId")
+        java.util.Optional<Book> findByIdWithTopicsAndTestsAndQuestions(@Param("bookId") Long bookId);
 }
