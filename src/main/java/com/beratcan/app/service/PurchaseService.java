@@ -171,6 +171,7 @@ public class PurchaseService {
         return mapToResponse(savedPurchase);
     }
 
+    @Transactional(readOnly = true)
     public List<PurchaseResponse> getUserPurchases(Long userId) {
         log.debug("Fetching all purchases for user: userId={}", userId);
 
@@ -183,6 +184,7 @@ public class PurchaseService {
                 .collect(Collectors.toList());
     }
 
+    @Transactional(readOnly = true)
     public List<PurchaseResponse> getUserCompletedPurchases(Long userId) {
         log.debug("Fetching completed purchases for user: userId={}", userId);
 

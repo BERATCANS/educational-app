@@ -13,20 +13,28 @@ import com.beratcan.app.repository.TestRepository;
 import com.beratcan.app.repository.TopicRepository;
 import com.beratcan.app.repository.PublisherRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationContext;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
+import lombok.extern.slf4j.Slf4j;
 
 import java.math.BigDecimal;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class BookAdminService {
 
     private final BookRepository bookRepository;
     private final TopicRepository topicRepository;
     private final TestRepository testRepository;
     private final PublisherRepository publisherRepository;
+
+    @Autowired
+    private ApplicationContext applicationContext;
 
     @Transactional
     public Book addBook(BookRequest request) {
@@ -53,7 +61,10 @@ public class BookAdminService {
         }
 
         Book savedBook = bookRepository.save(book);
-        countBookData(savedBook.getId());
+        // Book data sayılarını asenkron olarak hesapla (ana işlemi bloklamaz)
+        // ApplicationContext üzerinden çağır (self-invocation sorununu çözmek için)
+        BookAdminService self = applicationContext.getBean(BookAdminService.class);
+        self.countBookDataAsync(savedBook.getId());
         return savedBook;
     }
 
@@ -90,6 +101,25 @@ public class BookAdminService {
         bookRepository.deleteById(bookId);
     }
 
+    /**
+     * Book data sayılarını asenkron olarak hesapla
+     * Ana işlem thread'ini bloklamaz
+     */
+    @Async
+    public void countBookDataAsync(Long bookId) {
+        log.debug("countBookDataAsync başlatıldı: bookId={}", bookId);
+        try {
+            countBookData(bookId);
+            log.debug("countBookDataAsync tamamlandı: bookId={}", bookId);
+        } catch (Exception e) {
+            log.error("countBookDataAsync hatası: bookId={}, error={}", bookId, e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Book data sayılarını hesapla ve güncelle (transaction içinde)
+     * Asenkron wrapper metod tarafından çağrılır
+     */
     @Transactional
     public void countBookData(Long bookId) {
         // JOIN FETCH ile topics, tests ve questions ilişkilerini tek query'de yükle

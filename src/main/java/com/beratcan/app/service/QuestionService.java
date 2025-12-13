@@ -82,7 +82,8 @@ public class QuestionService {
         question.setExamType(examType);
 
         question = questionRepository.save(question);
-        bookAdminService.countBookData(test.getTopic().getBook().getId());
+        // Book data sayılarını asenkron olarak hesapla (ana işlemi bloklamaz)
+        bookAdminService.countBookDataAsync(test.getTopic().getBook().getId());
         return toQuestionResponse(question);
     }
 
@@ -108,6 +109,7 @@ public class QuestionService {
      * @param questionId Soru ID
      * @return AIAnalysisStatusResponse
      */
+    @Transactional(readOnly = true)
     public AIAnalysisStatusResponse getAIAnalysisStatus(Long questionId) {
         Question question = questionRepository.findById(questionId)
                 .orElseThrow(() -> new QuestionNotFoundException(questionId));
@@ -184,11 +186,14 @@ public class QuestionService {
     }
 
     // DELETE
+    @Transactional
     public void deleteQuestion(Long questionId) {
         Question question = questionRepository.findById(questionId)
                 .orElseThrow(() -> new QuestionNotFoundException(questionId));
+        Long bookId = question.getTest().getTopic().getBook().getId();
         questionRepository.delete(question);
-        bookAdminService.countBookData(question.getTest().getTopic().getBook().getId());
+        // Book data sayılarını asenkron olarak hesapla (ana işlemi bloklamaz)
+        bookAdminService.countBookDataAsync(bookId);
     }
 
     @Transactional

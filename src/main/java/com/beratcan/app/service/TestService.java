@@ -26,6 +26,7 @@ public class TestService {
     private final BookAdminService bookAdminService;
 
     // CREATE
+    @Transactional
     public TestResponse addTest(Long topicId, TestRequest request) {
         if (request == null) {
             throw new BadRequestException("Test request cannot be null");
@@ -46,11 +47,13 @@ public class TestService {
         test.setSequenceNumber(sequenceNumber);
 
         test = testRepository.save(test);
-        bookAdminService.countBookData(test.getTopic().getBook().getId());
+        // Book data sayılarını asenkron olarak hesapla (ana işlemi bloklamaz)
+        bookAdminService.countBookDataAsync(test.getTopic().getBook().getId());
         return toTestResponse(test);
     }
 
     // READ
+    @Transactional(readOnly = true)
     public List<TestResponse> getTestsByTopic(Long topicId) {
         return testRepository.findByTopicIdOrderBySequenceNumberAsc(topicId)
                 .stream()
@@ -58,6 +61,7 @@ public class TestService {
                 .collect(Collectors.toList());
     }
 
+    @Transactional(readOnly = true)
     public TestResponse getTestById(Long testId) {
         Test test = testRepository.findById(testId)
                 .orElseThrow(() -> new TestNotFoundException(testId));
@@ -81,7 +85,8 @@ public class TestService {
         }
 
         test = testRepository.save(test);
-        bookAdminService.countBookData(test.getTopic().getBook().getId());
+        // Book data sayılarını asenkron olarak hesapla (ana işlemi bloklamaz)
+        bookAdminService.countBookDataAsync(test.getTopic().getBook().getId());
         return toTestResponse(test);
     }
 
@@ -90,8 +95,10 @@ public class TestService {
     public void deleteTest(Long testId) {
         Test test = testRepository.findById(testId)
                 .orElseThrow(() -> new TestNotFoundException(testId));
+        Long bookId = test.getTopic().getBook().getId();
         testRepository.delete(test);
-        bookAdminService.countBookData(test.getTopic().getBook().getId());
+        // Book data sayılarını asenkron olarak hesapla (ana işlemi bloklamaz)
+        bookAdminService.countBookDataAsync(bookId);
     }
 
     // --- HELPER METHOD ---
