@@ -19,8 +19,13 @@ public class BookLibraryController {
 
     private final UserLibraryService userLibraryService;
 
-    @GetMapping("/for-user/{userId}")
-    public List<BookResponse> getBooksForUser(@PathVariable Long userId) {
+    @GetMapping("/for-user")
+    public List<BookResponse> getBooksForUser(Authentication authentication) {
+        if (authentication == null || !authentication.isAuthenticated()) {
+            throw new org.springframework.security.access.AccessDeniedException("Bu işlem için giriş yapmalısınız.");
+        }
+
+        Long userId = Long.parseLong(authentication.getName());
         return userLibraryService.getBooksForUser(userId);
     }
 

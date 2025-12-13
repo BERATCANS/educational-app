@@ -38,16 +38,20 @@ public class CartService {
 
         /**
          * Kullanıcının sepetini getir, yoksa oluştur
+         * JOIN FETCH ile tüm ilişkileri yükler (N+1 query önleme)
          */
         @Transactional
         public Cart getOrCreateCart(Long userId) {
-                return cartRepository.findByUserId(userId)
+                return cartRepository.findByUserIdWithItemsAndBooks(userId)
                                 .orElseGet(() -> {
                                         User user = userRepository.findById(userId)
                                                         .orElseThrow(() -> new UserNotFoundException(userId));
                                         Cart cart = new Cart();
                                         cart.setUser(user);
-                                        return cartRepository.save(cart);
+                                        Cart savedCart = cartRepository.save(cart);
+                                        // Yeni oluşturulan cart için JOIN FETCH ile tekrar yükle
+                                        return cartRepository.findByUserIdWithItemsAndBooks(userId)
+                                                        .orElse(savedCart);
                                 });
         }
 
@@ -79,9 +83,7 @@ public class CartService {
                 }
 
                 // Kullanıcı zaten bu kitaba sahip mi?
-                User user = cart.getUser();
-                boolean alreadyOwned = user.getOwnedBooks().stream()
-                                .anyMatch(b -> b.getId().equals(bookId));
+                boolean alreadyOwned = userRepository.existsByUserIdAndBookId(userId, bookId);
                 if (alreadyOwned) {
                         log.info("Book already owned, not added to cart: userId={}, bookId={}, bookTitle={}",
                                         userId, bookId, book.getTitle());
@@ -129,7 +131,8 @@ public class CartService {
         public CartResponse removeFromCart(Long userId, Long cartItemId) {
                 log.info("Removing item from cart: userId={}, cartItemId={}", userId, cartItemId);
 
-                Cart cart = cartRepository.findByUserId(userId)
+                // JOIN FETCH ile cart'ı yükle (N+1 query önleme)
+                Cart cart = cartRepository.findByUserIdWithItemsAndBooks(userId)
                                 .orElseThrow(() -> new CartNotFoundException(userId));
 
                 CartItem cartItem = cartItemRepository.findById(cartItemId)
@@ -157,10 +160,11 @@ public class CartService {
 
         /**
          * Sepeti görüntüle
+         * JOIN FETCH ile tüm ilişkileri yükler (N+1 query önleme)
          */
         @Transactional(readOnly = true)
         public CartResponse getCart(Long userId) {
-                Cart cart = cartRepository.findByUserId(userId)
+                Cart cart = cartRepository.findByUserIdWithItemsAndBooks(userId)
                                 .orElseGet(() -> getOrCreateCart(userId));
                 return mapToResponse(cart);
         }
@@ -172,7 +176,8 @@ public class CartService {
         public void clearCart(Long userId) {
                 log.info("Clearing cart: userId={}", userId);
 
-                Cart cart = cartRepository.findByUserId(userId)
+                // JOIN FETCH ile cart'ı yükle (N+1 query önleme)
+                Cart cart = cartRepository.findByUserIdWithItemsAndBooks(userId)
                                 .orElseThrow(() -> new CartNotFoundException(userId));
 
                 int itemCount = cart.getItems().size();
@@ -188,9 +193,11 @@ public class CartService {
 
         /**
          * Sepetteki kitap sayısı
+         * JOIN FETCH ile cart'ı yükle (items için)
          */
+        @Transactional(readOnly = true)
         public int getCartItemCount(Long userId) {
-                return cartRepository.findByUserId(userId)
+                return cartRepository.findByUserIdWithItemsAndBooks(userId)
                                 .map(cart -> cart.getItems().size())
                                 .orElse(0);
         }
@@ -260,6 +267,7 @@ public class CartService {
         public CartResponse applyDiscountCode(Long userId, String discountCode) {
                 log.info("Applying discount code to cart: userId={}, code={}", userId, discountCode);
 
+                // getOrCreateCart zaten JOIN FETCH kullanıyor
                 Cart cart = getOrCreateCart(userId);
 
                 // İndirim kodunu validate et
@@ -295,6 +303,7 @@ public class CartService {
         public CartResponse removeDiscountCode(Long userId) {
                 log.info("Removing discount code from cart: userId={}", userId);
 
+                // getOrCreateCart zaten JOIN FETCH kullanıyor
                 Cart cart = getOrCreateCart(userId);
                 cart.setAppliedDiscountCode(null);
                 cart.setDiscountAmount(null);
@@ -327,7 +336,7 @@ public class CartService {
                         return;
                 }
 
-                log.info("Re-validating discount code after cart change: userId={}, code={}", 
+                log.info("Re-validating discount code after cart change: userId={}, code={}",
                                 userId, cart.getAppliedDiscountCode().getCode());
 
                 // İndirim kodunu yeniden validate et
@@ -353,7 +362,8 @@ public class CartService {
                         cartRepository.save(cart);
 
                         log.info("Discount code re-validated and updated: userId={}, code={}, newDiscountAmount={}, newTotal={}",
-                                        userId, cart.getAppliedDiscountCode().getCode(), newDiscountAmount, newTotalAfterDiscount);
+                                        userId, cart.getAppliedDiscountCode().getCode(), newDiscountAmount,
+                                        newTotalAfterDiscount);
                 }
         }
 }

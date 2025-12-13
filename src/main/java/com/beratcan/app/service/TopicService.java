@@ -11,6 +11,7 @@ import com.beratcan.app.exception.TopicNotFoundException;
 import com.beratcan.app.repository.BookRepository;
 import com.beratcan.app.repository.TopicRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -64,6 +65,7 @@ public class TopicService {
         }
     }
 
+    @Transactional
     public TopicResponse addTopic(Long bookId, TopicRequest request) {
         if (request == null) {
             throw new BadRequestException("Topic request cannot be null");
@@ -84,10 +86,12 @@ public class TopicService {
         topic.setSequenceNumber(sequenceNumber);
 
         Topic saved = topicRepository.save(topic);
-        bookAdminService.countBookData(saved.getBook().getId());
+        // Book data sayılarını asenkron olarak hesapla (ana işlemi bloklamaz)
+        bookAdminService.countBookDataAsync(saved.getBook().getId());
         return toTopicResponse(saved);
     }
 
+    @Transactional
     public TopicResponse updateTopic(Long topicId, TopicRequest request) {
         if (request == null) {
             throw new BadRequestException("Topic request cannot be null");
@@ -101,17 +105,22 @@ public class TopicService {
         }
 
         Topic updated = topicRepository.save(topic);
-        bookAdminService.countBookData(updated.getBook().getId());
+        // Book data sayılarını asenkron olarak hesapla (ana işlemi bloklamaz)
+        bookAdminService.countBookDataAsync(updated.getBook().getId());
         return toTopicResponse(updated);
     }
 
+    @Transactional
     public void deleteTopic(Long topicId) {
         Topic topic = topicRepository.findById(topicId)
                 .orElseThrow(() -> new TopicNotFoundException(topicId));
+        Long bookId = topic.getBook().getId();
         topicRepository.delete(topic);
-        bookAdminService.countBookData(topic.getBook().getId());
+        // Book data sayılarını asenkron olarak hesapla (ana işlemi bloklamaz)
+        bookAdminService.countBookDataAsync(bookId);
     }
 
+    @Transactional(readOnly = true)
     public List<TopicResponse> getTopicsByBook(Long bookId) {
         if (bookId == null) {
             throw new BadRequestException("Book ID cannot be null");

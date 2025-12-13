@@ -22,6 +22,34 @@ public interface CartRepository extends JpaRepository<Cart, Long> {
     // Kullanıcının sepetini getir (normal okuma için)
     Optional<Cart> findByUserId(Long userId);
 
+    /**
+     * Kullanıcının sepetini tüm ilişkilerle birlikte getirir (JOIN FETCH)
+     * N+1 query problemini önler
+     */
+    @Query("SELECT DISTINCT c FROM Cart c " +
+            "JOIN FETCH c.user u " +
+            "LEFT JOIN FETCH c.items i " +
+            "LEFT JOIN FETCH i.book b " +
+            "LEFT JOIN FETCH b.publisher p " +
+            "LEFT JOIN FETCH c.appliedDiscountCode d " +
+            "WHERE c.user.id = :userId")
+    Optional<Cart> findByUserIdWithItemsAndBooks(@Param("userId") Long userId);
+
+    /**
+     * Kullanıcının sepetini pessimistic lock ile tüm ilişkilerle birlikte getirir
+     * (JOIN FETCH)
+     * Concurrent checkout'u önlemek için
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT DISTINCT c FROM Cart c " +
+            "JOIN FETCH c.user u " +
+            "LEFT JOIN FETCH c.items i " +
+            "LEFT JOIN FETCH i.book b " +
+            "LEFT JOIN FETCH b.publisher p " +
+            "LEFT JOIN FETCH c.appliedDiscountCode d " +
+            "WHERE c.user.id = :userId")
+    Optional<Cart> findByUserIdWithLockAndItems(@Param("userId") Long userId);
+
     // Kullanıcının sepeti var mı kontrol et
     boolean existsByUserId(Long userId);
 }

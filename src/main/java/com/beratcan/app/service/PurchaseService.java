@@ -79,8 +79,7 @@ public class PurchaseService {
         }
 
         // Kullanıcı bu kitabı daha önce satın almış mı kontrol et
-        boolean alreadyOwned = user.getOwnedBooks().stream()
-                .anyMatch(b -> b.getId().equals(bookId));
+        boolean alreadyOwned = userRepository.existsByUserIdAndBookId(userId, bookId);
 
         if (alreadyOwned) {
             log.info("Book already owned by user: userId={}, bookId={}, title={}",
@@ -172,6 +171,7 @@ public class PurchaseService {
         return mapToResponse(savedPurchase);
     }
 
+    @Transactional(readOnly = true)
     public List<PurchaseResponse> getUserPurchases(Long userId) {
         log.debug("Fetching all purchases for user: userId={}", userId);
 
@@ -184,6 +184,7 @@ public class PurchaseService {
                 .collect(Collectors.toList());
     }
 
+    @Transactional(readOnly = true)
     public List<PurchaseResponse> getUserCompletedPurchases(Long userId) {
         log.debug("Fetching completed purchases for user: userId={}", userId);
 
@@ -197,15 +198,18 @@ public class PurchaseService {
                 .collect(Collectors.toList());
     }
 
+    @Transactional(readOnly = true)
     public PurchaseResponse getPurchaseById(Long purchaseId, Long userId) {
-        Purchase purchase = purchaseRepository.findById(purchaseId)
+        // JOIN FETCH ile User, Book, Publisher ve DiscountCode'u tek query'de yükle
+        Purchase purchase = purchaseRepository.findByIdWithUserAndBook(purchaseId)
                 .orElseThrow(() -> {
                     PurchaseNotFoundException ex = new PurchaseNotFoundException(purchaseId);
                     log.error("Purchase not found: purchaseId={}, userId={}", purchaseId, userId, ex);
                     return ex;
                 });
 
-        // Kullanıcının kendi satın alma kaydını görmesini sağla
+        // Kullanıcının kendi satın alma kaydını görmesini sağla (User zaten JOIN FETCH
+        // ile yüklü)
         if (!purchase.getUser().getId().equals(userId)) {
             log.warn("Unauthorized purchase access attempt: purchaseId={}, requestingUserId={}, ownerUserId={}",
                     purchaseId, userId, purchase.getUser().getId());
@@ -232,8 +236,8 @@ public class PurchaseService {
                 });
 
         // Sepeti getir (pessimistic lock ile - concurrent checkout'u önlemek için)
-        // Bu sayede aynı anda sadece bir checkout işlemi çalışabilir
-        Cart cart = cartRepository.findByUserIdWithLock(userId)
+        // JOIN FETCH ile tüm ilişkileri yükle (N+1 query önleme)
+        Cart cart = cartRepository.findByUserIdWithLockAndItems(userId)
                 .orElseThrow(() -> {
                     CartNotFoundException ex = new CartNotFoundException(userId);
                     log.error("Cart not found for user: userId={}", userId, ex);

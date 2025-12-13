@@ -16,10 +16,10 @@ public class CacheConfig {
 
     /**
      * In-memory cache manager
-     * Filter options gibi static data için kullanılır
+     * Filter options ve cities gibi static data için kullanılır
      */
     @Bean
     public CacheManager cacheManager() {
-        return new ConcurrentMapCacheManager("filterOptions");
+        return new ConcurrentMapCacheManager("filterOptions", "cities");
     }
 }

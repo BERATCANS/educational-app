@@ -11,6 +11,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -35,7 +36,8 @@ public class EmailVerificationService {
     private String fromEmail;
 
     /**
-     * Email doğrulama token'ı oluştur ve gönder
+     * Email doğrulama token'ı oluştur ve gönder (asenkron)
+     * Token kaydı transaction içinde, email gönderimi asenkron
      */
     @Transactional
     public void sendVerificationEmail(User user) {
@@ -44,20 +46,28 @@ public class EmailVerificationService {
             return;
         }
 
-        // Token oluştur
+        // Token oluştur ve kaydet (transaction içinde)
         String token = UUID.randomUUID().toString();
-
         user.setEmailVerificationToken(token);
         userRepository.save(user);
 
-        // Email gönder
+        // Email'i asenkron olarak gönder (ana işlemi bloklamaz)
+        sendVerificationEmailAsync(user, token);
+    }
+
+    /**
+     * Email'i asenkron olarak gönder
+     * Token zaten kaydedilmiş, sadece email gönderme işlemi asenkron
+     */
+    @Async
+    public void sendVerificationEmailAsync(User user, String token) {
         String verificationUrl = baseUrl + "/api/users/verify-email?token=" + token;
         try {
             sendEmail(user.getEmail(), "Email Doğrulama - Hesabınızı Aktifleştirin",
                     buildVerificationEmail(user.getFirstName(), verificationUrl));
-            log.info("Verification email sent: userId={}, email={}", user.getId(), user.getEmail());
+            log.info("Verification email sent (async): userId={}, email={}", user.getId(), user.getEmail());
         } catch (Exception e) {
-            log.error("Failed to send verification email: userId={}, email={}",
+            log.error("Failed to send verification email (async): userId={}, email={}",
                     user.getId(), user.getEmail(), e);
             // Email gönderilemese bile token kaydedildi, kullanıcı tekrar isteyebilir
         }

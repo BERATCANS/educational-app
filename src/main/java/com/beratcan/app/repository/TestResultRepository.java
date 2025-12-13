@@ -27,8 +27,66 @@ public interface TestResultRepository extends JpaRepository<TestResult, Long> {
                         @Param("userId") Long userId,
                         Pageable pageable);
 
+        /**
+         * Kullanıcının tüm test sonuçlarını pagination ile getirir (QuestionResults
+         * ile)
+         * DB seviyesinde pagination yapar, memory'ye yük bindirmez
+         * JOIN FETCH ile N+1 query problemini önler
+         * Detay görünümü için kullanılır
+         */
+        @Query("SELECT DISTINCT tr FROM TestResult tr " +
+                        "JOIN FETCH tr.test t " +
+                        "JOIN FETCH t.topic tp " +
+                        "JOIN FETCH tp.book b " +
+                        "LEFT JOIN FETCH tr.questionResults qr " +
+                        "LEFT JOIN FETCH qr.question q " +
+                        "WHERE tr.user.id = :userId " +
+                        "ORDER BY tr.completedAt DESC")
+        Page<TestResult> findByUserIdOrderByCompletedAtDescWithQuestionResults(
+                        @Param("userId") Long userId,
+                        Pageable pageable);
+
         // Kullanıcının belirli bir test için en son sonucu (Optional)
         Optional<TestResult> findFirstByUserIdAndTestIdOrderByCompletedAtDesc(Long userId, Long testId);
+
+        /**
+         * TestResult'ı Test ve User ile birlikte getirir (JOIN FETCH)
+         * LazyInitializationException önlemek için
+         */
+        @Query("SELECT tr FROM TestResult tr " +
+                        "JOIN FETCH tr.test t " +
+                        "JOIN FETCH tr.user u " +
+                        "WHERE tr.id = :testResultId")
+        Optional<TestResult> findByIdWithTestAndUser(@Param("testResultId") Long testResultId);
+
+        /**
+         * TestResult'ı Test, User ve QuestionResults ile birlikte getirir (JOIN FETCH)
+         * LazyInitializationException önlemek için (detay görünümü için)
+         */
+        @Query("SELECT DISTINCT tr FROM TestResult tr " +
+                        "JOIN FETCH tr.test t " +
+                        "JOIN FETCH tr.user u " +
+                        "LEFT JOIN FETCH tr.questionResults qr " +
+                        "LEFT JOIN FETCH qr.question q " +
+                        "WHERE tr.id = :testResultId")
+        Optional<TestResult> findByIdWithTestUserAndQuestionResults(@Param("testResultId") Long testResultId);
+
+        /**
+         * Kullanıcının belirli bir test için en son sonucunu Test, User ve
+         * QuestionResults ile
+         * birlikte getirir (JOIN FETCH)
+         * LazyInitializationException önlemek için
+         */
+        @Query("SELECT DISTINCT tr FROM TestResult tr " +
+                        "JOIN FETCH tr.test t " +
+                        "JOIN FETCH tr.user u " +
+                        "LEFT JOIN FETCH tr.questionResults qr " +
+                        "LEFT JOIN FETCH qr.question q " +
+                        "WHERE tr.user.id = :userId AND tr.test.id = :testId " +
+                        "ORDER BY tr.completedAt DESC")
+        java.util.List<TestResult> findFirstByUserIdAndTestIdWithTestAndUser(
+                        @Param("userId") Long userId,
+                        @Param("testId") Long testId);
 
         // Kullanıcının genel istatistikleri
         @Query("SELECT AVG(tr.successRate) FROM TestResult tr WHERE tr.user.id = :userId")

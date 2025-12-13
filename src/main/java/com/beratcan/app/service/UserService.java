@@ -12,6 +12,7 @@ import com.beratcan.app.repository.UserRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Optional;
 import java.util.regex.Pattern;
@@ -34,6 +35,7 @@ public class UserService {
         this.emailVerificationService = emailVerificationService;
     }
 
+    @Transactional
     public User registerUser(UserRequest dto) {
         if (dto == null) {
             throw new BadRequestException("User request cannot be null");

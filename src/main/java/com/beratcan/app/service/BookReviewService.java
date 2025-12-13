@@ -101,7 +101,8 @@ public class BookReviewService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new UserNotFoundException(userId));
 
-        BookReview review = bookReviewRepository.findById(reviewId)
+        // JOIN FETCH ile User ve Book'u tek query'de yükle
+        BookReview review = bookReviewRepository.findByIdWithUserAndBook(reviewId)
                 .orElseThrow(() -> new ReviewNotFoundException(reviewId));
 
         if (!review.getBook().getId().equals(bookId)) {
@@ -154,7 +155,9 @@ public class BookReviewService {
             throw new BadRequestException("Kullanıcı ID gerekli.");
         }
 
-        Optional<BookReview> reviewOpt = bookReviewRepository.findByBookIdAndUserId(bookId, userId);
+        // JOIN FETCH ile User ve Book'u tek query'de yükle
+        Optional<BookReview> reviewOpt = bookReviewRepository
+                .findByBookIdAndUserIdWithUserAndBook(bookId, userId);
 
         if (reviewOpt.isEmpty()) {
             return null; // Kullanıcının yorumu yok
@@ -175,15 +178,17 @@ public class BookReviewService {
         Book book = bookRepository.findById(bookId)
                 .orElseThrow(() -> new BookNotFoundException(bookId));
 
-        BookReview review = bookReviewRepository.findById(reviewId)
+        // JOIN FETCH ile User ve Book'u tek query'de yükle
+        BookReview review = bookReviewRepository.findByIdWithUserAndBook(reviewId)
                 .orElseThrow(() -> new ReviewNotFoundException(reviewId));
 
-        // Yorumun bu kitaba ait olduğunu kontrol et
+        // Yorumun bu kitaba ait olduğunu kontrol et (Book zaten JOIN FETCH ile yüklü)
         if (!review.getBook().getId().equals(bookId)) {
             throw new BadRequestException("Bu yorum bu kitaba ait değil");
         }
 
-        // Kullanıcı yorum sahibi mi veya admin mi kontrol et
+        // Kullanıcı yorum sahibi mi veya admin mi kontrol et (User zaten JOIN FETCH ile
+        // yüklü)
         boolean isOwner = review.getUser().getId().equals(userId);
         boolean isAdmin = user.getRole() == Role.ADMIN;
 

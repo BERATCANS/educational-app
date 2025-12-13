@@ -33,6 +33,7 @@ public class BookCatalogService {
         private final UserRepository userRepository;
         private final FilterLabelService filterLabelService;
 
+        @Transactional(readOnly = true)
         public PageResponse<BookStoreResponse> getBookStore(String query,
                         List<ExamType> examTypes,
                         List<GradeLevel> gradeLevels,
@@ -108,12 +109,7 @@ public class BookCatalogService {
                 // Kullanıcının kitabı sahip olup olmadığını kontrol et
                 boolean isOwned = false;
                 if (userId != null) {
-                        User user = userRepository.findById(userId)
-                                        .orElse(null);
-                        if (user != null) {
-                                isOwned = user.getOwnedBooks().stream()
-                                                .anyMatch(ownedBook -> ownedBook.getId().equals(bookId));
-                        }
+                        isOwned = userRepository.existsByUserIdAndBookId(userId, bookId);
                 }
 
                 BookDetailResponse response = new BookDetailResponse();

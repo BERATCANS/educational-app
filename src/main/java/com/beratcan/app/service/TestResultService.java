@@ -1,6 +1,8 @@
 package com.beratcan.app.service;
 
 import com.beratcan.app.dto.response.PageResponse;
+import com.beratcan.app.dto.response.QuestionResultResponse;
+import com.beratcan.app.dto.response.TestResultDetailResponse;
 import com.beratcan.app.dto.response.TestResultResponse;
 import com.beratcan.app.entity.*;
 import com.beratcan.app.entity.enums.OptionLetter;
@@ -43,7 +45,7 @@ public class TestResultService {
     }
 
     @Transactional
-    public TestResult saveTestResult(Long userId, Long testId,
+    public TestResultDetailResponse saveTestResult(Long userId, Long testId,
             Map<Long, OptionLetter> userAnswers,
             Integer totalTimeSeconds) {
         if (userAnswers == null || userAnswers.isEmpty()) {
@@ -131,7 +133,14 @@ public class TestResultService {
         // Kullanıcının günlük çözülen soru sayısını güncelle
         updateDailySolvedQuestions(user, totalQuestions);
 
-        return savedTestResult;
+        // QuestionResults'ı da yüklemek için yeniden çek (lazy loading sorununu önlemek
+        // için)
+        TestResult testResultWithQuestionResults = testResultRepository
+                .findByIdWithTestUserAndQuestionResults(savedTestResult.getId())
+                .orElse(savedTestResult);
+
+        // Transaction içinde DTO'ya çevir (lazy loading sorununu önlemek için)
+        return mapToDetailResponse(testResultWithQuestionResults);
     }
 
     /**
@@ -153,54 +162,86 @@ public class TestResultService {
      * Kullanıcının tüm test sonuçlarını pagination ile getirir
      * DB seviyesinde pagination yapar, memory'ye yük bindirmez
      * JOIN FETCH ile N+1 query problemini önler
+     * Liste görünümü için QuestionResults yüklenmez (performans optimizasyonu)
      */
-    public PageResponse<TestResult> getUserTestResults(Long userId, int page, int size) {
+    @Transactional(readOnly = true)
+    public PageResponse<TestResultDetailResponse> getUserTestResults(Long userId, int page, int size) {
         Pageable pageable = PageRequest.of(page, size);
+        // QuestionResults yüklemeden hızlı query kullan (liste görünümü için yeterli)
         Page<TestResult> testResultPage = testResultRepository
                 .findByUserIdOrderByCompletedAtDesc(userId, pageable);
 
+        // Entity'leri DTO'ya çevir (transaction içinde, lazy loading sorununu önlemek
+        // için)
+        // QuestionResults null olacak (liste görünümü için gerekli değil)
+        List<TestResultDetailResponse> testResultResponses = testResultPage.getContent().stream()
+                .map(this::mapToDetailResponse)
+                .toList();
+
         return PageResponse.of(
-                testResultPage.getContent(),
+                testResultResponses,
                 page,
                 size,
                 testResultPage.getTotalElements());
     }
 
-    public TestResult getTestResultById(Long testResultId) {
-        return testResultRepository.findById(testResultId)
+    @Transactional(readOnly = true)
+    public TestResultDetailResponse getTestResultById(Long testResultId) {
+        // JOIN FETCH ile test, user ve questionResults ilişkilerini tek query'de yükle
+        TestResult testResult = testResultRepository.findByIdWithTestUserAndQuestionResults(testResultId)
                 .orElseThrow(() -> new TestResultNotFoundException(testResultId));
+
+        // Transaction içinde DTO'ya çevir (lazy loading sorununu önlemek için)
+        return mapToDetailResponse(testResult);
     }
 
-    public TestResult getTestResultById(Long testResultId, Long userId) {
-        TestResult testResult = testResultRepository.findById(testResultId)
+    @Transactional(readOnly = true)
+    public TestResultDetailResponse getTestResultById(Long testResultId, Long userId) {
+        // JOIN FETCH ile test, user ve questionResults ilişkilerini tek query'de yükle
+        TestResult testResult = testResultRepository.findByIdWithTestUserAndQuestionResults(testResultId)
                 .orElseThrow(() -> new TestResultNotFoundException(testResultId));
 
+        // Authorization kontrolü (User zaten JOIN FETCH ile yüklü)
         if (!testResult.getUser().getId().equals(userId)) {
             throw new UnauthorizedOperationException("You can only access your own test results");
         }
 
-        return testResult;
+        // Transaction içinde DTO'ya çevir (lazy loading sorununu önlemek için)
+        return mapToDetailResponse(testResult);
     }
 
     // Kullanıcı istatistikleri
+    @Transactional(readOnly = true)
     public Double getUserAverageSuccessRate(Long userId) {
         return testResultRepository.findAverageSuccessRateByUserId(userId);
     }
 
+    @Transactional(readOnly = true)
     public Long getUserTotalTestCount(Long userId) {
         return testResultRepository.countTestsByUserId(userId);
     }
 
     // Kullanıcının belirli bir test için sonucunu getir
-    public TestResult getUserTestResultByTestId(Long userId, Long testId) {
-        return testResultRepository.findFirstByUserIdAndTestIdOrderByCompletedAtDesc(userId, testId)
-                .orElse(null); // Eğer bulunamazsa null döner
+    @Transactional(readOnly = true)
+    public TestResultDetailResponse getUserTestResultByTestId(Long userId, Long testId) {
+        // JOIN FETCH ile test ve user ilişkilerini tek query'de yükle
+        java.util.List<TestResult> results = testResultRepository
+                .findFirstByUserIdAndTestIdWithTestAndUser(userId, testId);
+
+        // En son sonucu döndür (ORDER BY completedAt DESC ile sıralı)
+        if (results.isEmpty()) {
+            return null;
+        }
+
+        TestResult testResult = results.get(0);
+        return mapToDetailResponse(testResult);
     }
 
     /**
      * Kullanıcının belirli bir kitaptaki test sonuçlarını getirir
      * JOIN FETCH ile N+1 query problemini önler
      */
+    @Transactional(readOnly = true)
     public List<TestResultResponse> getUserTestResultsByBookId(Long userId, Long bookId) {
         if (userId == null) {
             throw new BadRequestException("User ID cannot be null");
@@ -217,15 +258,56 @@ public class TestResultService {
         List<TestResult> testResults = testResultRepository
                 .findAllByUserIdAndBookId(userId, bookId);
 
-        // DTO'ya çevir
+        // DTO'ya çevir (sadece testId ve successRate - basit mapping)
         return testResults.stream()
                 .map(testResult -> {
                     TestResultResponse response = new TestResultResponse();
-                    response.setUserId(userId);
                     response.setTestId(testResult.getTest().getId());
                     response.setSuccessRate(testResult.getSuccessRate());
                     return response;
                 })
                 .toList();
+    }
+
+    /**
+     * TestResult entity'sini TestResultDetailResponse DTO'suna çevirir (detaylı
+     * bilgiler)
+     * Transaction içinde çağrılmalı (lazy loading sorununu önlemek için)
+     */
+    private TestResultDetailResponse mapToDetailResponse(TestResult testResult) {
+        TestResultDetailResponse response = new TestResultDetailResponse();
+        response.setId(testResult.getId());
+        response.setScore(testResult.getScore());
+        response.setTotalQuestions(testResult.getTotalQuestions());
+        response.setSuccessRate(testResult.getSuccessRate());
+        response.setTimeSpentSeconds(testResult.getTimeSpentSeconds());
+        response.setCompletedAt(testResult.getCompletedAt());
+
+        // Test bilgilerini direkt field'lara ekle (iç içe DTO yerine)
+        if (testResult.getTest() != null) {
+            response.setTestId(testResult.getTest().getId());
+            response.setTestTitle(testResult.getTest().getTitle());
+            response.setTestNumberOfQuestions(testResult.getTest().getNumberOfQuestions());
+            response.setTestSequenceNumber(testResult.getTest().getSequenceNumber());
+        }
+
+        // QuestionResults'ı DTO'ya çevir
+        if (testResult.getQuestionResults() != null && !testResult.getQuestionResults().isEmpty()) {
+            List<QuestionResultResponse> questionResultResponses = testResult.getQuestionResults().stream()
+                    .map(qr -> {
+                        QuestionResultResponse qrResponse = new QuestionResultResponse();
+                        qrResponse.setId(qr.getId());
+                        qrResponse.setQuestionId(qr.getQuestion() != null ? qr.getQuestion().getId() : null);
+                        qrResponse.setSelectedAnswer(qr.getSelectedAnswer());
+                        qrResponse.setIsCorrect(qr.getIsCorrect());
+                        qrResponse.setTimeSpentSeconds(qr.getTimeSpentSeconds());
+                        qrResponse.setAnsweredAt(qr.getAnsweredAt());
+                        return qrResponse;
+                    })
+                    .toList();
+            response.setQuestionResults(questionResultResponses);
+        }
+
+        return response;
     }
 }
