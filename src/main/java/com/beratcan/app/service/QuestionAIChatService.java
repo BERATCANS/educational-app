@@ -128,8 +128,26 @@ public class QuestionAIChatService {
         String imageMimeType = null; // MIME type'ı da sakla
         try {
             if (question.getImageUrl() != null && !question.getImageUrl().trim().isEmpty()) {
-                File imageFile = new File(uploadDir + question.getImageUrl());
-                if (imageFile.exists()) {
+                // imageUrl'den "api/files/" veya "/api/files/" prefix'ini temizle (URL
+                // formatıysa)
+                // Database'de filename olarak saklanıyor ama bazı kayıtlarda URL formatında
+                // olabilir
+                String imageFilename = question.getImageUrl().trim();
+                if (imageFilename.startsWith("/api/files/")) {
+                    imageFilename = imageFilename.substring("/api/files/".length());
+                } else if (imageFilename.startsWith("api/files/")) {
+                    imageFilename = imageFilename.substring("api/files/".length());
+                }
+
+                // uploadDir'in sonunda / var mı kontrol et ve dosya yolunu oluştur
+                String separator = uploadDir.endsWith("/") || uploadDir.endsWith("\\") ? "" : "/";
+                File imageFile = new File(uploadDir + separator + imageFilename);
+
+                log.debug(
+                        "Görsel dosyası aranıyor: questionId={}, originalImageUrl={}, cleanedFilename={}, fullPath={}",
+                        questionId, question.getImageUrl(), imageFilename, imageFile.getAbsolutePath());
+
+                if (imageFile.exists() && imageFile.isFile()) {
                     byte[] imageBytes = Files.readAllBytes(imageFile.toPath());
                     base64Image = Base64.getEncoder().encodeToString(imageBytes);
 
@@ -153,8 +171,10 @@ public class QuestionAIChatService {
                     log.debug("Soru görseli base64'e çevrildi: questionId={}, size={}KB, mimeType={}",
                             questionId, imageBytes.length / 1024, imageMimeType);
                 } else {
-                    log.warn("Soru görseli bulunamadı: questionId={}, imageUrl={}",
-                            questionId, question.getImageUrl());
+                    log.warn(
+                            "Soru görseli bulunamadı: questionId={}, originalImageUrl={}, cleanedFilename={}, fullPath={}, exists={}",
+                            questionId, question.getImageUrl(), imageFilename, imageFile.getAbsolutePath(),
+                            imageFile.exists());
                 }
             }
         } catch (Exception e) {
