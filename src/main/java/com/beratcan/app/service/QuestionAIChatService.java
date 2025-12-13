@@ -190,7 +190,7 @@ public class QuestionAIChatService {
         String aiResponse;
         Integer tokenCount;
         try {
-            Map<String, Object> result = callOpenAIChatAPI(context, history, userMessage, base64Image, imageMimeType);
+            Map<String, Object> result = callOpenAIChatAPI(context, history, question, base64Image, imageMimeType);
             aiResponse = (String) result.get("content");
             tokenCount = (Integer) result.get("tokenCount");
         } catch (Exception e) {
@@ -285,10 +285,25 @@ public class QuestionAIChatService {
     }
 
     /**
-     * OpenAI Chat Completions API çağrısı
+     * Son N mesajı al (hem USER hem ASSISTANT)
      */
-    private Map<String, Object> callOpenAIChatAPI(String context, List<QuestionAIMessage> history, String userMessage,
-            String base64Image, String imageMimeType) {
+    private List<QuestionAIMessage> pickRecentHistory(List<QuestionAIMessage> history, int maxMessages) {
+        if (history.size() <= maxMessages) {
+            return history;
+        }
+        return history.subList(history.size() - maxMessages, history.size());
+    }
+
+    /**
+     * OpenAI Chat Completions API çağrısı
+     * 
+     * Değişiklikler:
+     * - History'den son 5 mesaj alınıyor (USER + ASSISTANT)
+     * - Görsel sadece ilk mesajda gönderiliyor (history boşsa veya çok kısaysa)
+     * - Tam çözüm kontrolü kaldırıldı, AI kendisi karar verecek
+     */
+    private Map<String, Object> callOpenAIChatAPI(String context, List<QuestionAIMessage> history,
+            Question question, String base64Image, String imageMimeType) {
         long startTime = System.currentTimeMillis();
 
         try {
@@ -301,67 +316,67 @@ public class QuestionAIChatService {
             systemMessage.put("content", context);
             messages.add(systemMessage);
 
-            // Conversation history (son 10 mesaj - token limiti için)
-            List<QuestionAIMessage> recentHistory = history.size() > 10
-                    ? history.subList(history.size() - 10, history.size())
-                    : history;
+            // Conversation history: Son 5 mesaj (hem USER hem ASSISTANT)
+            List<QuestionAIMessage> recentHistory = pickRecentHistory(history, 5);
 
+            // Görsel gönderim kontrolü:
+            // - History boşsa (ilk mesaj) -> görsel gönder
+            // - History'de sadece 1 mesaj varsa (ilk USER mesajı, henüz cevap yok) ->
+            // görsel gönder
+            // - Diğer durumlarda görsel gönderme (zaten ilk mesajda gönderilmiş)
+            boolean shouldSendImage = base64Image != null &&
+                    (recentHistory.isEmpty() ||
+                            (recentHistory.size() == 1 && recentHistory.get(0).getRole() == MessageRole.USER));
+
+            // History mesajlarını ekle
+            boolean imageSent = false;
             for (QuestionAIMessage msg : recentHistory) {
                 Map<String, Object> msgMap = new HashMap<>();
                 msgMap.put("role", msg.getRole().name().toLowerCase());
-                msgMap.put("content", msg.getContent());
-                messages.add(msgMap);
-            }
 
-            // Yeni kullanıcı mesajı (görsel varsa image_url ile birlikte)
-            Map<String, Object> newUserMessage = new HashMap<>();
-            newUserMessage.put("role", "user");
+                // İlk USER mesajıysa ve görsel gönderilmesi gerekiyorsa, görseli ekle
+                if (shouldSendImage && !imageSent && msg.getRole() == MessageRole.USER) {
+                    List<Map<String, Object>> content = new ArrayList<>();
 
-            if (base64Image != null) {
-                // Görsel varsa content array olarak gönder
-                List<Map<String, Object>> content = new ArrayList<>();
+                    // Text part
+                    Map<String, Object> textPart = new HashMap<>();
+                    textPart.put("type", "text");
+                    textPart.put("text", msg.getContent());
+                    content.add(textPart);
 
-                // Text part
-                Map<String, Object> textPart = new HashMap<>();
-                textPart.put("type", "text");
-                textPart.put("text", userMessage);
-                content.add(textPart);
+                    // Image part
+                    Map<String, Object> imagePart = new HashMap<>();
+                    imagePart.put("type", "image_url");
+                    Map<String, String> imageUrl = new HashMap<>();
 
-                // Image part
-                Map<String, Object> imagePart = new HashMap<>();
-                imagePart.put("type", "image_url");
-                Map<String, String> imageUrl = new HashMap<>();
+                    String mime = (imageMimeType != null && !imageMimeType.isEmpty())
+                            ? imageMimeType
+                            : "image/jpeg";
+                    imageUrl.put("url", "data:" + mime + ";base64," + base64Image);
+                    imagePart.put("image_url", imageUrl);
+                    content.add(imagePart);
 
-                // MIME type'a göre doğru format kullan
-                if (imageMimeType != null && !imageMimeType.isEmpty()) {
-                    imageUrl.put("url", "data:" + imageMimeType + ";base64," + base64Image);
+                    msgMap.put("content", content);
+                    imageSent = true;
                 } else {
-                    // Fallback: varsayılan olarak JPEG (çoğu görsel JPEG)
-                    imageUrl.put("url", "data:image/jpeg;base64," + base64Image);
-                    log.warn("MIME type belirlenemedi, JPEG olarak gönderiliyor");
+                    // Normal text mesaj
+                    msgMap.put("content", msg.getContent());
                 }
 
-                imagePart.put("image_url", imageUrl);
-                content.add(imagePart);
-
-                newUserMessage.put("content", content);
-            } else {
-                // Görsel yoksa sadece text
-                newUserMessage.put("content", userMessage);
+                messages.add(msgMap);
             }
-            messages.add(newUserMessage);
 
             // Request body
             Map<String, Object> requestMap = new HashMap<>();
             requestMap.put("model", model);
             requestMap.put("messages", messages);
-            requestMap.put("max_tokens", 1000);
+            requestMap.put("max_tokens", 1000); // AI kendi karar verecek, sabit limit
             requestMap.put("temperature", chatTemperature);
 
             String requestBody = objectMapper.writeValueAsString(requestMap);
 
-            log.info("Calling OpenAI Chat API: model={}, messages={}, hasImage={}",
-                    model, messages.size(), base64Image != null);
+            log.info("Calling OpenAI Chat API: model={}, messages={}, hasImage={}, recentHistorySize={}",
+                    model, messages.size(), imageSent, recentHistory.size());
 
             Request request = new Request.Builder()
                     .url("https://api.openai.com/v1/chat/completions")
@@ -531,7 +546,7 @@ public class QuestionAIChatService {
         String aiResponse;
         Integer tokenCount;
         try {
-            Map<String, Object> result = callOpenAIChatAPI(context, history, userMessageText, base64Image,
+            Map<String, Object> result = callOpenAIChatAPI(context, history, question, base64Image,
                     imageMimeType);
             aiResponse = (String) result.get("content");
             tokenCount = (Integer) result.get("tokenCount");
