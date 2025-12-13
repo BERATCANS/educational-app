@@ -211,10 +211,12 @@ public class TestResultService {
     }
 
     // Kullanıcı istatistikleri
+    @Transactional(readOnly = true)
     public Double getUserAverageSuccessRate(Long userId) {
         return testResultRepository.findAverageSuccessRateByUserId(userId);
     }
 
+    @Transactional(readOnly = true)
     public Long getUserTotalTestCount(Long userId) {
         return testResultRepository.countTestsByUserId(userId);
     }
@@ -272,7 +274,7 @@ public class TestResultService {
      * bilgiler)
      * Transaction içinde çağrılmalı (lazy loading sorununu önlemek için)
      */
-    public TestResultDetailResponse mapToDetailResponse(TestResult testResult) {
+    private TestResultDetailResponse mapToDetailResponse(TestResult testResult) {
         TestResultDetailResponse response = new TestResultDetailResponse();
         response.setId(testResult.getId());
         response.setScore(testResult.getScore());

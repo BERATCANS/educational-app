@@ -125,14 +125,33 @@ public class QuestionAIChatService {
 
         // Soru görselini base64'e çevir
         String base64Image = null;
+        String imageMimeType = null; // MIME type'ı da sakla
         try {
             if (question.getImageUrl() != null && !question.getImageUrl().trim().isEmpty()) {
                 File imageFile = new File(uploadDir + question.getImageUrl());
                 if (imageFile.exists()) {
                     byte[] imageBytes = Files.readAllBytes(imageFile.toPath());
                     base64Image = Base64.getEncoder().encodeToString(imageBytes);
-                    log.debug("Soru görseli base64'e çevrildi: questionId={}, size={}KB",
-                            questionId, imageBytes.length / 1024);
+
+                    // Dosya uzantısına göre MIME type belirle
+                    String fileName = imageFile.getName().toLowerCase();
+                    if (fileName.endsWith(".png")) {
+                        imageMimeType = "image/png";
+                    } else if (fileName.endsWith(".jpg") || fileName.endsWith(".jpeg")) {
+                        imageMimeType = "image/jpeg";
+                    } else if (fileName.endsWith(".gif")) {
+                        imageMimeType = "image/gif";
+                    } else if (fileName.endsWith(".webp")) {
+                        imageMimeType = "image/webp";
+                    } else {
+                        // Varsayılan olarak JPEG (çoğu görsel JPEG)
+                        imageMimeType = "image/jpeg";
+                        log.warn("Bilinmeyen görsel formatı, JPEG olarak varsayılıyor: questionId={}, fileName={}",
+                                questionId, fileName);
+                    }
+
+                    log.debug("Soru görseli base64'e çevrildi: questionId={}, size={}KB, mimeType={}",
+                            questionId, imageBytes.length / 1024, imageMimeType);
                 } else {
                     log.warn("Soru görseli bulunamadı: questionId={}, imageUrl={}",
                             questionId, question.getImageUrl());
@@ -147,7 +166,7 @@ public class QuestionAIChatService {
         String aiResponse;
         Integer tokenCount;
         try {
-            Map<String, Object> result = callOpenAIChatAPI(context, history, userMessage, base64Image);
+            Map<String, Object> result = callOpenAIChatAPI(context, history, userMessage, base64Image, imageMimeType);
             aiResponse = (String) result.get("content");
             tokenCount = (Integer) result.get("tokenCount");
         } catch (Exception e) {
@@ -270,7 +289,7 @@ public class QuestionAIChatService {
      * OpenAI Chat Completions API çağrısı
      */
     private Map<String, Object> callOpenAIChatAPI(String context, List<QuestionAIMessage> history, String userMessage,
-            String base64Image) {
+            String base64Image, String imageMimeType) {
         long startTime = System.currentTimeMillis();
 
         try {
@@ -313,7 +332,16 @@ public class QuestionAIChatService {
                 Map<String, Object> imagePart = new HashMap<>();
                 imagePart.put("type", "image_url");
                 Map<String, String> imageUrl = new HashMap<>();
-                imageUrl.put("url", "data:image/png;base64," + base64Image);
+
+                // MIME type'a göre doğru format kullan
+                if (imageMimeType != null && !imageMimeType.isEmpty()) {
+                    imageUrl.put("url", "data:" + imageMimeType + ";base64," + base64Image);
+                } else {
+                    // Fallback: varsayılan olarak JPEG (çoğu görsel JPEG)
+                    imageUrl.put("url", "data:image/jpeg;base64," + base64Image);
+                    log.warn("MIME type belirlenemedi, JPEG olarak gönderiliyor");
+                }
+
                 imagePart.put("image_url", imageUrl);
                 content.add(imagePart);
 
