@@ -8,7 +8,9 @@ import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationContext;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.scheduling.annotation.Async;
@@ -28,6 +30,9 @@ public class EmailVerificationService {
 
     private final UserRepository userRepository;
     private final JavaMailSender mailSender;
+
+    @Autowired
+    private ApplicationContext applicationContext;
 
     @Value("${app.base-url:http://localhost:8080}")
     private String baseUrl;
@@ -52,7 +57,9 @@ public class EmailVerificationService {
         userRepository.save(user);
 
         // Email'i asenkron olarak gönder (ana işlemi bloklamaz)
-        sendVerificationEmailAsync(user, token);
+        // ApplicationContext üzerinden çağır (self-invocation sorununu çözmek için)
+        EmailVerificationService self = applicationContext.getBean(EmailVerificationService.class);
+        self.sendVerificationEmailAsync(user, token);
     }
 
     /**

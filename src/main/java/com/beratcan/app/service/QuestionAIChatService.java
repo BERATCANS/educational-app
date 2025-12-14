@@ -276,7 +276,10 @@ public class QuestionAIChatService {
         context.append("1. Her zaman Türkçe yanıt ver\n");
         context.append("2. Öğrencinin sorusuna doğrudan odaklan: Ne sorduysa ona yanıt ver\n");
         context.append("3. Gerekli detay seviyesini sen belirle: Öğrencinin ihtiyacına göre uzun veya kısa olabilir\n");
-        context.append("4. Formülleri açıkla: Sadece yazma, ne anlama geldiğini de söyle\n");
+        context.append("4. Matematik formüllerini ve denklemleri TUTARLI olarak LaTeX formatında yaz\n");
+        context.append("   - Formülleri $...$ (inline) veya $$...$$ (block) ile göster\n");
+        context.append("   - Örnek: $x = \\frac{-b \\pm \\sqrt{b^2-4ac}}{2a}$ veya $E = mc^2$\n");
+        context.append("   - Formülleri açıkla: Sadece yazma, ne anlama geldiğini de söyle\n");
         context.append("5. Öğrencinin seviyesine uygun dil kullan\n");
         context.append("6. Emoji kullanma, profesyonel kal\n");
         context.append("7. Maksimum ").append(responseMaxWords).append(" kelime içinde kal\n\n");
