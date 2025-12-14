@@ -47,7 +47,7 @@ public class EmailVerificationService {
     @Transactional
     public void sendVerificationEmail(User user) {
         if (user.getEmailVerified()) {
-            log.warn("Email already verified: userId={}, email={}", user.getId(), user.getEmail());
+            log.warn("Email already verified: userId={}", user.getId());
             return;
         }
 
@@ -72,10 +72,10 @@ public class EmailVerificationService {
         try {
             sendEmail(user.getEmail(), "Email Doğrulama - Hesabınızı Aktifleştirin",
                     buildVerificationEmail(user.getFirstName(), verificationUrl));
-            log.info("Verification email sent (async): userId={}, email={}", user.getId(), user.getEmail());
+            log.info("Verification email sent (async): userId={}", user.getId());
         } catch (Exception e) {
-            log.error("Failed to send verification email (async): userId={}, email={}",
-                    user.getId(), user.getEmail(), e);
+            log.error("Failed to send verification email (async): userId={}",
+                    user.getId(), e);
             // Email gönderilemese bile token kaydedildi, kullanıcı tekrar isteyebilir
         }
     }
@@ -94,7 +94,7 @@ public class EmailVerificationService {
 
         // Zaten doğrulanmış mı?
         if (user.getEmailVerified()) {
-            log.info("Email already verified: userId={}, email={}", user.getId(), user.getEmail());
+            log.info("Email already verified: userId={}", user.getId());
             throw new BadRequestException("Email zaten doğrulanmış.");
         }
 
@@ -104,7 +104,7 @@ public class EmailVerificationService {
         user.setEmailVerificationToken(null);
         userRepository.save(user);
 
-        log.info("Email verified successfully: userId={}, email={}", user.getId(), user.getEmail());
+        log.info("Email verified successfully: userId={}", user.getId());
     }
 
     /**
@@ -126,7 +126,7 @@ public class EmailVerificationService {
 
         // Yeni token oluştur ve gönder
         sendVerificationEmail(user);
-        log.info("Verification email resent: userId={}, email={}", user.getId(), user.getEmail());
+        log.info("Verification email resent: userId={}", user.getId());
     }
 
     /**
@@ -142,7 +142,6 @@ public class EmailVerificationService {
         helper.setFrom(fromEmail);
 
         mailSender.send(message);
-        log.debug("Email sent successfully: to={}, subject={}", to, subject);
     }
 
     /**

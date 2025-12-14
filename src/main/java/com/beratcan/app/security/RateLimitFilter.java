@@ -9,8 +9,8 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.core.annotation.Order;
 import org.springframework.lang.NonNull;
 import org.springframework.security.core.Authentication;
@@ -34,12 +34,17 @@ import java.util.Map;
 @Slf4j
 @Component
 @Order(1)
-@RequiredArgsConstructor
 public class RateLimitFilter extends OncePerRequestFilter {
 
     private final RateLimitConfig rateLimitConfig;
     private final RequestMappingHandlerMapping handlerMapping;
     private final ObjectMapper objectMapper = new ObjectMapper();
+
+    public RateLimitFilter(RateLimitConfig rateLimitConfig,
+            @Qualifier("requestMappingHandlerMapping") RequestMappingHandlerMapping handlerMapping) {
+        this.rateLimitConfig = rateLimitConfig;
+        this.handlerMapping = handlerMapping;
+    }
 
     // Default: 500 requests per minute (genel endpoint'ler için - toplam limit)
     private static final int DEFAULT_REQUESTS_PER_MINUTE = 500;

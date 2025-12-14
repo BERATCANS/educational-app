@@ -13,6 +13,7 @@ import com.beratcan.app.exception.TestResultNotFoundException;
 import com.beratcan.app.exception.UnauthorizedOperationException;
 import com.beratcan.app.exception.UserNotFoundException;
 import com.beratcan.app.repository.*;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -23,6 +24,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 
+@Slf4j
 @Service
 public class TestResultService {
 
@@ -48,12 +50,17 @@ public class TestResultService {
     public TestResultDetailResponse saveTestResult(Long userId, Long testId,
             Map<Long, OptionLetter> userAnswers,
             Integer totalTimeSeconds) {
+        long startTime = System.currentTimeMillis();
+
         if (userAnswers == null || userAnswers.isEmpty()) {
             throw new BadRequestException("User answers cannot be null or empty");
         }
         if (totalTimeSeconds == null || totalTimeSeconds < 0) {
             throw new BadRequestException("Total time seconds must be a non-negative number");
         }
+
+        log.info("EVENT: Test submission started | userId={} | testId={} | questionCount={}",
+                userId, testId, userAnswers.size());
 
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new UserNotFoundException(userId));
@@ -128,6 +135,11 @@ public class TestResultService {
         testResult.setTotalQuestions(totalQuestions);
         testResult.calculateSuccessRate();
 
+        Double successRate = testResult.getSuccessRate();
+        log.info("EVENT: Test scored | userId={} | testId={} | score={}/{} | successRate={}%",
+                userId, testId, correctCount, totalQuestions,
+                successRate != null ? String.format("%.2f", successRate) : "N/A");
+
         TestResult savedTestResult = testResultRepository.save(testResult);
 
         // Kullanıcının günlük çözülen soru sayısını güncelle
@@ -138,6 +150,16 @@ public class TestResultService {
         TestResult testResultWithQuestionResults = testResultRepository
                 .findByIdWithTestUserAndQuestionResults(savedTestResult.getId())
                 .orElse(savedTestResult);
+
+        long duration = System.currentTimeMillis() - startTime;
+        log.info("EVENT: Test submission completed | testResultId={} | userId={} | testId={} | duration={}ms",
+                savedTestResult.getId(), userId, testId, duration);
+
+        // Performance warning for slow operations (5 second threshold)
+        if (duration > 5000) {
+            log.warn("PERF: Test submission slow | duration={}ms | threshold=5000ms | userId={} | testId={}",
+                    duration, userId, testId);
+        }
 
         // Transaction içinde DTO'ya çevir (lazy loading sorununu önlemek için)
         return mapToDetailResponse(testResultWithQuestionResults);

@@ -170,6 +170,5 @@ public class FeedbackService {
         helper.setFrom(fromEmail);
 
         mailSender.send(message);
-        log.debug("Email sent successfully: to={}, subject={}", to, subject);
     }
 }

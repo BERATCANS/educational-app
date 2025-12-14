@@ -24,9 +24,12 @@ public class FileController {
     @PostMapping("/upload")
     @PreAuthorize("hasRole('ADMIN')")
     @RateLimit(requestsPerMinute = 20, keyType = "USER", message = "Too many file uploads. Please try again later.")
-    public ResponseEntity<String> uploadFile(@RequestParam("file") MultipartFile file) {
+    public ResponseEntity<Map<String, String>> uploadFile(@RequestParam("file") MultipartFile file) {
         String filename = fileService.saveFile(file);
-        return ResponseEntity.ok(filename);
+        String fileUrl = fileService.getFileUrl(filename);
+        return ResponseEntity.ok(Map.of(
+                "filename", filename,
+                "url", fileUrl));
     }
 
     @GetMapping("/{filename}")

@@ -24,8 +24,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.File;
-import java.nio.file.Files;
 import java.util.*;
 import java.util.Base64;
 import java.util.concurrent.TimeUnit;
@@ -41,6 +39,8 @@ public class QuestionAIChatService {
     private final QuestionRepository questionRepository;
     private final UserRepository userRepository;
     private final SpeechProcessingService speechProcessingService;
+    private final DailyLimitService dailyLimitService;
+    private final FileService fileService;
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final OkHttpClient httpClient = new OkHttpClient.Builder()
             .connectTimeout(AppConstants.HTTP_CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
@@ -97,6 +97,9 @@ public class QuestionAIChatService {
             throw new BadRequestException("Mesaj boş olamaz");
         }
 
+        // Günlük AI konuşma limitini kontrol et
+        dailyLimitService.checkDailyAiConversationLimit(userId);
+
         Question question = questionRepository.findById(questionId)
                 .orElseThrow(() -> new QuestionNotFoundException(questionId));
         User user = userRepository.findById(userId)
@@ -132,53 +135,40 @@ public class QuestionAIChatService {
         String imageMimeType = null; // MIME type'ı da sakla
         try {
             if (question.getImageUrl() != null && !question.getImageUrl().trim().isEmpty()) {
-                // imageUrl'den "api/files/" veya "/api/files/" prefix'ini temizle (URL
-                // formatıysa)
-                // Database'de filename olarak saklanıyor ama bazı kayıtlarda URL formatında
-                // olabilir
-                String imageFilename = question.getImageUrl().trim();
-                if (imageFilename.startsWith("/api/files/")) {
-                    imageFilename = imageFilename.substring("/api/files/".length());
-                } else if (imageFilename.startsWith("api/files/")) {
-                    imageFilename = imageFilename.substring("api/files/".length());
-                }
+                // StorageService üzerinden dosyayı oku
+                try {
+                    org.springframework.core.io.Resource imageResource = fileService.getFile(question.getImageUrl());
 
-                // uploadDir'in sonunda / var mı kontrol et ve dosya yolunu oluştur
-                String separator = uploadDir.endsWith("/") || uploadDir.endsWith("\\") ? "" : "/";
-                File imageFile = new File(uploadDir + separator + imageFilename);
+                    if (imageResource.exists() && imageResource.isReadable()) {
+                        byte[] imageBytes = imageResource.getInputStream().readAllBytes();
+                        base64Image = Base64.getEncoder().encodeToString(imageBytes);
 
-                log.debug(
-                        "Görsel dosyası aranıyor: questionId={}, originalImageUrl={}, cleanedFilename={}, fullPath={}",
-                        questionId, question.getImageUrl(), imageFilename, imageFile.getAbsolutePath());
+                        // Dosya uzantısına göre MIME type belirle
+                        String fileName = question.getImageUrl().toLowerCase();
+                        if (fileName.endsWith(".png")) {
+                            imageMimeType = "image/png";
+                        } else if (fileName.endsWith(".jpg") || fileName.endsWith(".jpeg")) {
+                            imageMimeType = "image/jpeg";
+                        } else if (fileName.endsWith(".gif")) {
+                            imageMimeType = "image/gif";
+                        } else if (fileName.endsWith(".webp")) {
+                            imageMimeType = "image/webp";
+                        } else {
+                            // Varsayılan olarak JPEG (çoğu görsel JPEG)
+                            imageMimeType = "image/jpeg";
+                            log.warn("Bilinmeyen görsel formatı, JPEG olarak varsayılıyor: questionId={}, fileName={}",
+                                    questionId, fileName);
+                        }
 
-                if (imageFile.exists() && imageFile.isFile()) {
-                    byte[] imageBytes = Files.readAllBytes(imageFile.toPath());
-                    base64Image = Base64.getEncoder().encodeToString(imageBytes);
-
-                    // Dosya uzantısına göre MIME type belirle
-                    String fileName = imageFile.getName().toLowerCase();
-                    if (fileName.endsWith(".png")) {
-                        imageMimeType = "image/png";
-                    } else if (fileName.endsWith(".jpg") || fileName.endsWith(".jpeg")) {
-                        imageMimeType = "image/jpeg";
-                    } else if (fileName.endsWith(".gif")) {
-                        imageMimeType = "image/gif";
-                    } else if (fileName.endsWith(".webp")) {
-                        imageMimeType = "image/webp";
+                        log.debug("Soru görseli base64'e çevrildi: questionId={}, size={}KB, mimeType={}",
+                                questionId, imageBytes.length / 1024, imageMimeType);
                     } else {
-                        // Varsayılan olarak JPEG (çoğu görsel JPEG)
-                        imageMimeType = "image/jpeg";
-                        log.warn("Bilinmeyen görsel formatı, JPEG olarak varsayılıyor: questionId={}, fileName={}",
-                                questionId, fileName);
+                        log.warn("Soru görseli bulunamadı veya okunamıyor: questionId={}, imageUrl={}",
+                                questionId, question.getImageUrl());
                     }
-
-                    log.debug("Soru görseli base64'e çevrildi: questionId={}, size={}KB, mimeType={}",
-                            questionId, imageBytes.length / 1024, imageMimeType);
-                } else {
-                    log.warn(
-                            "Soru görseli bulunamadı: questionId={}, originalImageUrl={}, cleanedFilename={}, fullPath={}, exists={}",
-                            questionId, question.getImageUrl(), imageFilename, imageFile.getAbsolutePath(),
-                            imageFile.exists());
+                } catch (Exception ex) {
+                    log.warn("Soru görseli okunamadı: questionId={}, imageUrl={}, error={}",
+                            questionId, question.getImageUrl(), ex.getMessage());
                 }
             }
         } catch (Exception e) {
@@ -276,14 +266,23 @@ public class QuestionAIChatService {
         context.append("1. Her zaman Türkçe yanıt ver\n");
         context.append("2. Öğrencinin sorusuna doğrudan odaklan: Ne sorduysa ona yanıt ver\n");
         context.append("3. Gerekli detay seviyesini sen belirle: Öğrencinin ihtiyacına göre uzun veya kısa olabilir\n");
-        context.append("4. Matematik formüllerini ve denklemleri TUTARLI olarak LaTeX formatında yaz\n");
-        context.append("   - Formülleri $...$ (inline) veya $$...$$ (block) ile göster\n");
-        context.append("   - Örnek: $x = \\frac{-b \\pm \\sqrt{b^2-4ac}}{2a}$ veya $E = mc^2$\n");
+        context.append("4. YANITLARINI MARKDOWN FORMATINDA YAZ:\n");
+        context.append("   - Başlıklar için #, ##, ### kullan\n");
+        context.append("   - Liste için - veya * kullan\n");
+        context.append("   - Kod blokları için ``` kullan\n");
+        context.append("   - Kalın yazı için **text** kullan\n");
+        context.append("   - İtalik için *text* kullan\n");
+        context.append("5. Matematik formüllerini ve denklemleri TUTARLI olarak LaTeX formatında yaz:\n");
+        context.append("   - Inline formüller için $...$ kullan (örnek: $x = 5$)\n");
+        context.append(
+                "   - Block formüller için $$...$$ kullan (örnek: $$\\int_{0}^{\\infty} e^{-x^2} dx = \\frac{\\sqrt{\\pi}}{2}$$)\n");
+        context.append(
+                "   - Örnekler: $x = \\frac{-b \\pm \\sqrt{b^2-4ac}}{2a}$, $E = mc^2$, $\\sum_{i=1}^{n} i = \\frac{n(n+1)}{2}$\n");
         context.append("   - Formülleri açıkla: Sadece yazma, ne anlama geldiğini de söyle\n");
-        context.append("5. Öğrencinin seviyesine uygun dil kullan\n");
-        context.append("6. Emoji kullanma, profesyonel kal\n");
-        context.append("7. Maksimum ").append(responseMaxWords).append(" kelime içinde kal\n\n");
-
+        context.append("6. Öğrencinin seviyesine uygun dil kullan\n");
+        context.append("7. Emoji kullanma, profesyonel kal\n");
+        context.append("8. Maksimum ").append(responseMaxWords).append(" kelime içinde kal\n");
+        context.append("9. ÖNEMLİ: Tüm matematiksel ifadeleri LaTeX formatında yaz, düz metin olarak yazma\n\n");
         return context.toString();
     }
 
@@ -378,9 +377,6 @@ public class QuestionAIChatService {
 
             String requestBody = objectMapper.writeValueAsString(requestMap);
 
-            log.info("Calling OpenAI Chat API: model={}, messages={}, hasImage={}, recentHistorySize={}",
-                    model, messages.size(), imageSent, recentHistory.size());
-
             Request request = new Request.Builder()
                     .url("https://api.openai.com/v1/chat/completions")
                     .header("Authorization", "Bearer " + apiKey)
@@ -408,15 +404,31 @@ public class QuestionAIChatService {
 
                 // Token kullanımı çıkar
                 Integer tokenCount = null;
+                Integer promptTokens = null;
+                Integer completionTokens = null;
                 if (jsonResponse.has("usage")) {
                     JsonNode usage = jsonResponse.get("usage");
                     if (usage.has("total_tokens")) {
                         tokenCount = usage.get("total_tokens").asInt();
                     }
+                    if (usage.has("prompt_tokens")) {
+                        promptTokens = usage.get("prompt_tokens").asInt();
+                    }
+                    if (usage.has("completion_tokens")) {
+                        completionTokens = usage.get("completion_tokens").asInt();
+                    }
                 }
 
-                log.info("OpenAI API success: duration={}ms, responseLength={} chars, tokens={}",
-                        duration, content.length(), tokenCount);
+                // Estimated cost calculation
+                double estimatedCost = estimateAICost(model, promptTokens != null ? promptTokens : 0,
+                        completionTokens != null ? completionTokens : 0);
+
+                log.info(
+                        "OpenAI API call: model={} | duration={}ms | tokens={} (prompt={}, completion={}) | estimatedCost=${}",
+                        model, duration, tokenCount != null ? tokenCount : 0,
+                        promptTokens != null ? promptTokens : 0,
+                        completionTokens != null ? completionTokens : 0,
+                        String.format("%.4f", estimatedCost));
 
                 Map<String, Object> result = new HashMap<>();
                 result.put("content", content);
@@ -459,6 +471,9 @@ public class QuestionAIChatService {
         if (audioFile == null || audioFile.isEmpty()) {
             throw new BadRequestException("Audio dosyası boş olamaz");
         }
+
+        // Günlük AI konuşma limitini kontrol et
+        dailyLimitService.checkDailyAiConversationLimit(userId);
 
         log.info("Voice mesaj alındı: questionId={}, userId={}, filename={}, size={}KB",
                 questionId, userId, audioFile.getOriginalFilename(), audioFile.getSize() / 1024);
@@ -513,32 +528,30 @@ public class QuestionAIChatService {
         String imageMimeType = null;
         try {
             if (question.getImageUrl() != null && !question.getImageUrl().trim().isEmpty()) {
-                String imageFilename = question.getImageUrl().trim();
-                if (imageFilename.startsWith("/api/files/")) {
-                    imageFilename = imageFilename.substring("/api/files/".length());
-                } else if (imageFilename.startsWith("api/files/")) {
-                    imageFilename = imageFilename.substring("api/files/".length());
-                }
+                // StorageService üzerinden dosyayı oku
+                try {
+                    org.springframework.core.io.Resource imageResource = fileService.getFile(question.getImageUrl());
 
-                String separator = uploadDir.endsWith("/") || uploadDir.endsWith("\\") ? "" : "/";
-                File imageFile = new File(uploadDir + separator + imageFilename);
+                    if (imageResource.exists() && imageResource.isReadable()) {
+                        byte[] imageBytes = imageResource.getInputStream().readAllBytes();
+                        base64Image = Base64.getEncoder().encodeToString(imageBytes);
 
-                if (imageFile.exists() && imageFile.isFile()) {
-                    byte[] imageBytes = Files.readAllBytes(imageFile.toPath());
-                    base64Image = Base64.getEncoder().encodeToString(imageBytes);
-
-                    String fileName = imageFile.getName().toLowerCase();
-                    if (fileName.endsWith(".png")) {
-                        imageMimeType = "image/png";
-                    } else if (fileName.endsWith(".jpg") || fileName.endsWith(".jpeg")) {
-                        imageMimeType = "image/jpeg";
-                    } else if (fileName.endsWith(".gif")) {
-                        imageMimeType = "image/gif";
-                    } else if (fileName.endsWith(".webp")) {
-                        imageMimeType = "image/webp";
-                    } else {
-                        imageMimeType = "image/jpeg";
+                        String fileName = question.getImageUrl().toLowerCase();
+                        if (fileName.endsWith(".png")) {
+                            imageMimeType = "image/png";
+                        } else if (fileName.endsWith(".jpg") || fileName.endsWith(".jpeg")) {
+                            imageMimeType = "image/jpeg";
+                        } else if (fileName.endsWith(".gif")) {
+                            imageMimeType = "image/gif";
+                        } else if (fileName.endsWith(".webp")) {
+                            imageMimeType = "image/webp";
+                        } else {
+                            imageMimeType = "image/jpeg";
+                        }
                     }
+                } catch (Exception ex) {
+                    log.warn("Soru görseli okunamadı: questionId={}, imageUrl={}, error={}",
+                            questionId, question.getImageUrl(), ex.getMessage());
                 }
             }
         } catch (Exception e) {
@@ -586,6 +599,43 @@ public class QuestionAIChatService {
         AIMessageResponse response = toMessageResponse(aiMsg);
         response.setAudioUrl(audioUrl); // Geçici audio URL (nullable)
         return response;
+    }
+
+    /**
+     * OpenAI API maliyetini tahmin eder (token bazlı)
+     * Pricing (approximate as of 2024):
+     * - gpt-4o-mini: $0.15/1M input tokens, $0.60/1M output tokens
+     * - gpt-4o: $2.50/1M input tokens, $10.00/1M output tokens
+     * - gpt-4-turbo: $10.00/1M input tokens, $30.00/1M output tokens
+     * 
+     * @param modelName        Model adı
+     * @param promptTokens     Prompt token sayısı
+     * @param completionTokens Completion token sayısı
+     * @return Tahmini maliyet (USD)
+     */
+    private double estimateAICost(String modelName, int promptTokens, int completionTokens) {
+        double inputPricePerMillion;
+        double outputPricePerMillion;
+
+        if (modelName.contains("gpt-4o-mini") || modelName.contains("mini")) {
+            inputPricePerMillion = 0.15;
+            outputPricePerMillion = 0.60;
+        } else if (modelName.contains("gpt-4o")) {
+            inputPricePerMillion = 2.50;
+            outputPricePerMillion = 10.00;
+        } else if (modelName.contains("gpt-4-turbo") || modelName.contains("gpt-4")) {
+            inputPricePerMillion = 10.00;
+            outputPricePerMillion = 30.00;
+        } else {
+            // Default estimate for unknown models
+            inputPricePerMillion = 1.0;
+            outputPricePerMillion = 3.0;
+        }
+
+        double inputCost = (promptTokens / 1_000_000.0) * inputPricePerMillion;
+        double outputCost = (completionTokens / 1_000_000.0) * outputPricePerMillion;
+
+        return inputCost + outputCost;
     }
 
     /**
