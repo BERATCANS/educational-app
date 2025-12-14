@@ -145,7 +145,6 @@ public class PurchaseService {
             try {
                 user.getOwnedBooks().add(book);
                 userRepository.save(user);
-                log.debug("Book added to user library: userId={}, bookId={}", userId, bookId);
             } catch (DataIntegrityViolationException e) {
                 // DB constraint hatası (duplicate entry) yakalandı
                 if (e.getMessage() != null && e.getMessage().contains("uk_user_book")) {
@@ -173,7 +172,6 @@ public class PurchaseService {
 
     @Transactional(readOnly = true)
     public List<PurchaseResponse> getUserPurchases(Long userId) {
-        log.debug("Fetching all purchases for user: userId={}", userId);
 
         List<Purchase> purchases = purchaseRepository.findByUserIdOrderByPurchaseDateDesc(userId);
 
@@ -186,7 +184,6 @@ public class PurchaseService {
 
     @Transactional(readOnly = true)
     public List<PurchaseResponse> getUserCompletedPurchases(Long userId) {
-        log.debug("Fetching completed purchases for user: userId={}", userId);
 
         List<Purchase> purchases = purchaseRepository
                 .findByUserIdAndStatusOrderByPurchaseDateDesc(userId, PurchaseStatus.COMPLETED);
@@ -225,7 +222,9 @@ public class PurchaseService {
      */
     @Transactional
     public List<PurchaseResponse> checkoutCart(Long userId) {
-        log.info("Starting cart checkout: userId={}", userId);
+        long startTime = System.currentTimeMillis();
+
+        log.info("EVENT: Cart checkout started | userId={}", userId);
 
         // Kullanıcıyı getir
         User user = userRepository.findById(userId)
@@ -245,6 +244,12 @@ public class PurchaseService {
                 });
 
         int cartItemCount = cart.getItems().size();
+        BigDecimal initialTotalAmount = cart.getItems().stream()
+                .map(item -> item.getPriceAtAdd() != null ? item.getPriceAtAdd() : BigDecimal.ZERO)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        log.info("EVENT: Cart checkout details | userId={} | itemCount={} | initialTotalAmount={}",
+                userId, cartItemCount, initialTotalAmount);
 
         // Sepet boş mu kontrol et
         if (cart.getItems().isEmpty()) {
@@ -351,7 +356,7 @@ public class PurchaseService {
             if (validation.isValid()) {
                 discountAmount = validation.getDiscountAmount();
                 finalTotalAmount = totalAmount.subtract(discountAmount);
-                log.info("Discount applied: userId={}, code={}, discountAmount={}, finalTotal={}",
+                log.info("EVENT: Discount applied | userId={} | code={} | discountAmount={} | finalTotal={}",
                         userId, cart.getAppliedDiscountCode().getCode(), discountAmount, finalTotalAmount);
             } else {
                 log.warn("Discount code validation failed during checkout: userId={}, code={}, error={}",
@@ -384,8 +389,6 @@ public class PurchaseService {
 
         int bookIndex = 0;
         for (Book book : validBooks) {
-            log.debug("Creating purchase record: userId={}, bookId={}, transactionId={}",
-                    userId, book.getId(), transactionId);
 
             // Son kitaba kalan farkı ekle (rounding sorununu çözer)
             BigDecimal bookDiscount = discountPerBook;
@@ -421,15 +424,12 @@ public class PurchaseService {
             // Purchase'ı PENDING olarak kaydet
             Purchase savedPurchase = purchaseRepository.save(purchase);
             pendingPurchases.add(savedPurchase); // Geçici olarak listeye ekle
-            log.debug("Purchase record created (PENDING): purchaseId={}, bookId={}, transactionId={}",
-                    savedPurchase.getId(), book.getId(), transactionId);
 
             bookIndex++; // Sonraki kitap için index'i artır
         }
 
         // Kullanıcıyı kaydet (ownedBooks güncellemeleri için - henüz kitap eklenmedi)
         userRepository.save(user);
-        log.debug("User saved (before payment): userId={}", userId);
 
         // ADIM 5: Şimdi ödeme işlemini yap
         PurchaseRequest paymentRequest = new PurchaseRequest();
@@ -480,13 +480,10 @@ public class PurchaseService {
                     purchaseResponse.setInfoMessage(discountCodeWarning);
                 }
                 purchaseResponses.add(purchaseResponse);
-                log.debug("Purchase record updated to COMPLETED: purchaseId={}, bookId={}",
-                        updatedPurchase.getId(), book.getId());
             }
 
             // Kullanıcıyı kaydet (ownedBooks güncellemeleri için)
             userRepository.save(user);
-            log.debug("User library updated: userId={}, newBookCount={}", userId, validBooks.size());
 
             // İndirim kodunu kullan (kaydet) - Purchase kayıtları başarıyla oluşturulduktan
             // SONRA
@@ -506,7 +503,6 @@ public class PurchaseService {
             for (Purchase purchase : pendingPurchases) {
                 purchase.setStatus(PurchaseStatus.FAILED);
                 purchaseRepository.save(purchase);
-                log.debug("Purchase record updated to FAILED: purchaseId={}", purchase.getId());
             }
 
             // Transaction rollback olacak ama purchase kayıtları FAILED olarak kalacak
@@ -529,8 +525,16 @@ public class PurchaseService {
                     userId, validationErrors.size(), String.join(", ", validationErrors));
         }
 
-        log.info("Cart checkout completed: userId={}, purchasedBooks={}, totalAmount={}, transactionId={}",
-                userId, purchaseResponses.size(), totalAmount, transactionId);
+        long duration = System.currentTimeMillis() - startTime;
+        log.info(
+                "EVENT: Cart checkout completed | userId={} | purchaseCount={} | totalAmount={} | transactionId={} | duration={}ms",
+                userId, purchaseResponses.size(), finalTotalAmount, transactionId, duration);
+
+        // Performance warning for slow operations (5 second threshold)
+        if (duration > 5000) {
+            log.warn("PERF: Cart checkout slow | duration={}ms | threshold=5000ms | userId={} | transactionId={}",
+                    duration, userId, transactionId);
+        }
 
         return purchaseResponses;
     }
@@ -538,15 +542,12 @@ public class PurchaseService {
     // Simüle edilmiş ödeme işlemi (ileride gerçek ödeme gateway'i entegre
     // edilebilir)
     private boolean processPayment(Purchase purchase, PurchaseRequest request) {
-        log.debug("Processing payment: transactionId={}, amount={}, paymentMethod={}",
-                purchase.getTransactionId(), purchase.getPrice(), request.getPaymentMethod());
 
         // TODO: Gerçek ödeme gateway'i (Stripe, iyzico, vb.) ile entegrasyon
         // Şimdilik her ödemeyi başarılı kabul ediyoruz
         boolean success = true;
 
         if (success) {
-            log.debug("Payment processed successfully: transactionId={}", purchase.getTransactionId());
         } else {
             log.error("Payment processing failed: transactionId={}", purchase.getTransactionId());
         }
@@ -557,7 +558,6 @@ public class PurchaseService {
     // Benzersiz işlem numarası oluştur
     private String generateTransactionId() {
         String transactionId = "TXN-" + UUID.randomUUID().toString();
-        log.trace("Generated transaction ID: {}", transactionId);
         return transactionId;
     }
 

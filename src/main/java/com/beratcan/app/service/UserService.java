@@ -41,8 +41,8 @@ public class UserService {
             throw new BadRequestException("User request cannot be null");
         }
 
-        log.info("User registration started: username={}, email={}, role={}",
-                dto.getUsername(), dto.getEmail(), dto.getRole());
+        log.info("User registration started: username={}, role={}",
+                dto.getUsername(), dto.getRole());
 
         // Temel alan kontrolleri
         if (dto.getEmail() == null || dto.getEmail().trim().isEmpty()) {
@@ -61,7 +61,7 @@ public class UserService {
         // Email format doğrulama ve normalize et
         String email = dto.getEmail().trim().toLowerCase();
         if (!isValidEmailFormat(email)) {
-            log.warn("Invalid email format: email={}", email);
+            log.warn("Invalid email format: username={}", dto.getUsername());
             throw new BadRequestException("Geçersiz email formatı. Lütfen geçerli bir email adresi giriniz.");
         }
 
@@ -73,7 +73,7 @@ public class UserService {
 
         // Benzersizlik kontrolleri
         if (userRepository.existsByEmail(dto.getEmail())) {
-            log.warn("Registration failed - email already exists: email={}", dto.getEmail());
+            log.warn("Registration failed - email already exists: username={}", dto.getUsername());
             throw new ConflictException("Bu email zaten kayıtlı.");
         }
         if (userRepository.existsByPhoneNumber(dto.getPhoneNumber())) {
@@ -136,17 +136,16 @@ public class UserService {
         user.setEmailVerified(false);
 
         User savedUser = userRepository.save(user);
-        log.info("User registered successfully: userId={}, username={}, email={}, role={}",
-                savedUser.getId(), savedUser.getUsername(), savedUser.getEmail(), savedUser.getRole());
+        log.info("User registered successfully: userId={}, username={}, role={}",
+                savedUser.getId(), savedUser.getUsername(), savedUser.getRole());
 
         // Email doğrulama email'i gönder
         try {
             emailVerificationService.sendVerificationEmail(savedUser);
-            log.info("Verification email sent to new user: userId={}, email={}",
-                    savedUser.getId(), savedUser.getEmail());
+            log.info("Verification email sent to new user: userId={}", savedUser.getId());
         } catch (Exception e) {
-            log.error("Failed to send verification email during registration: userId={}, email={}",
-                    savedUser.getId(), savedUser.getEmail(), e);
+            log.error("Failed to send verification email during registration: userId={}",
+                    savedUser.getId(), e);
             // Email gönderilemese bile kullanıcı kaydedildi, sonra tekrar isteyebilir
         }
 

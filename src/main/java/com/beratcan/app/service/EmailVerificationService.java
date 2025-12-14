@@ -8,7 +8,9 @@ import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationContext;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.scheduling.annotation.Async;
@@ -29,6 +31,9 @@ public class EmailVerificationService {
     private final UserRepository userRepository;
     private final JavaMailSender mailSender;
 
+    @Autowired
+    private ApplicationContext applicationContext;
+
     @Value("${app.base-url:http://localhost:8080}")
     private String baseUrl;
 
@@ -42,7 +47,7 @@ public class EmailVerificationService {
     @Transactional
     public void sendVerificationEmail(User user) {
         if (user.getEmailVerified()) {
-            log.warn("Email already verified: userId={}, email={}", user.getId(), user.getEmail());
+            log.warn("Email already verified: userId={}", user.getId());
             return;
         }
 
@@ -52,7 +57,9 @@ public class EmailVerificationService {
         userRepository.save(user);
 
         // Email'i asenkron olarak gönder (ana işlemi bloklamaz)
-        sendVerificationEmailAsync(user, token);
+        // ApplicationContext üzerinden çağır (self-invocation sorununu çözmek için)
+        EmailVerificationService self = applicationContext.getBean(EmailVerificationService.class);
+        self.sendVerificationEmailAsync(user, token);
     }
 
     /**
@@ -65,10 +72,10 @@ public class EmailVerificationService {
         try {
             sendEmail(user.getEmail(), "Email Doğrulama - Hesabınızı Aktifleştirin",
                     buildVerificationEmail(user.getFirstName(), verificationUrl));
-            log.info("Verification email sent (async): userId={}, email={}", user.getId(), user.getEmail());
+            log.info("Verification email sent (async): userId={}", user.getId());
         } catch (Exception e) {
-            log.error("Failed to send verification email (async): userId={}, email={}",
-                    user.getId(), user.getEmail(), e);
+            log.error("Failed to send verification email (async): userId={}",
+                    user.getId(), e);
             // Email gönderilemese bile token kaydedildi, kullanıcı tekrar isteyebilir
         }
     }
@@ -87,7 +94,7 @@ public class EmailVerificationService {
 
         // Zaten doğrulanmış mı?
         if (user.getEmailVerified()) {
-            log.info("Email already verified: userId={}, email={}", user.getId(), user.getEmail());
+            log.info("Email already verified: userId={}", user.getId());
             throw new BadRequestException("Email zaten doğrulanmış.");
         }
 
@@ -97,7 +104,7 @@ public class EmailVerificationService {
         user.setEmailVerificationToken(null);
         userRepository.save(user);
 
-        log.info("Email verified successfully: userId={}, email={}", user.getId(), user.getEmail());
+        log.info("Email verified successfully: userId={}", user.getId());
     }
 
     /**
@@ -119,7 +126,7 @@ public class EmailVerificationService {
 
         // Yeni token oluştur ve gönder
         sendVerificationEmail(user);
-        log.info("Verification email resent: userId={}, email={}", user.getId(), user.getEmail());
+        log.info("Verification email resent: userId={}", user.getId());
     }
 
     /**
@@ -135,7 +142,6 @@ public class EmailVerificationService {
         helper.setFrom(fromEmail);
 
         mailSender.send(message);
-        log.debug("Email sent successfully: to={}, subject={}", to, subject);
     }
 
     /**

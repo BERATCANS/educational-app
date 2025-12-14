@@ -27,19 +27,11 @@ public class DotEnvConfig implements ApplicationContextInitializer<ConfigurableA
 
     @Override
     public void initialize(@org.springframework.lang.NonNull ConfigurableApplicationContext applicationContext) {
-        // Production profile kontrolü - Production'da .env dosyası kullanılmaz
-        String activeProfile = System.getProperty("spring.profiles.active");
-        if (activeProfile == null) {
-            activeProfile = System.getenv("SPRING_PROFILES_ACTIVE");
-        }
+        // Önce .env dosyasını oku (eğer varsa)
+        // Production'da da local test için .env okunabilir
+        // Ama production deployment'ta environment variables kullanılmalı
 
-        // Production'da .env dosyası okunmaz (sadece environment variables kullanılır)
-        if ("prod".equals(activeProfile)) {
-            log.info("Production profile aktif. .env dosyası okunmayacak, sadece environment variables kullanılacak.");
-            return;
-        }
-
-        // Development/test ortamlarında .env dosyasını oku
+        // .env dosyasını oku (local test için production'da da kullanılabilir)
         try {
             // .env dosyasını oku
             Dotenv dotenv = Dotenv.configure()
@@ -50,14 +42,37 @@ public class DotEnvConfig implements ApplicationContextInitializer<ConfigurableA
             Set<DotenvEntry> envVars = dotenv.entries();
 
             if (!envVars.isEmpty()) {
-                log.info(".env dosyası bulundu ve yüklendi. {} değişken yüklendi (development mode).", envVars.size());
-
                 ConfigurableEnvironment environment = applicationContext.getEnvironment();
                 Map<String, Object> dotenvProperties = new HashMap<>();
 
+                // ÖNCE SPRING_PROFILES_ACTIVE'i oku ve set et (diğer değişkenlerden önce)
+                String springProfilesActive = dotenv.get("SPRING_PROFILES_ACTIVE");
+                if (springProfilesActive != null && !springProfilesActive.trim().isEmpty()) {
+                    if (System.getProperty("spring.profiles.active") == null
+                            && System.getenv("SPRING_PROFILES_ACTIVE") == null) {
+                        System.setProperty("spring.profiles.active", springProfilesActive);
+                        dotenvProperties.put("SPRING_PROFILES_ACTIVE", springProfilesActive);
+                        log.debug("SPRING_PROFILES_ACTIVE yüklendi: {}", springProfilesActive);
+                    }
+                }
+
+                // Profile kontrolü (log için) - şimdi doğru değeri görecek
+                String activeProfile = System.getProperty("spring.profiles.active");
+                if (activeProfile == null) {
+                    activeProfile = System.getenv("SPRING_PROFILES_ACTIVE");
+                }
+                String profileInfo = "prod".equals(activeProfile) ? "production mode (local test)" : "development mode";
+                log.info(".env dosyası bulundu ve yüklendi. {} değişken yüklendi ({})", envVars.size(), profileInfo);
+
+                // Diğer tüm değişkenleri yükle (SPRING_PROFILES_ACTIVE hariç, zaten yüklendi)
                 envVars.forEach(entry -> {
                     String key = entry.getKey();
                     String value = entry.getValue();
+
+                    // SPRING_PROFILES_ACTIVE'i atla (zaten yüklendi)
+                    if ("SPRING_PROFILES_ACTIVE".equals(key)) {
+                        return;
+                    }
 
                     // Eğer System property veya environment variable'da yoksa, .env'den yükle
                     // Bu sayede environment variable'lar .env dosyasından önceliklidir

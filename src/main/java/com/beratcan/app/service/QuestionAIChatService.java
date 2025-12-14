@@ -5,6 +5,7 @@ import com.beratcan.app.dto.response.AIMessageResponse;
 import com.beratcan.app.dto.response.QuestionAIConversationResponse;
 import com.beratcan.app.entity.*;
 import com.beratcan.app.entity.enums.MessageRole;
+import com.beratcan.app.entity.enums.MessageType;
 import com.beratcan.app.exception.BadRequestException;
 import com.beratcan.app.exception.ExternalServiceException;
 import com.beratcan.app.exception.QuestionNotFoundException;
@@ -21,9 +22,8 @@ import okhttp3.*;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
-import java.io.File;
-import java.nio.file.Files;
 import java.util.*;
 import java.util.Base64;
 import java.util.concurrent.TimeUnit;
@@ -38,6 +38,9 @@ public class QuestionAIChatService {
     private final QuestionAIMessageRepository messageRepository;
     private final QuestionRepository questionRepository;
     private final UserRepository userRepository;
+    private final SpeechProcessingService speechProcessingService;
+    private final DailyLimitService dailyLimitService;
+    private final FileService fileService;
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final OkHttpClient httpClient = new OkHttpClient.Builder()
             .connectTimeout(AppConstants.HTTP_CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
@@ -94,6 +97,9 @@ public class QuestionAIChatService {
             throw new BadRequestException("Mesaj boş olamaz");
         }
 
+        // Günlük AI konuşma limitini kontrol et
+        dailyLimitService.checkDailyAiConversationLimit(userId);
+
         Question question = questionRepository.findById(questionId)
                 .orElseThrow(() -> new QuestionNotFoundException(questionId));
         User user = userRepository.findById(userId)
@@ -114,6 +120,7 @@ public class QuestionAIChatService {
         userMsg.setConversation(conversation);
         userMsg.setContent(userMessage.trim());
         userMsg.setRole(MessageRole.USER);
+        userMsg.setMessageType(MessageType.TEXT); // Text mesaj
         messageRepository.save(userMsg);
 
         // Conversation history al
@@ -128,53 +135,40 @@ public class QuestionAIChatService {
         String imageMimeType = null; // MIME type'ı da sakla
         try {
             if (question.getImageUrl() != null && !question.getImageUrl().trim().isEmpty()) {
-                // imageUrl'den "api/files/" veya "/api/files/" prefix'ini temizle (URL
-                // formatıysa)
-                // Database'de filename olarak saklanıyor ama bazı kayıtlarda URL formatında
-                // olabilir
-                String imageFilename = question.getImageUrl().trim();
-                if (imageFilename.startsWith("/api/files/")) {
-                    imageFilename = imageFilename.substring("/api/files/".length());
-                } else if (imageFilename.startsWith("api/files/")) {
-                    imageFilename = imageFilename.substring("api/files/".length());
-                }
+                // StorageService üzerinden dosyayı oku
+                try {
+                    org.springframework.core.io.Resource imageResource = fileService.getFile(question.getImageUrl());
 
-                // uploadDir'in sonunda / var mı kontrol et ve dosya yolunu oluştur
-                String separator = uploadDir.endsWith("/") || uploadDir.endsWith("\\") ? "" : "/";
-                File imageFile = new File(uploadDir + separator + imageFilename);
+                    if (imageResource.exists() && imageResource.isReadable()) {
+                        byte[] imageBytes = imageResource.getInputStream().readAllBytes();
+                        base64Image = Base64.getEncoder().encodeToString(imageBytes);
 
-                log.debug(
-                        "Görsel dosyası aranıyor: questionId={}, originalImageUrl={}, cleanedFilename={}, fullPath={}",
-                        questionId, question.getImageUrl(), imageFilename, imageFile.getAbsolutePath());
+                        // Dosya uzantısına göre MIME type belirle
+                        String fileName = question.getImageUrl().toLowerCase();
+                        if (fileName.endsWith(".png")) {
+                            imageMimeType = "image/png";
+                        } else if (fileName.endsWith(".jpg") || fileName.endsWith(".jpeg")) {
+                            imageMimeType = "image/jpeg";
+                        } else if (fileName.endsWith(".gif")) {
+                            imageMimeType = "image/gif";
+                        } else if (fileName.endsWith(".webp")) {
+                            imageMimeType = "image/webp";
+                        } else {
+                            // Varsayılan olarak JPEG (çoğu görsel JPEG)
+                            imageMimeType = "image/jpeg";
+                            log.warn("Bilinmeyen görsel formatı, JPEG olarak varsayılıyor: questionId={}, fileName={}",
+                                    questionId, fileName);
+                        }
 
-                if (imageFile.exists() && imageFile.isFile()) {
-                    byte[] imageBytes = Files.readAllBytes(imageFile.toPath());
-                    base64Image = Base64.getEncoder().encodeToString(imageBytes);
-
-                    // Dosya uzantısına göre MIME type belirle
-                    String fileName = imageFile.getName().toLowerCase();
-                    if (fileName.endsWith(".png")) {
-                        imageMimeType = "image/png";
-                    } else if (fileName.endsWith(".jpg") || fileName.endsWith(".jpeg")) {
-                        imageMimeType = "image/jpeg";
-                    } else if (fileName.endsWith(".gif")) {
-                        imageMimeType = "image/gif";
-                    } else if (fileName.endsWith(".webp")) {
-                        imageMimeType = "image/webp";
+                        log.debug("Soru görseli base64'e çevrildi: questionId={}, size={}KB, mimeType={}",
+                                questionId, imageBytes.length / 1024, imageMimeType);
                     } else {
-                        // Varsayılan olarak JPEG (çoğu görsel JPEG)
-                        imageMimeType = "image/jpeg";
-                        log.warn("Bilinmeyen görsel formatı, JPEG olarak varsayılıyor: questionId={}, fileName={}",
-                                questionId, fileName);
+                        log.warn("Soru görseli bulunamadı veya okunamıyor: questionId={}, imageUrl={}",
+                                questionId, question.getImageUrl());
                     }
-
-                    log.debug("Soru görseli base64'e çevrildi: questionId={}, size={}KB, mimeType={}",
-                            questionId, imageBytes.length / 1024, imageMimeType);
-                } else {
-                    log.warn(
-                            "Soru görseli bulunamadı: questionId={}, originalImageUrl={}, cleanedFilename={}, fullPath={}, exists={}",
-                            questionId, question.getImageUrl(), imageFilename, imageFile.getAbsolutePath(),
-                            imageFile.exists());
+                } catch (Exception ex) {
+                    log.warn("Soru görseli okunamadı: questionId={}, imageUrl={}, error={}",
+                            questionId, question.getImageUrl(), ex.getMessage());
                 }
             }
         } catch (Exception e) {
@@ -186,7 +180,7 @@ public class QuestionAIChatService {
         String aiResponse;
         Integer tokenCount;
         try {
-            Map<String, Object> result = callOpenAIChatAPI(context, history, userMessage, base64Image, imageMimeType);
+            Map<String, Object> result = callOpenAIChatAPI(context, history, question, base64Image, imageMimeType);
             aiResponse = (String) result.get("content");
             tokenCount = (Integer) result.get("tokenCount");
         } catch (Exception e) {
@@ -199,6 +193,7 @@ public class QuestionAIChatService {
         aiMsg.setConversation(conversation);
         aiMsg.setContent(aiResponse);
         aiMsg.setRole(MessageRole.ASSISTANT);
+        aiMsg.setMessageType(MessageType.ASSISTANT_TEXT); // Text yanıt
         aiMsg.setTokenCount(tokenCount);
         messageRepository.save(aiMsg);
 
@@ -255,12 +250,13 @@ public class QuestionAIChatService {
         // Rol ve görev tanımı
         context.append("=== ROL VE GÖREV ===\n");
         context.append("Sen bir matematik öğretmenisin. Öğrenciye bu soru hakkında yardımcı oluyorsun.\n");
-        context.append("Amacın öğrencinin soruyu anlamasını ve çözmesini sağlamak.\n\n");
+        context.append("Amacın öğrencinin soruyu anlamasını ve çözmesini sağlamak.\n");
+        context.append("Öğrencinin her sorusuna doğrudan, net ve anlaşılır şekilde yanıt ver.\n\n");
 
         // Öğretim prensipleri
         context.append("=== ÖĞRETİM PRENSİPLERİ ===\n");
-        context.append("1. Sokratik yöntem kullan: Öğrenciyi düşündür, doğrudan cevap verme\n");
-        context.append("2. Adım adım ilerle: Her adımı açıkla ve öğrencinin takip etmesini sağla\n");
+        context.append("1. Sokratik yöntem kullan: Öğrenciyi düşündür, gerektiğinde rehberlik et\n");
+        context.append("2. Esnek yaklaşım: Öğrencinin sorusuna göre gerekirse detaylı, gerekirse kısa açıkla\n");
         context.append("3. Örneklerle açıkla: Soyut kavramları somut örneklerle göster\n");
         context.append("4. Pozitif ve destekleyici ol: Öğrenciyi cesaretlendir\n");
         context.append("5. Hataları öğrenme fırsatı olarak gör: Yapıcı geri bildirim ver\n\n");
@@ -268,48 +264,48 @@ public class QuestionAIChatService {
         // Yanıt kuralları
         context.append("=== YANIT KURALLARI ===\n");
         context.append("1. Her zaman Türkçe yanıt ver\n");
-        context.append("2. Kısa ve öz ol (maksimum ").append(responseMaxWords).append(" kelime)\n");
-        context.append("3. Formülleri açıkla: Sadece yazma, ne anlama geldiğini de söyle\n");
-        context.append("4. Öğrencinin seviyesine uygun dil kullan\n");
-        context.append("5. Emoji kullanma, profesyonel kal\n\n");
-
-        // Özel durumlar - AI kendi karar versin
-        context.append("=== ÖZEL DURUMLAR ===\n");
-        context.append("Öğrenci ile konuşurken şu durumları dikkate al:\n");
-        context.append("- Öğrenci doğru cevabı isterse (açıkça söylerse) verebilirsin\n");
-        context.append("- Hata türlerini (işlem hatası, konu hatası) kendin algıla ve ona göre yaklaş\n");
-        context.append("- Konu dışı soruları kendin tespit et ve uygun şekilde yanıtla\n");
-        context.append("- Öğrenci anlamadıysa daha basit dil kullan, farklı yöntemler dene\n");
-        context.append("- Doğru cevap bulunca tebrik et, konuyu pekiştir, benzer örnekler ver\n\n");
-
-        // İpucu kullanım stratejisi
-        context.append("=== İPUCU KULLANIM STRATEJİSİ ===\n");
-        context.append("1. Önce mevcut ipuçlarını kullan (yukarıda listelenen)\n");
-        context.append("2. Öğrenci zorlanırsa yeni ipuçları üret\n");
-        context.append("3. İpuçları kademeli olarak daha spesifik olmalı\n\n");
-
-        // Yanıt formatı
-        context.append("=== YANIT FORMATI ===\n");
-        context.append("Yanıtını şu yapıda ver:\n");
-        context.append("1. Öğrencinin mesajını anladığını göster (kısa)\n");
-        context.append("2. Sorunun/hatanın ne olduğunu açıkla\n");
-        context.append("3. Çözüm yolunu adım adım göster\n");
-        context.append("4. Öğrenciyi bir sonraki adıma yönlendir\n\n");
-
-        // Conversation history notu
-        context.append("=== CONVERSATION HISTORY ===\n");
-        context.append("Öğrenci ile olan tüm konuşma geçmişi sana gönderilecek.\n");
-        context.append("Bu geçmişi kullanarak öğrencinin hangi aşamada olduğunu anla ve ona göre yanıt ver.\n");
-        context.append("Öğrencinin daha önce sorduğu soruları ve verdiğin yanıtları dikkate al.\n");
-
+        context.append("2. Öğrencinin sorusuna doğrudan odaklan: Ne sorduysa ona yanıt ver\n");
+        context.append("3. Gerekli detay seviyesini sen belirle: Öğrencinin ihtiyacına göre uzun veya kısa olabilir\n");
+        context.append("4. YANITLARINI MARKDOWN FORMATINDA YAZ:\n");
+        context.append("   - Başlıklar için #, ##, ### kullan\n");
+        context.append("   - Liste için - veya * kullan\n");
+        context.append("   - Kod blokları için ``` kullan\n");
+        context.append("   - Kalın yazı için **text** kullan\n");
+        context.append("   - İtalik için *text* kullan\n");
+        context.append("5. Matematik formüllerini ve denklemleri TUTARLI olarak LaTeX formatında yaz:\n");
+        context.append("   - Inline formüller için $...$ kullan (örnek: $x = 5$)\n");
+        context.append(
+                "   - Block formüller için $$...$$ kullan (örnek: $$\\int_{0}^{\\infty} e^{-x^2} dx = \\frac{\\sqrt{\\pi}}{2}$$)\n");
+        context.append(
+                "   - Örnekler: $x = \\frac{-b \\pm \\sqrt{b^2-4ac}}{2a}$, $E = mc^2$, $\\sum_{i=1}^{n} i = \\frac{n(n+1)}{2}$\n");
+        context.append("   - Formülleri açıkla: Sadece yazma, ne anlama geldiğini de söyle\n");
+        context.append("6. Öğrencinin seviyesine uygun dil kullan\n");
+        context.append("7. Emoji kullanma, profesyonel kal\n");
+        context.append("8. Maksimum ").append(responseMaxWords).append(" kelime içinde kal\n");
+        context.append("9. ÖNEMLİ: Tüm matematiksel ifadeleri LaTeX formatında yaz, düz metin olarak yazma\n\n");
         return context.toString();
     }
 
     /**
-     * OpenAI Chat Completions API çağrısı
+     * Son N mesajı al (hem USER hem ASSISTANT)
      */
-    private Map<String, Object> callOpenAIChatAPI(String context, List<QuestionAIMessage> history, String userMessage,
-            String base64Image, String imageMimeType) {
+    private List<QuestionAIMessage> pickRecentHistory(List<QuestionAIMessage> history, int maxMessages) {
+        if (history.size() <= maxMessages) {
+            return history;
+        }
+        return history.subList(history.size() - maxMessages, history.size());
+    }
+
+    /**
+     * OpenAI Chat Completions API çağrısı
+     * 
+     * Değişiklikler:
+     * - History'den son 5 mesaj alınıyor (USER + ASSISTANT)
+     * - Görsel sadece ilk mesajda gönderiliyor (history boşsa veya çok kısaysa)
+     * - Tam çözüm kontrolü kaldırıldı, AI kendisi karar verecek
+     */
+    private Map<String, Object> callOpenAIChatAPI(String context, List<QuestionAIMessage> history,
+            Question question, String base64Image, String imageMimeType) {
         long startTime = System.currentTimeMillis();
 
         try {
@@ -322,67 +318,64 @@ public class QuestionAIChatService {
             systemMessage.put("content", context);
             messages.add(systemMessage);
 
-            // Conversation history (son 10 mesaj - token limiti için)
-            List<QuestionAIMessage> recentHistory = history.size() > 10
-                    ? history.subList(history.size() - 10, history.size())
-                    : history;
+            // Conversation history: Son 5 mesaj (hem USER hem ASSISTANT)
+            List<QuestionAIMessage> recentHistory = pickRecentHistory(history, 5);
 
+            // Görsel gönderim kontrolü:
+            // - History boşsa (ilk mesaj) -> görsel gönder
+            // - History'de sadece 1 mesaj varsa (ilk USER mesajı, henüz cevap yok) ->
+            // görsel gönder
+            // - Diğer durumlarda görsel gönderme (zaten ilk mesajda gönderilmiş)
+            boolean shouldSendImage = base64Image != null &&
+                    (recentHistory.isEmpty() ||
+                            (recentHistory.size() == 1 && recentHistory.get(0).getRole() == MessageRole.USER));
+
+            // History mesajlarını ekle
+            boolean imageSent = false;
             for (QuestionAIMessage msg : recentHistory) {
                 Map<String, Object> msgMap = new HashMap<>();
                 msgMap.put("role", msg.getRole().name().toLowerCase());
-                msgMap.put("content", msg.getContent());
-                messages.add(msgMap);
-            }
 
-            // Yeni kullanıcı mesajı (görsel varsa image_url ile birlikte)
-            Map<String, Object> newUserMessage = new HashMap<>();
-            newUserMessage.put("role", "user");
+                // İlk USER mesajıysa ve görsel gönderilmesi gerekiyorsa, görseli ekle
+                if (shouldSendImage && !imageSent && msg.getRole() == MessageRole.USER) {
+                    List<Map<String, Object>> content = new ArrayList<>();
 
-            if (base64Image != null) {
-                // Görsel varsa content array olarak gönder
-                List<Map<String, Object>> content = new ArrayList<>();
+                    // Text part
+                    Map<String, Object> textPart = new HashMap<>();
+                    textPart.put("type", "text");
+                    textPart.put("text", msg.getContent());
+                    content.add(textPart);
 
-                // Text part
-                Map<String, Object> textPart = new HashMap<>();
-                textPart.put("type", "text");
-                textPart.put("text", userMessage);
-                content.add(textPart);
+                    // Image part
+                    Map<String, Object> imagePart = new HashMap<>();
+                    imagePart.put("type", "image_url");
+                    Map<String, String> imageUrl = new HashMap<>();
 
-                // Image part
-                Map<String, Object> imagePart = new HashMap<>();
-                imagePart.put("type", "image_url");
-                Map<String, String> imageUrl = new HashMap<>();
+                    String mime = (imageMimeType != null && !imageMimeType.isEmpty())
+                            ? imageMimeType
+                            : "image/jpeg";
+                    imageUrl.put("url", "data:" + mime + ";base64," + base64Image);
+                    imagePart.put("image_url", imageUrl);
+                    content.add(imagePart);
 
-                // MIME type'a göre doğru format kullan
-                if (imageMimeType != null && !imageMimeType.isEmpty()) {
-                    imageUrl.put("url", "data:" + imageMimeType + ";base64," + base64Image);
+                    msgMap.put("content", content);
+                    imageSent = true;
                 } else {
-                    // Fallback: varsayılan olarak JPEG (çoğu görsel JPEG)
-                    imageUrl.put("url", "data:image/jpeg;base64," + base64Image);
-                    log.warn("MIME type belirlenemedi, JPEG olarak gönderiliyor");
+                    // Normal text mesaj
+                    msgMap.put("content", msg.getContent());
                 }
 
-                imagePart.put("image_url", imageUrl);
-                content.add(imagePart);
-
-                newUserMessage.put("content", content);
-            } else {
-                // Görsel yoksa sadece text
-                newUserMessage.put("content", userMessage);
+                messages.add(msgMap);
             }
-            messages.add(newUserMessage);
 
             // Request body
             Map<String, Object> requestMap = new HashMap<>();
             requestMap.put("model", model);
             requestMap.put("messages", messages);
-            requestMap.put("max_tokens", 1000);
+            requestMap.put("max_tokens", 1000); // AI kendi karar verecek, sabit limit
             requestMap.put("temperature", chatTemperature);
 
             String requestBody = objectMapper.writeValueAsString(requestMap);
-
-            log.info("Calling OpenAI Chat API: model={}, messages={}, hasImage={}",
-                    model, messages.size(), base64Image != null);
 
             Request request = new Request.Builder()
                     .url("https://api.openai.com/v1/chat/completions")
@@ -411,15 +404,31 @@ public class QuestionAIChatService {
 
                 // Token kullanımı çıkar
                 Integer tokenCount = null;
+                Integer promptTokens = null;
+                Integer completionTokens = null;
                 if (jsonResponse.has("usage")) {
                     JsonNode usage = jsonResponse.get("usage");
                     if (usage.has("total_tokens")) {
                         tokenCount = usage.get("total_tokens").asInt();
                     }
+                    if (usage.has("prompt_tokens")) {
+                        promptTokens = usage.get("prompt_tokens").asInt();
+                    }
+                    if (usage.has("completion_tokens")) {
+                        completionTokens = usage.get("completion_tokens").asInt();
+                    }
                 }
 
-                log.info("OpenAI API success: duration={}ms, responseLength={} chars, tokens={}",
-                        duration, content.length(), tokenCount);
+                // Estimated cost calculation
+                double estimatedCost = estimateAICost(model, promptTokens != null ? promptTokens : 0,
+                        completionTokens != null ? completionTokens : 0);
+
+                log.info(
+                        "OpenAI API call: model={} | duration={}ms | tokens={} (prompt={}, completion={}) | estimatedCost=${}",
+                        model, duration, tokenCount != null ? tokenCount : 0,
+                        promptTokens != null ? promptTokens : 0,
+                        completionTokens != null ? completionTokens : 0,
+                        String.format("%.4f", estimatedCost));
 
                 Map<String, Object> result = new HashMap<>();
                 result.put("content", content);
@@ -455,6 +464,181 @@ public class QuestionAIChatService {
     }
 
     /**
+     * Voice mesaj gönder ve AI yanıtı al (audio olarak)
+     */
+    @Transactional
+    public AIMessageResponse sendVoiceMessage(Long questionId, Long userId, MultipartFile audioFile) {
+        if (audioFile == null || audioFile.isEmpty()) {
+            throw new BadRequestException("Audio dosyası boş olamaz");
+        }
+
+        // Günlük AI konuşma limitini kontrol et
+        dailyLimitService.checkDailyAiConversationLimit(userId);
+
+        log.info("Voice mesaj alındı: questionId={}, userId={}, filename={}, size={}KB",
+                questionId, userId, audioFile.getOriginalFilename(), audioFile.getSize() / 1024);
+
+        // 1. Audio'yu text'e çevir (Whisper API)
+        String userMessageText;
+        try {
+            userMessageText = speechProcessingService.speechToText(audioFile);
+            log.info("Voice mesaj text'e çevrildi: questionId={}, textLength={} chars",
+                    questionId, userMessageText.length());
+        } catch (Exception e) {
+            log.error("Voice mesaj text'e çevrilemedi: questionId={}, error={}", questionId, e.getMessage(), e);
+            throw new BadRequestException("Voice mesaj text'e çevrilemedi: " + e.getMessage());
+        }
+
+        if (userMessageText == null || userMessageText.trim().isEmpty()) {
+            throw new BadRequestException("Voice mesajdan text çıkarılamadı");
+        }
+
+        Question question = questionRepository.findById(questionId)
+                .orElseThrow(() -> new QuestionNotFoundException(questionId));
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new UserNotFoundException(userId));
+
+        // Conversation getir veya oluştur
+        QuestionAIConversation conversation = conversationRepository
+                .findByQuestionIdAndUserId(questionId, userId)
+                .orElseGet(() -> {
+                    QuestionAIConversation newConv = new QuestionAIConversation();
+                    newConv.setQuestion(question);
+                    newConv.setUser(user);
+                    return conversationRepository.save(newConv);
+                });
+
+        // 2. Kullanıcı voice mesajını text olarak kaydet
+        QuestionAIMessage userMsg = new QuestionAIMessage();
+        userMsg.setConversation(conversation);
+        userMsg.setContent(userMessageText.trim());
+        userMsg.setRole(MessageRole.USER);
+        userMsg.setMessageType(MessageType.VOICE_INPUT); // Voice mesajdan çevrilmiş text
+        messageRepository.save(userMsg);
+
+        // 3. Conversation history al
+        List<QuestionAIMessage> history = messageRepository
+                .findByConversationIdOrderByCreatedAtAsc(conversation.getId());
+
+        // 4. Soru context'i oluştur
+        String context = buildStudentChatContext(question, history);
+
+        // 5. Soru görselini base64'e çevir (mevcut logic)
+        String base64Image = null;
+        String imageMimeType = null;
+        try {
+            if (question.getImageUrl() != null && !question.getImageUrl().trim().isEmpty()) {
+                // StorageService üzerinden dosyayı oku
+                try {
+                    org.springframework.core.io.Resource imageResource = fileService.getFile(question.getImageUrl());
+
+                    if (imageResource.exists() && imageResource.isReadable()) {
+                        byte[] imageBytes = imageResource.getInputStream().readAllBytes();
+                        base64Image = Base64.getEncoder().encodeToString(imageBytes);
+
+                        String fileName = question.getImageUrl().toLowerCase();
+                        if (fileName.endsWith(".png")) {
+                            imageMimeType = "image/png";
+                        } else if (fileName.endsWith(".jpg") || fileName.endsWith(".jpeg")) {
+                            imageMimeType = "image/jpeg";
+                        } else if (fileName.endsWith(".gif")) {
+                            imageMimeType = "image/gif";
+                        } else if (fileName.endsWith(".webp")) {
+                            imageMimeType = "image/webp";
+                        } else {
+                            imageMimeType = "image/jpeg";
+                        }
+                    }
+                } catch (Exception ex) {
+                    log.warn("Soru görseli okunamadı: questionId={}, imageUrl={}, error={}",
+                            questionId, question.getImageUrl(), ex.getMessage());
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Soru görseli okunamadı: questionId={}, error={}", questionId, e.getMessage());
+        }
+
+        // 6. OpenAI Chat API çağrısı (text response al)
+        String aiResponse;
+        Integer tokenCount;
+        try {
+            Map<String, Object> result = callOpenAIChatAPI(context, history, question, base64Image,
+                    imageMimeType);
+            aiResponse = (String) result.get("content");
+            tokenCount = (Integer) result.get("tokenCount");
+        } catch (Exception e) {
+            log.error("OpenAI API çağrısı başarısız: {}", e.getMessage(), e);
+            throw new ExternalServiceException("AI yanıtı alınamadı: " + e.getMessage());
+        }
+
+        // 7. AI text yanıtını kaydet
+        QuestionAIMessage aiMsg = new QuestionAIMessage();
+        aiMsg.setConversation(conversation);
+        aiMsg.setContent(aiResponse);
+        aiMsg.setRole(MessageRole.ASSISTANT);
+        aiMsg.setMessageType(MessageType.ASSISTANT_TEXT); // Text yanıt
+        aiMsg.setTokenCount(tokenCount);
+        messageRepository.save(aiMsg);
+
+        // 8. Conversation'ı güncelle
+        conversation.setLastMessageAt(aiMsg.getCreatedAt());
+        conversationRepository.save(conversation);
+
+        // 9. AI text yanıtını audio'ya çevir (TTS)
+        String audioUrl = null;
+        try {
+            byte[] audioBytes = speechProcessingService.textToSpeech(aiResponse);
+            audioUrl = speechProcessingService.saveTemporaryAudio(audioBytes);
+            log.info("AI yanıtı audio'ya çevrildi: questionId={}, audioUrl={}", questionId, audioUrl);
+        } catch (Exception e) {
+            log.error("AI yanıtı audio'ya çevrilemedi: questionId={}, error={}", questionId, e.getMessage(), e);
+            // Audio çevrilemezse devam et, sadece text response döndür
+        }
+
+        // 10. Response oluştur
+        AIMessageResponse response = toMessageResponse(aiMsg);
+        response.setAudioUrl(audioUrl); // Geçici audio URL (nullable)
+        return response;
+    }
+
+    /**
+     * OpenAI API maliyetini tahmin eder (token bazlı)
+     * Pricing (approximate as of 2024):
+     * - gpt-4o-mini: $0.15/1M input tokens, $0.60/1M output tokens
+     * - gpt-4o: $2.50/1M input tokens, $10.00/1M output tokens
+     * - gpt-4-turbo: $10.00/1M input tokens, $30.00/1M output tokens
+     * 
+     * @param modelName        Model adı
+     * @param promptTokens     Prompt token sayısı
+     * @param completionTokens Completion token sayısı
+     * @return Tahmini maliyet (USD)
+     */
+    private double estimateAICost(String modelName, int promptTokens, int completionTokens) {
+        double inputPricePerMillion;
+        double outputPricePerMillion;
+
+        if (modelName.contains("gpt-4o-mini") || modelName.contains("mini")) {
+            inputPricePerMillion = 0.15;
+            outputPricePerMillion = 0.60;
+        } else if (modelName.contains("gpt-4o")) {
+            inputPricePerMillion = 2.50;
+            outputPricePerMillion = 10.00;
+        } else if (modelName.contains("gpt-4-turbo") || modelName.contains("gpt-4")) {
+            inputPricePerMillion = 10.00;
+            outputPricePerMillion = 30.00;
+        } else {
+            // Default estimate for unknown models
+            inputPricePerMillion = 1.0;
+            outputPricePerMillion = 3.0;
+        }
+
+        double inputCost = (promptTokens / 1_000_000.0) * inputPricePerMillion;
+        double outputCost = (completionTokens / 1_000_000.0) * outputPricePerMillion;
+
+        return inputCost + outputCost;
+    }
+
+    /**
      * Message entity'yi Response DTO'ya çevir
      */
     private AIMessageResponse toMessageResponse(QuestionAIMessage message) {
@@ -462,7 +646,9 @@ public class QuestionAIChatService {
         response.setId(message.getId());
         response.setContent(message.getContent());
         response.setRole(message.getRole().name());
+        response.setMessageType(message.getMessageType() != null ? message.getMessageType().name() : null);
         response.setCreatedAt(message.getCreatedAt());
+        // audioUrl sadece response oluşturulurken set edilecek (geçici audio için)
         return response;
     }
 }

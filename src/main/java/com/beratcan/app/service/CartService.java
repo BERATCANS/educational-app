@@ -161,8 +161,10 @@ public class CartService {
         /**
          * Sepeti görüntüle
          * JOIN FETCH ile tüm ilişkileri yükler (N+1 query önleme)
+         * 
+         * Not: readOnly = true kullanılamaz çünkü getOrCreateCart() INSERT yapabilir
          */
-        @Transactional(readOnly = true)
+        @Transactional
         public CartResponse getCart(Long userId) {
                 Cart cart = cartRepository.findByUserIdWithItemsAndBooks(userId)
                                 .orElseGet(() -> getOrCreateCart(userId));

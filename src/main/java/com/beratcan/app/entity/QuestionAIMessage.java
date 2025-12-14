@@ -1,6 +1,7 @@
 package com.beratcan.app.entity;
 
 import com.beratcan.app.entity.enums.MessageRole;
+import com.beratcan.app.entity.enums.MessageType;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
@@ -26,6 +27,10 @@ public class QuestionAIMessage {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private MessageRole role;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "message_type")
+    private MessageType messageType; // Mesaj tipi (TEXT, VOICE_INPUT, ASSISTANT_TEXT, ASSISTANT_VOICE)
 
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;

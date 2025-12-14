@@ -29,6 +29,9 @@ public class SecurityConfig {
     @Value("${allowed.origins}")
     private String allowedOrigins;
 
+    @Value("${spring.profiles.active:dev}")
+    private String activeProfile;
+
     public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter,
             AuthEntryPointJwt unauthorizedHandler,
             RateLimitFilter rateLimitFilter) {
@@ -44,22 +47,29 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable()) // CSRF kapalı (REST API için gerekli değil)
                 .exceptionHandling(ex -> ex
                         .authenticationEntryPoint(unauthorizedHandler)) // ✅ Profesyonel error handling
-                .authorizeHttpRequests(auth -> auth
-                        // Swagger UI endpoints (herkese açık - development için)
-                        .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html").permitAll()
-                        // Public endpoints
-                        .requestMatchers("/api/users/register", "/api/users/login").permitAll() // herkes erişebilir
-                        // /api/users/refresh artık authenticated (refresh token ile authenticate
-                        // edilir)
-                        .requestMatchers("/api/users/verify-email")
-                        .permitAll() // ✅ Email doğrulama herkese açık (email verification token ile güvenlik
-                                     // sağlanır)
-                        // /api/users/resend-verification ve /api/users/change-email artık authenticated
-                        // (ProfileController'da)
-                        .requestMatchers("/api/books/store").permitAll() // Kitap mağazası herkese açık
-                        .requestMatchers("/api/users/cities").permitAll() // Şehir listesi herkese açık
-                        .anyRequest().authenticated() // ✅ DİĞER TÜM ENDPOINT'LER AUTH GEREKTİRİR!
-                )
+                .authorizeHttpRequests(auth -> {
+                    // Swagger UI endpoints - Production'da sadece admin, dev'de herkese açık
+                    if ("prod".equals(activeProfile)) {
+                        auth.requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html")
+                                .hasRole("ADMIN");
+                    } else {
+                        auth.requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html")
+                                .permitAll();
+                    }
+                    // Public endpoints
+                    auth
+                            .requestMatchers("/api/users/register", "/api/users/login").permitAll() // herkes erişebilir
+                            // /api/users/refresh artık authenticated (refresh token ile authenticate
+                            // edilir)
+                            .requestMatchers("/api/users/verify-email")
+                            .permitAll() // ✅ Email doğrulama herkese açık (email verification token ile güvenlik
+                                         // sağlanır)
+                            // /api/users/resend-verification ve /api/users/change-email artık authenticated
+                            // (ProfileController'da)
+                            .requestMatchers("/api/books/store").permitAll() // Kitap mağazası herkese açık
+                            .requestMatchers("/api/users/cities").permitAll() // Şehir listesi herkese açık
+                            .anyRequest().authenticated(); // ✅ DİĞER TÜM ENDPOINT'LER AUTH GEREKTİRİR!
+                })
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)); // JWT
                                                                                                                // stateless
 
@@ -100,8 +110,15 @@ public class SecurityConfig {
         // İzin verilen HTTP metodları
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
 
-        // İzin verilen header'lar
-        configuration.setAllowedHeaders(Arrays.asList("*"));
+        // İzin verilen header'lar (spesifik - güvenlik için)
+        configuration.setAllowedHeaders(Arrays.asList(
+                "Authorization",
+                "Content-Type",
+                "X-Requested-With",
+                "Accept",
+                "Origin",
+                "Access-Control-Request-Method",
+                "Access-Control-Request-Headers"));
 
         // Credentials (cookies, authorization headers) izni
         configuration.setAllowCredentials(true);

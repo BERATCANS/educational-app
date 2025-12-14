@@ -33,6 +33,9 @@ import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
 import java.io.File;
+import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
@@ -463,20 +466,28 @@ public class QuestionService {
                 .orElseThrow(() -> new QuestionNotFoundException(questionId));
 
         try {
-            // 1. Görseli oku
-            File imageFile = new File(uploadDir + question.getImageUrl());
-            if (!imageFile.exists()) {
-                log.error("Görsel dosyası bulunamadı: questionId={}, imageUrl={}, fullPath={}",
-                        questionId, question.getImageUrl(), uploadDir + question.getImageUrl());
-                updateAIAnalysisStatus(questionId, AIAnalysisStatus.FAILED);
-                return;
+            // 1. Görseli oku (StorageService üzerinden)
+            org.springframework.core.io.Resource imageResource = fileService.getFile(question.getImageUrl());
+
+            // Geçici dosya oluştur (AIQuestionAnalyzer File bekliyor)
+            Path tempFile = Files.createTempFile("question_", "_" + questionId);
+            try (InputStream inputStream = imageResource.getInputStream()) {
+                Files.copy(inputStream, tempFile, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
             }
 
+            File imageFile = tempFile.toFile();
             log.info("Görsel dosyası bulundu: questionId={}, fileSize={} bytes",
                     questionId, imageFile.length());
 
             // 2. AI analiz yap (questionId ile ExamType algılanacak)
             QuestionAnalysisResult analysis = aiAnalyzer.analyzeQuestion(imageFile, questionId);
+
+            // Geçici dosyayı sil
+            try {
+                Files.deleteIfExists(tempFile);
+            } catch (Exception e) {
+                log.warn("Geçici dosya silinemedi: {}", tempFile, e);
+            }
             log.info("AI analiz tamamlandı: questionId={}", questionId);
 
             // 3. Question'ı tekrar yükle (transaction içinde fresh state için)
@@ -569,15 +580,30 @@ public class QuestionService {
 
         log.info("AI analiz başlatıldı: questionId={}", questionId);
 
+        Path tempFile = null;
         try {
-            // 1. Görseli oku
-            File imageFile = new File(uploadDir + question.getImageUrl());
-            if (!imageFile.exists()) {
-                throw new BadRequestException("Görsel dosyası bulunamadı: " + question.getImageUrl());
+            // 1. Görseli oku (StorageService üzerinden)
+            org.springframework.core.io.Resource imageResource = fileService.getFile(question.getImageUrl());
+
+            // Geçici dosya oluştur (AIQuestionAnalyzer File bekliyor)
+            tempFile = Files.createTempFile("question_", "_" + questionId);
+            try (InputStream inputStream = imageResource.getInputStream()) {
+                Files.copy(inputStream, tempFile, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
             }
+
+            File imageFile = tempFile.toFile();
 
             // 2. AI analiz yap (questionId ile ExamType algılanacak)
             QuestionAnalysisResult analysis = aiAnalyzer.analyzeQuestion(imageFile, questionId);
+
+            // Geçici dosyayı sil
+            try {
+                Files.deleteIfExists(tempFile);
+                tempFile = null;
+            } catch (Exception e) {
+                log.warn("Geçici dosya silinemedi: {}", tempFile, e);
+            }
+
             log.info("AI analiz tamamlandı: questionId={}", questionId);
 
             // 3. Mevcut hints'i temizle
@@ -598,6 +624,14 @@ public class QuestionService {
             questionRepository.save(question);
 
         } catch (Exception e) {
+            // Geçici dosyayı temizle (exception durumunda da)
+            if (tempFile != null) {
+                try {
+                    Files.deleteIfExists(tempFile);
+                } catch (Exception ex) {
+                    log.warn("Geçici dosya silinemedi: {}", tempFile, ex);
+                }
+            }
             log.error("AI analiz hatası: questionId={}", questionId, e);
             question.setAiAnalysisStatus(AIAnalysisStatus.FAILED);
             questionRepository.save(question);
