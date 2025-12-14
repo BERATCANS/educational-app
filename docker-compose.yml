@@ -1,18 +1,88 @@
 version: "3.9"
 
 services:
+  # Backend Spring Boot Application
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: app-backend
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      # Database Configuration (DigitalOcean veya local postgres)
+      - DB_URL=${DB_URL:-jdbc:postgresql://postgres:5432/soruapp}
+      - DB_USERNAME=${DB_USERNAME:-berat}
+      - DB_PASSWORD=${DB_PASSWORD:-123}
+
+      # Spring Profile
+      - SPRING_PROFILES_ACTIVE=${SPRING_PROFILES_ACTIVE:-prod}
+
+      # JWT Configuration
+      - JWT_SECRET=${JWT_SECRET}
+
+      # OpenAI Configuration
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o}
+      - OPENAI_TIMEOUT=${OPENAI_TIMEOUT:-120}
+
+      # Email Configuration
+      - EMAIL_HOST=${EMAIL_HOST:-smtp.hostinger.com}
+      - EMAIL_PORT=${EMAIL_PORT:-465}
+      - EMAIL_USERNAME=${EMAIL_USERNAME}
+      - EMAIL_PASSWORD=${EMAIL_PASSWORD}
+      - APP_EMAIL_FROM=${APP_EMAIL_FROM}
+
+      # DigitalOcean Spaces Configuration
+      - DO_SPACES_ENDPOINT=${DO_SPACES_ENDPOINT}
+      - DO_SPACES_KEY=${DO_SPACES_KEY}
+      - DO_SPACES_SECRET=${DO_SPACES_SECRET}
+      - DO_SPACES_BUCKET=${DO_SPACES_BUCKET}
+      - DO_SPACES_REGION=${DO_SPACES_REGION}
+      - DO_SPACES_CDN_ENDPOINT=${DO_SPACES_CDN_ENDPOINT}
+
+      # Application Configuration
+      - APP_BASE_URL=${APP_BASE_URL:-http://localhost:8080}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3000}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - app-network
+    # Healthcheck (DigitalOcean kendi healthcheck kullanıyorsa bu opsiyonel)
+    # Alpine'de wget yok, curl kullanılabilir veya wget eklenebilir
+    # healthcheck:
+    #   test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8080/actuator/health || exit 1"]
+    #   interval: 30s
+    #   timeout: 10s
+    #   retries: 3
+    #   start_period: 40s
+
+  # PostgreSQL Database (Local development için - Production'da DigitalOcean kullanılacak)
   postgres:
     image: postgres:16
-    container_name: my_postgres
-    restart: always
+    container_name: app-postgres
+    restart: unless-stopped
     environment:
-      POSTGRES_USER: berat
-      POSTGRES_PASSWORD: 123
+      POSTGRES_USER: ${DB_USERNAME:-berat}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-123}
       POSTGRES_DB: soruapp
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-berat}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+networks:
+  app-network:
+    driver: bridge
 
 volumes:
   postgres_data:
