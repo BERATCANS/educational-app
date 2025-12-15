@@ -23,11 +23,17 @@ import java.util.Map;
 @Slf4j
 public class AuthEntryPointJwt implements AuthenticationEntryPoint {
 
+    private final ObjectMapper objectMapper;
+
     @Value("${spring.profiles.active:prod}")
     private String activeProfile;
 
     private boolean isProduction() {
         return "prod".equals(activeProfile);
+    }
+
+    public AuthEntryPointJwt(ObjectMapper objectMapper) {
+        this.objectMapper = objectMapper;
     }
 
     @Override
@@ -55,7 +61,6 @@ public class AuthEntryPointJwt implements AuthenticationEntryPoint {
         body.put("message", message);
         body.put("path", request.getServletPath());
 
-        final ObjectMapper mapper = new ObjectMapper();
-        mapper.writeValue(response.getOutputStream(), body);
+        objectMapper.writeValue(response.getOutputStream(), body);
     }
 }

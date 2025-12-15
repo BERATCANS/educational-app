@@ -58,6 +58,8 @@ public class SecurityConfig {
                     }
                     // Public endpoints
                     auth
+                            .requestMatchers("/actuator/health").permitAll() // ✅ Health check endpoint - DigitalOcean
+                                                                             // ve monitoring için
                             .requestMatchers("/api/users/register", "/api/users/login").permitAll() // herkes erişebilir
                             // /api/users/refresh artık authenticated (refresh token ile authenticate
                             // edilir)
