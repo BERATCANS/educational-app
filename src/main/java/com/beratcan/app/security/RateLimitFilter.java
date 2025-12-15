@@ -38,12 +38,14 @@ public class RateLimitFilter extends OncePerRequestFilter {
 
     private final RateLimitConfig rateLimitConfig;
     private final RequestMappingHandlerMapping handlerMapping;
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final ObjectMapper objectMapper;
 
     public RateLimitFilter(RateLimitConfig rateLimitConfig,
-            @Qualifier("requestMappingHandlerMapping") RequestMappingHandlerMapping handlerMapping) {
+            @Qualifier("requestMappingHandlerMapping") RequestMappingHandlerMapping handlerMapping,
+            ObjectMapper objectMapper) {
         this.rateLimitConfig = rateLimitConfig;
         this.handlerMapping = handlerMapping;
+        this.objectMapper = objectMapper;
     }
 
     // Default: 500 requests per minute (genel endpoint'ler için - toplam limit)

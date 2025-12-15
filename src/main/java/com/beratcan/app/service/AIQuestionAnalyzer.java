@@ -25,7 +25,7 @@ import java.util.concurrent.TimeUnit;
 public class AIQuestionAnalyzer {
 
     private final QuestionRepository questionRepository;
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final ObjectMapper objectMapper;
     private final OkHttpClient httpClient = new OkHttpClient.Builder()
             .connectTimeout(AppConstants.HTTP_CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
             .writeTimeout(AppConstants.HTTP_WRITE_TIMEOUT_SECONDS, TimeUnit.SECONDS)

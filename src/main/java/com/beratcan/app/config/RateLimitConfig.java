@@ -11,11 +11,15 @@ import java.util.Map;
 /**
  * Rate Limiting Configuration
  * IP ve USER bazlı rate limit bucket'larını yönetir
- * Spring Cache kullanarak in-memory storage sağlar
+ * In-memory storage kullanır (ConcurrentHashMap)
+ * 
+ * NOT: Memory leak önlemek için cache temizleme mekanizması eklenebilir
  */
 @Configuration
 public class RateLimitConfig {
 
+    // In-memory cache - IP ve USER bazlı bucket'lar
+    // Memory leak önlemek için maksimum cache size limiti yok (dikkat!)
     private final Map<String, Bucket> cache = new ConcurrentHashMap<>();
 
     public RateLimitConfig() {

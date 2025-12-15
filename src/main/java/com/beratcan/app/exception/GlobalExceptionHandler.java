@@ -2,7 +2,6 @@ package com.beratcan.app.exception;
 
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -18,13 +17,6 @@ import java.util.stream.Collectors;
 @RestControllerAdvice
 @Slf4j
 public class GlobalExceptionHandler {
-
-        @Value("${spring.profiles.active:prod}")
-        private String activeProfile;
-
-        private boolean isProduction() {
-                return "prod".equals(activeProfile);
-        }
 
         @ExceptionHandler(MethodArgumentNotValidException.class)
         public ResponseEntity<ErrorDetails> handleValidationExceptions(MethodArgumentNotValidException ex) {
@@ -47,12 +39,8 @@ public class GlobalExceptionHandler {
                         IllegalArgumentException ex, HttpServletRequest request) {
                 log.warn("Illegal argument: path={}, error={}", request.getRequestURI(), ex.getMessage());
 
-                String message = isProduction()
-                                ? "Invalid request parameters"
-                                : ex.getMessage();
-
                 ErrorDetails errorDetails = buildErrorDetails(
-                                message,
+                                ex.getMessage(),
                                 "Validation error",
                                 HttpStatus.BAD_REQUEST);
 
@@ -71,16 +59,13 @@ public class GlobalExceptionHandler {
                 if (message != null && message.contains("No enum constant")) {
                         // "No enum constant com.beratcan.app.entity.enums.ExamType.INVALID" gibi bir
                         // mesaj
-                        details = "Geçersiz enum değeri. Lütfen geçerli bir değer gönderin.";
-                        if (!isProduction()) {
-                                details = message; // Dev modda detaylı mesaj
-                        }
+                        details = ex.getMessage();
                 } else if (message != null && message.contains("JSON parse error")) {
                         details = "JSON formatı hatalı. Lütfen request body'nin doğru formatta olduğundan emin olun.";
                 }
 
                 ErrorDetails errorDetails = buildErrorDetails(
-                                isProduction() ? "Invalid request format" : message,
+                                "Invalid request format",
                                 details,
                                 HttpStatus.BAD_REQUEST);
                 return ResponseEntity.badRequest().body(errorDetails);
@@ -91,12 +76,8 @@ public class GlobalExceptionHandler {
                         ResourceNotFoundException ex, HttpServletRequest request) {
                 log.warn("Resource not found: path={}, error={}", request.getRequestURI(), ex.getMessage());
 
-                String message = isProduction()
-                                ? "Resource not found"
-                                : ex.getMessage();
-
                 ErrorDetails errorDetails = buildErrorDetails(
-                                message,
+                                ex.getMessage(),
                                 "The requested resource was not found.",
                                 HttpStatus.NOT_FOUND);
 
@@ -108,12 +89,8 @@ public class GlobalExceptionHandler {
                         BadRequestException ex, HttpServletRequest request) {
                 log.warn("Bad request: path={}, error={}", request.getRequestURI(), ex.getMessage());
 
-                String message = isProduction()
-                                ? "Invalid request"
-                                : ex.getMessage();
-
                 ErrorDetails errorDetails = buildErrorDetails(
-                                message,
+                                ex.getMessage(),
                                 "Bad request",
                                 HttpStatus.BAD_REQUEST);
                 return ResponseEntity.badRequest().body(errorDetails);
@@ -124,12 +101,8 @@ public class GlobalExceptionHandler {
                         ConflictException ex, HttpServletRequest request) {
                 log.warn("Conflict: path={}, error={}", request.getRequestURI(), ex.getMessage());
 
-                String message = isProduction()
-                                ? "Conflict detected"
-                                : ex.getMessage();
-
                 ErrorDetails errorDetails = buildErrorDetails(
-                                message,
+                                ex.getMessage(),
                                 "Conflict detected",
                                 HttpStatus.CONFLICT);
                 return ResponseEntity.status(HttpStatus.CONFLICT).body(errorDetails);
@@ -140,12 +113,8 @@ public class GlobalExceptionHandler {
                         UnauthorizedOperationException ex, HttpServletRequest request) {
                 log.warn("Unauthorized operation: path={}, error={}", request.getRequestURI(), ex.getMessage());
 
-                String message = isProduction()
-                                ? "Access denied"
-                                : ex.getMessage();
-
                 ErrorDetails errorDetails = buildErrorDetails(
-                                message,
+                                ex.getMessage(),
                                 "You are not allowed to perform this operation.",
                                 HttpStatus.FORBIDDEN);
                 return ResponseEntity.status(HttpStatus.FORBIDDEN).body(errorDetails);
@@ -166,12 +135,8 @@ public class GlobalExceptionHandler {
                 log.error("External service error: path={}, error={}",
                                 request.getRequestURI(), ex.getMessage(), ex);
 
-                String message = isProduction()
-                                ? "External service temporarily unavailable"
-                                : ex.getMessage();
-
                 ErrorDetails errorDetails = buildErrorDetails(
-                                message,
+                                ex.getMessage(),
                                 "External service error",
                                 HttpStatus.BAD_GATEWAY);
                 return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(errorDetails);
@@ -183,12 +148,8 @@ public class GlobalExceptionHandler {
                 log.error("File storage error: path={}, error={}",
                                 request.getRequestURI(), ex.getMessage(), ex);
 
-                String message = isProduction()
-                                ? "File operation failed. Please try again later."
-                                : ex.getMessage();
-
                 ErrorDetails errorDetails = buildErrorDetails(
-                                message,
+                                ex.getMessage(),
                                 "File storage error",
                                 HttpStatus.INTERNAL_SERVER_ERROR);
                 return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorDetails);
@@ -221,14 +182,9 @@ public class GlobalExceptionHandler {
                                 ex.getMessage(),
                                 ex);
 
-                // PRODUCTION'DA GENERIC MESAJ, DEV'DE DETAYLI
-                String details = isProduction()
-                                ? "An unexpected error occurred. Please try again later."
-                                : ex.getMessage();
-
                 ErrorDetails errorDetails = buildErrorDetails(
                                 "An unexpected error occurred",
-                                details,
+                                ex.getMessage(),
                                 HttpStatus.INTERNAL_SERVER_ERROR);
 
                 return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorDetails);
