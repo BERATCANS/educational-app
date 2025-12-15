@@ -37,6 +37,11 @@ public class EmailVerificationService {
     @Value("${app.base-url:http://localhost:8080}")
     private String baseUrl;
 
+    // Frontend URL (emailde gidecek doğrulama linki için)
+    // Örn: https://kitappai.com
+    @Value("${app.frontend-url:https://kitappai.com}")
+    private String frontendUrl;
+
     @Value("${app.email.from:noreply@yourapp.com}")
     private String fromEmail;
 
@@ -68,7 +73,9 @@ public class EmailVerificationService {
      */
     @Async
     public void sendVerificationEmailAsync(User user, String token) {
-        String verificationUrl = baseUrl + "/api/users/verify-email?token=" + token;
+        // Emailde kullanıcıyı frontend'e yönlendiriyoruz; frontend token'ı backend'e
+        // iletecek
+        String verificationUrl = frontendUrl + "/verify-email.html?token=" + token;
         try {
             sendEmail(user.getEmail(), "Email Doğrulama - Hesabınızı Aktifleştirin",
                     buildVerificationEmail(user.getFirstName(), verificationUrl));
