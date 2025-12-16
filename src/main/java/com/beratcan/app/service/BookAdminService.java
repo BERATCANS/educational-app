@@ -138,9 +138,16 @@ public class BookAdminService {
                 : testRepository.findByTopicIdsWithQuestions(topicIds);
 
         // 5. Test'leri topic ID'lerine göre grupla
-        Map<Long, List<Test>> testsByTopicId = testsWithQuestions.stream()
-                .collect(java.util.stream.Collectors.groupingBy(
-                        test -> test.getTopic().getId()));
+        Map<Long, List<Test>> testsByTopicId = new java.util.HashMap<>();
+        for (Test test : testsWithQuestions) {
+            Topic topic = test.getTopic();
+            if (topic != null) {
+                Long topicId = topic.getId();
+                testsByTopicId.computeIfAbsent(topicId, k -> new java.util.ArrayList<>()).add(test);
+            } else {
+                log.warn("Test'in topic'i null: testId={}", test.getId());
+            }
+        }
 
         // 6. Test ID'lerine göre questions sayısını map'le (performans için)
         Map<Long, Integer> questionCountByTestId = testsWithQuestions.stream()
@@ -161,6 +168,8 @@ public class BookAdminService {
             int topicTestCount = topicTests.size();
             int topicQuestionCount = 0;
 
+            log.debug("Topic için sayılar hesaplanıyor: topicId={}, testCount={}", topic.getId(), topicTestCount);
+
             // Her test için sayıları hesapla ve güncelle
             for (Test test : topicTests) {
                 totalTests++;
@@ -174,17 +183,25 @@ public class BookAdminService {
                 // Test'i repository'den yeniden yükle (detached entity sorununu önlemek için)
                 Test testToUpdate = testRepository.findById(test.getId())
                         .orElseThrow(() -> new TestNotFoundException(test.getId()));
+                int oldCount = testToUpdate.getNumberOfQuestions();
                 testToUpdate.setNumberOfQuestions(testQuestionCount);
-                testRepository.save(testToUpdate);
+                testRepository.saveAndFlush(testToUpdate);
+                log.info("Test güncellendi: testId={}, oldNumberOfQuestions={}, newNumberOfQuestions={}",
+                        test.getId(), oldCount, testQuestionCount);
             }
 
             // Topic'in test ve soru sayılarını güncelle ve kaydet
             // Topic'i repository'den yeniden yükle (detached entity sorununu önlemek için)
             Topic topicToUpdate = topicRepository.findById(topic.getId())
                     .orElseThrow(() -> new TopicNotFoundException(topic.getId()));
+            int oldTestCount = topicToUpdate.getNumberOfTests();
+            int oldQuestionCount = topicToUpdate.getNumberOfQuestions();
             topicToUpdate.setNumberOfTests(topicTestCount);
             topicToUpdate.setNumberOfQuestions(topicQuestionCount);
-            topicRepository.save(topicToUpdate);
+            topicRepository.saveAndFlush(topicToUpdate);
+            log.info(
+                    "Topic güncellendi: topicId={}, oldNumberOfTests={}, newNumberOfTests={}, oldNumberOfQuestions={}, newNumberOfQuestions={}",
+                    topic.getId(), oldTestCount, topicTestCount, oldQuestionCount, topicQuestionCount);
         }
 
         // Book'un toplam sayılarını güncelle ve kaydet
