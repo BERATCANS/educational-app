@@ -117,8 +117,10 @@ public class BookAdminService {
      * Book data sayılarını hesapla ve güncelle (transaction içinde)
      * Asenkron wrapper metod tarafından çağrılır
      * MultipleBagFetchException'ı önlemek için collections ayrı ayrı fetch edilir
+     * REQUIRES_NEW: Her zaman yeni bir transaction başlatır, async metodun
+     * transaction'ından bağımsızdır
      */
-    @Transactional
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
     public void countBookData(Long bookId) {
         // 1. Book'u topics ile birlikte getir (sadece bir bag fetch)
         Book book = bookRepository.findByIdWithTopics(bookId)
@@ -199,9 +201,15 @@ public class BookAdminService {
             topicToUpdate.setNumberOfTests(topicTestCount);
             topicToUpdate.setNumberOfQuestions(topicQuestionCount);
             topicRepository.saveAndFlush(topicToUpdate);
+
+            // Değişikliklerin persist edildiğini doğrula (yeni transaction'da)
+            // EntityManager'ı clear edip yeniden yükle (cache sorununu önlemek için)
+            Topic verifiedTopic = topicRepository.findById(topic.getId())
+                    .orElseThrow(() -> new TopicNotFoundException(topic.getId()));
             log.info(
-                    "Topic güncellendi: topicId={}, oldNumberOfTests={}, newNumberOfTests={}, oldNumberOfQuestions={}, newNumberOfQuestions={}",
-                    topic.getId(), oldTestCount, topicTestCount, oldQuestionCount, topicQuestionCount);
+                    "Topic güncellendi: topicId={}, oldNumberOfTests={}, newNumberOfTests={}, oldNumberOfQuestions={}, newNumberOfQuestions={}, verifiedNumberOfTests={}, verifiedNumberOfQuestions={}",
+                    topic.getId(), oldTestCount, topicTestCount, oldQuestionCount, topicQuestionCount,
+                    verifiedTopic.getNumberOfTests(), verifiedTopic.getNumberOfQuestions());
         }
 
         // Book'un toplam sayılarını güncelle ve kaydet
