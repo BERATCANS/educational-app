@@ -1,6 +1,7 @@
 package com.beratcan.app.service;
 
 import com.beratcan.app.dto.request.BookRequest;
+import com.beratcan.app.dto.response.BookResponse;
 import com.beratcan.app.entity.Book;
 import com.beratcan.app.entity.Test;
 import com.beratcan.app.entity.Topic;
@@ -39,7 +40,7 @@ public class BookAdminService {
     private ApplicationContext applicationContext;
 
     @Transactional
-    public Book addBook(BookRequest request) {
+    public BookResponse addBook(BookRequest request) {
         if (request == null) {
             throw new IllegalArgumentException("BookRequest cannot be null");
         }
@@ -67,11 +68,11 @@ public class BookAdminService {
         // ApplicationContext üzerinden çağır (self-invocation sorununu çözmek için)
         BookAdminService self = applicationContext.getBean(BookAdminService.class);
         self.countBookDataAsync(savedBook.getId());
-        return savedBook;
+        return toBookResponse(savedBook);
     }
 
     @Transactional
-    public Book updateBook(Long bookId, BookRequest request) {
+    public BookResponse updateBook(Long bookId, BookRequest request) {
         Book book = bookRepository.findById(bookId)
                 .orElseThrow(() -> new BookNotFoundException(bookId));
 
@@ -92,7 +93,8 @@ public class BookAdminService {
             book.setPrice(request.getPrice());
         }
 
-        return bookRepository.save(book);
+        Book updatedBook = bookRepository.save(book);
+        return toBookResponse(updatedBook);
     }
 
     @Transactional
@@ -200,5 +202,29 @@ public class BookAdminService {
                     });
         }
         throw new BadRequestException("Yayınevi bilgisi zorunludur");
+    }
+
+    /**
+     * Book entity'sini BookResponse DTO'suna dönüştür
+     */
+    private BookResponse toBookResponse(Book book) {
+        BookResponse response = new BookResponse();
+        response.setId(book.getId());
+        response.setTitle(book.getTitle());
+        response.setPublisher(book.getPublisher() != null ? book.getPublisher().getName() : null);
+        // Database'de filename var, response'da URL oluştur
+        // Eğer zaten URL formatındaysa (eski kayıtlar için) olduğu gibi bırak
+        String coverImageUrl = book.getCoverImageUrl();
+        if (coverImageUrl != null && !coverImageUrl.isEmpty() && !coverImageUrl.startsWith("api/files/")) {
+            response.setCoverImageUrl("api/files/" + coverImageUrl);
+        } else {
+            response.setCoverImageUrl(coverImageUrl);
+        }
+        response.setPaid(book.isPaid());
+        // Hesaplanmış alanları entity'deki getter metodlarından al
+        response.setNumberOfTopics(book.getNumberOfTopics());
+        response.setNumberOfTests(book.getNumberOfTests());
+        response.setNumberOfQuestions(book.getNumberOfQuestions());
+        return response;
     }
 }

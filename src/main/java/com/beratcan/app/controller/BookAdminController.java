@@ -1,7 +1,7 @@
 package com.beratcan.app.controller;
 
 import com.beratcan.app.dto.request.BookRequest;
-import com.beratcan.app.entity.Book;
+import com.beratcan.app.dto.response.BookResponse;
 import com.beratcan.app.service.BookAdminService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -18,16 +18,16 @@ public class BookAdminController {
 
     @PreAuthorize("hasRole('ADMIN')")
     @PostMapping("/add")
-    public Book addBook(@Valid @RequestBody BookRequest request) {
+    public BookResponse addBook(@Valid @RequestBody BookRequest request) {
         return bookAdminService.addBook(request);
     }
 
     @PreAuthorize("hasRole('ADMIN')")
     @PutMapping("/{bookId}")
-    public ResponseEntity<Book> updateBook(
+    public ResponseEntity<BookResponse> updateBook(
             @PathVariable Long bookId,
             @Valid @RequestBody BookRequest request) {
-        Book updatedBook = bookAdminService.updateBook(bookId, request);
+        BookResponse updatedBook = bookAdminService.updateBook(bookId, request);
         bookAdminService.countBookData(bookId);
         return ResponseEntity.ok(updatedBook);
     }

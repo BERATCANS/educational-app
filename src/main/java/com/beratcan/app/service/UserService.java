@@ -207,6 +207,36 @@ public class UserService {
     }
 
     /**
+     * Kullanıcının kendi hesabını sil
+     * Cascade ilişkiler sayesinde tüm ilişkili veriler (testResults, cart,
+     * purchases, bookReviews) otomatik silinir
+     * ManyToMany ilişkiler (ownedBooks, flaggedQuestions) join table'dan otomatik
+     * temizlenir
+     * 
+     * @param userId Silinecek kullanıcının ID'si
+     * @throws UserNotFoundException Kullanıcı bulunamazsa
+     */
+    @Transactional
+    public void deleteOwnAccount(Long userId) {
+        if (userId == null) {
+            throw new BadRequestException("User ID cannot be null");
+        }
+
+        log.info("User account deletion started: userId={}", userId);
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> {
+                    log.warn("Account deletion failed - user not found: userId={}", userId);
+                    return new UserNotFoundException(userId);
+                });
+
+        // Kullanıcıyı sil (cascade sayesinde ilişkili veriler otomatik silinir)
+        userRepository.delete(user);
+
+        log.info("User account deleted successfully: userId={}, username={}", userId, user.getUsername());
+    }
+
+    /**
      * Email formatını doğrula
      */
     private boolean isValidEmailFormat(String email) {
