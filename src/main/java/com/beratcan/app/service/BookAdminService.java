@@ -22,6 +22,8 @@ import org.springframework.util.StringUtils;
 import lombok.extern.slf4j.Slf4j;
 
 import java.math.BigDecimal;
+import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -119,38 +121,55 @@ public class BookAdminService {
     /**
      * Book data sayılarını hesapla ve güncelle (transaction içinde)
      * Asenkron wrapper metod tarafından çağrılır
+     * MultipleBagFetchException'ı önlemek için collections ayrı ayrı fetch edilir
      */
     @Transactional
     public void countBookData(Long bookId) {
-        // JOIN FETCH ile topics, tests ve questions ilişkilerini tek query'de yükle
-        Book book = bookRepository.findByIdWithTopicsAndTestsAndQuestions(bookId)
+        // 1. Book'u topics ile birlikte getir (sadece bir bag fetch)
+        Book book = bookRepository.findByIdWithTopics(bookId)
                 .orElseThrow(() -> new BookNotFoundException(bookId));
+
+        // 2. Topics'ları tests ile birlikte getir (sadece bir bag fetch)
+        List<Topic> topics = topicRepository.findByBookIdWithTests(bookId);
+
+        // 3. Topic ID'lerini topla
+        List<Long> topicIds = topics.stream()
+                .map(Topic::getId)
+                .toList();
+
+        // 4. Tests'leri questions ile birlikte getir (sadece bir bag fetch)
+        List<Test> tests = topicIds.isEmpty()
+                ? List.of()
+                : testRepository.findByTopicIdsWithQuestions(topicIds);
+
+        // 5. Test'leri topic'lere göre grupla (performans için)
+        Map<Long, List<Test>> testsByTopicId = tests.stream()
+                .collect(java.util.stream.Collectors.groupingBy(
+                        test -> test.getTopic().getId()));
 
         int totalTopics = 0;
         int totalTests = 0;
         int totalQuestions = 0;
 
         // Her topic için sayıları hesapla ve güncelle
-        for (Topic topic : book.getTopics()) {
+        for (Topic topic : topics) {
             totalTopics++;
 
-            int topicTestCount = 0;
+            List<Test> topicTests = testsByTopicId.getOrDefault(topic.getId(), List.of());
+            int topicTestCount = topicTests.size();
             int topicQuestionCount = 0;
 
             // Her test için sayıları hesapla ve güncelle
-            if (topic.getTests() != null) {
-                for (Test test : topic.getTests()) {
-                    topicTestCount++;
-                    totalTests++;
+            for (Test test : topicTests) {
+                totalTests++;
 
-                    int testQuestionCount = test.getQuestions() != null ? test.getQuestions().size() : 0;
-                    topicQuestionCount += testQuestionCount;
-                    totalQuestions += testQuestionCount;
+                int testQuestionCount = test.getQuestions() != null ? test.getQuestions().size() : 0;
+                topicQuestionCount += testQuestionCount;
+                totalQuestions += testQuestionCount;
 
-                    // Test'in soru sayısını güncelle ve kaydet
-                    test.setNumberOfQuestions(testQuestionCount);
-                    testRepository.save(test);
-                }
+                // Test'in soru sayısını güncelle ve kaydet
+                test.setNumberOfQuestions(testQuestionCount);
+                testRepository.save(test);
             }
 
             // Topic'in test ve soru sayılarını güncelle ve kaydet

@@ -18,4 +18,13 @@ public interface TestRepository extends JpaRepository<Test, Long> {
 
     @Query("SELECT MAX(t.sequenceNumber) FROM Test t WHERE t.topic.id = :topicId")
     Integer findMaxSequenceNumberByTopicId(@Param("topicId") Long topicId);
+
+    /**
+     * Tests'leri questions ile birlikte getirir (JOIN FETCH)
+     * MultipleBagFetchException'ı önlemek için sadece questions fetch edilir
+     */
+    @Query("SELECT DISTINCT t FROM Test t " +
+            "LEFT JOIN FETCH t.questions q " +
+            "WHERE t.topic.id IN :topicIds")
+    List<Test> findByTopicIdsWithQuestions(@Param("topicIds") List<Long> topicIds);
 }
