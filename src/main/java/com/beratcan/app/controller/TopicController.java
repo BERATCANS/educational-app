@@ -20,8 +20,8 @@ public class TopicController {
     }
 
     @PreAuthorize("hasRole('ADMIN')")
-    @PostMapping("/add")
-    public TopicResponse addTopic(@RequestParam Long bookId, @Valid @RequestBody TopicRequest request) {
+    @PostMapping("/add/{bookId}")
+    public TopicResponse addTopic(@PathVariable Long bookId, @Valid @RequestBody TopicRequest request) {
         return topicService.addTopic(bookId, request);
     }
 

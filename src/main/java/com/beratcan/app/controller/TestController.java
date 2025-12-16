@@ -21,8 +21,8 @@ public class TestController {
 
     // CREATE
     @PreAuthorize("hasRole('ADMIN')")
-    @PostMapping("/add")
-    public TestResponse addTest(@RequestParam Long topicId, @Valid @RequestBody TestRequest request) {
+    @PostMapping("/add/{topicId}")
+    public TestResponse addTest(@PathVariable Long topicId, @Valid @RequestBody TestRequest request) {
         return testService.addTest(topicId, request);
     }
 
