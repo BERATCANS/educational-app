@@ -84,17 +84,17 @@ public class QuestionService {
         question.setExamType(examType);
 
         question = questionRepository.save(question);
-        
+
         // Response'u önce oluştur
         QuestionResponse response = toQuestionResponse(question);
-        
+
         // bookId'yi transaction içinde al (lazy initialization sorununu önlemek için)
         Long bookId = test.getTopic().getBook().getId();
-        
+
         // Response'u döndür, countBookDataAsync arkada async olarak çalışacak
         BookAdminService bookAdminServiceProxy = applicationContext.getBean(BookAdminService.class);
         bookAdminServiceProxy.countBookDataAsync(bookId);
-        
+
         return response;
     }
 

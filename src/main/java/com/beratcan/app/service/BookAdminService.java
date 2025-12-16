@@ -9,6 +9,8 @@ import com.beratcan.app.entity.Publisher;
 import com.beratcan.app.exception.BadRequestException;
 import com.beratcan.app.exception.BookNotFoundException;
 import com.beratcan.app.exception.PublisherNotFoundException;
+import com.beratcan.app.exception.TestNotFoundException;
+import com.beratcan.app.exception.TopicNotFoundException;
 import com.beratcan.app.repository.BookRepository;
 import com.beratcan.app.repository.TestRepository;
 import com.beratcan.app.repository.TopicRepository;
@@ -131,14 +133,15 @@ public class BookAdminService {
                 .toList();
 
         // 4. Tests'leri questions ile birlikte getir (sadece bir bag fetch)
-        List<Test> tests = topicIds.isEmpty()
+        List<Test> testsWithQuestions = topicIds.isEmpty()
                 ? List.of()
                 : testRepository.findByTopicIdsWithQuestions(topicIds);
 
-        // 5. Test'leri topic'lere göre grupla (performans için)
-        Map<Long, List<Test>> testsByTopicId = tests.stream()
-                .collect(java.util.stream.Collectors.groupingBy(
-                        test -> test.getTopic().getId()));
+        // 5. Test ID'lerine göre questions sayısını map'le (performans için)
+        Map<Long, Integer> questionCountByTestId = testsWithQuestions.stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        Test::getId,
+                        test -> test.getQuestions() != null ? test.getQuestions().size() : 0));
 
         int totalTopics = 0;
         int totalTests = 0;
@@ -148,7 +151,8 @@ public class BookAdminService {
         for (Topic topic : topics) {
             totalTopics++;
 
-            List<Test> topicTests = testsByTopicId.getOrDefault(topic.getId(), List.of());
+            // Topic'in tests collection'ını kullan (zaten fetch edilmiş)
+            List<Test> topicTests = topic.getTests() != null ? topic.getTests() : List.of();
             int topicTestCount = topicTests.size();
             int topicQuestionCount = 0;
 
@@ -156,19 +160,26 @@ public class BookAdminService {
             for (Test test : topicTests) {
                 totalTests++;
 
-                int testQuestionCount = test.getQuestions() != null ? test.getQuestions().size() : 0;
+                // Questions sayısını map'ten al (fetch edilmiş test'lerden)
+                int testQuestionCount = questionCountByTestId.getOrDefault(test.getId(), 0);
                 topicQuestionCount += testQuestionCount;
                 totalQuestions += testQuestionCount;
 
                 // Test'in soru sayısını güncelle ve kaydet
-                test.setNumberOfQuestions(testQuestionCount);
-                testRepository.save(test);
+                // Test'i repository'den yeniden yükle (detached entity sorununu önlemek için)
+                Test testToUpdate = testRepository.findById(test.getId())
+                        .orElseThrow(() -> new TestNotFoundException(test.getId()));
+                testToUpdate.setNumberOfQuestions(testQuestionCount);
+                testRepository.save(testToUpdate);
             }
 
             // Topic'in test ve soru sayılarını güncelle ve kaydet
-            topic.setNumberOfTests(topicTestCount);
-            topic.setNumberOfQuestions(topicQuestionCount);
-            topicRepository.save(topic);
+            // Topic'i repository'den yeniden yükle (detached entity sorununu önlemek için)
+            Topic topicToUpdate = topicRepository.findById(topic.getId())
+                    .orElseThrow(() -> new TopicNotFoundException(topic.getId()));
+            topicToUpdate.setNumberOfTests(topicTestCount);
+            topicToUpdate.setNumberOfQuestions(topicQuestionCount);
+            topicRepository.save(topicToUpdate);
         }
 
         // Book'un toplam sayılarını güncelle ve kaydet
