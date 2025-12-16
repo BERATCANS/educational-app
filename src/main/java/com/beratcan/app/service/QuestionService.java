@@ -86,7 +86,11 @@ public class QuestionService {
 
         question = questionRepository.save(question);
         // Book data sayılarını asenkron olarak hesapla (ana işlemi bloklamaz)
-        bookAdminService.countBookDataAsync(test.getTopic().getBook().getId());
+        // ApplicationContext üzerinden çağır (self-invocation sorununu çözmek için)
+        // bookId'yi transaction içinde al (lazy initialization sorununu önlemek için)
+        Long bookId = test.getTopic().getBook().getId();
+        BookAdminService bookAdminServiceProxy = applicationContext.getBean(BookAdminService.class);
+        bookAdminServiceProxy.countBookDataAsync(bookId);
         return toQuestionResponse(question);
     }
 

@@ -11,6 +11,8 @@ import com.beratcan.app.exception.TopicNotFoundException;
 import com.beratcan.app.repository.TestRepository;
 import com.beratcan.app.repository.TopicRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationContext;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,7 +25,9 @@ public class TestService {
 
     private final TestRepository testRepository;
     private final TopicRepository topicRepository;
-    private final BookAdminService bookAdminService;
+
+    @Autowired
+    private ApplicationContext applicationContext;
 
     // CREATE
     @Transactional
@@ -48,7 +52,11 @@ public class TestService {
 
         test = testRepository.save(test);
         // Book data sayılarını asenkron olarak hesapla (ana işlemi bloklamaz)
-        bookAdminService.countBookDataAsync(test.getTopic().getBook().getId());
+        // ApplicationContext üzerinden çağır (self-invocation sorununu çözmek için)
+        // bookId'yi transaction içinde al (lazy initialization sorununu önlemek için)
+        Long bookId = test.getTopic().getBook().getId();
+        BookAdminService bookAdminServiceProxy = applicationContext.getBean(BookAdminService.class);
+        bookAdminServiceProxy.countBookDataAsync(bookId);
         return toTestResponse(test);
     }
 
@@ -86,7 +94,11 @@ public class TestService {
 
         test = testRepository.save(test);
         // Book data sayılarını asenkron olarak hesapla (ana işlemi bloklamaz)
-        bookAdminService.countBookDataAsync(test.getTopic().getBook().getId());
+        // ApplicationContext üzerinden çağır (self-invocation sorununu çözmek için)
+        // bookId'yi transaction içinde al (lazy initialization sorununu önlemek için)
+        Long bookId = test.getTopic().getBook().getId();
+        BookAdminService bookAdminServiceProxy = applicationContext.getBean(BookAdminService.class);
+        bookAdminServiceProxy.countBookDataAsync(bookId);
         return toTestResponse(test);
     }
 
@@ -98,7 +110,9 @@ public class TestService {
         Long bookId = test.getTopic().getBook().getId();
         testRepository.delete(test);
         // Book data sayılarını asenkron olarak hesapla (ana işlemi bloklamaz)
-        bookAdminService.countBookDataAsync(bookId);
+        // ApplicationContext üzerinden çağır (self-invocation sorununu çözmek için)
+        BookAdminService bookAdminServiceProxy = applicationContext.getBean(BookAdminService.class);
+        bookAdminServiceProxy.countBookDataAsync(bookId);
     }
 
     // --- HELPER METHOD ---
