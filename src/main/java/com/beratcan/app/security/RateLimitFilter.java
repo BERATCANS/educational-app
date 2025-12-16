@@ -147,12 +147,15 @@ public class RateLimitFilter extends OncePerRequestFilter {
         int rateLimit = getRateLimitForPath(path);
         String keyType = getKeyTypeForPath(path);
 
+        // Authentication durumunu kontrol et
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        boolean isAuthenticated = auth != null && auth.isAuthenticated() && !auth.getName().equals("anonymousUser");
+
         Bucket bucket;
 
         if ("USER".equals(keyType)) {
             // USER bazlı rate limiting (authenticated users için)
-            Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-            if (auth != null && auth.isAuthenticated() && !auth.getName().equals("anonymousUser")) {
+            if (isAuthenticated && auth != null) {
                 try {
                     Long userId = Long.parseLong(auth.getName());
                     bucket = rateLimitConfig.resolveBucketByUserId(userId, rateLimit);
@@ -171,9 +174,9 @@ public class RateLimitFilter extends OncePerRequestFilter {
                         ip, path, rateLimit);
             }
         } else {
-            // IP bazlı rate limiting
+            // IP bazlı rate limiting (sadece public endpoint'ler için)
             bucket = rateLimitConfig.resolveBucket(ip, rateLimit);
-            log.debug("Rate limit check (IP): ip={}, path={}, limit={}/min", ip, path, rateLimit);
+            log.debug("Rate limit check (IP - public endpoint): ip={}, path={}, limit={}/min", ip, path, rateLimit);
         }
 
         // Try to consume 1 token
@@ -205,15 +208,22 @@ public class RateLimitFilter extends OncePerRequestFilter {
 
     /**
      * Path'e göre key type'ı döndürür (IP veya USER)
+     * Public endpoint'ler IP bazlı, authenticated endpoint'ler USER bazlı
      */
     private String getKeyTypeForPath(String path) {
-        // USER bazlı rate limiting gereken endpoint'ler
-        if (path.startsWith("/api/files/upload-question-with-ai") ||
-                path.startsWith("/api/test-results/submit")) {
-            return "USER";
+        // Public endpoint'ler IP bazlı rate limiting kullanır
+        if (path.startsWith("/actuator/health") ||
+                path.startsWith("/api/users/register") ||
+                path.startsWith("/api/users/login") ||
+                path.startsWith("/api/users/verify-email") ||
+                path.startsWith("/api/books/store") ||
+                path.startsWith("/api/users/cities") ||
+                path.startsWith("/swagger-ui") ||
+                path.startsWith("/v3/api-docs")) {
+            return "IP";
         }
-        // Diğerleri IP bazlı
-        return "IP";
+        // Diğer tüm endpoint'ler (authenticated) USER bazlı rate limiting kullanır
+        return "USER";
     }
 
     /**
