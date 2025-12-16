@@ -137,7 +137,12 @@ public class BookAdminService {
                 ? List.of()
                 : testRepository.findByTopicIdsWithQuestions(topicIds);
 
-        // 5. Test ID'lerine göre questions sayısını map'le (performans için)
+        // 5. Test'leri topic ID'lerine göre grupla
+        Map<Long, List<Test>> testsByTopicId = testsWithQuestions.stream()
+                .collect(java.util.stream.Collectors.groupingBy(
+                        test -> test.getTopic().getId()));
+
+        // 6. Test ID'lerine göre questions sayısını map'le (performans için)
         Map<Long, Integer> questionCountByTestId = testsWithQuestions.stream()
                 .collect(java.util.stream.Collectors.toMap(
                         Test::getId,
@@ -151,8 +156,8 @@ public class BookAdminService {
         for (Topic topic : topics) {
             totalTopics++;
 
-            // Topic'in tests collection'ını kullan (zaten fetch edilmiş)
-            List<Test> topicTests = topic.getTests() != null ? topic.getTests() : List.of();
+            // testsWithQuestions listesinden bu topic'e ait test'leri al
+            List<Test> topicTests = testsByTopicId.getOrDefault(topic.getId(), List.of());
             int topicTestCount = topicTests.size();
             int topicQuestionCount = 0;
 
