@@ -33,7 +33,7 @@ public class RateLimitConfig {
      * @return Bucket
      */
     public Bucket resolveBucket(String ip, int requestsPerMinute) {
-        String key = "rate_limit_ip_" + ip;
+        String key = "rate_limit_ip_" + ip + "_limit_" + requestsPerMinute;
         return cache.computeIfAbsent(key, k -> createNewBucket(requestsPerMinute));
     }
 
@@ -45,7 +45,7 @@ public class RateLimitConfig {
      * @return Bucket
      */
     public Bucket resolveBucketByUserId(Long userId, int requestsPerMinute) {
-        String key = "rate_limit_user_" + userId;
+        String key = "rate_limit_user_" + userId + "_limit_" + requestsPerMinute;
         return cache.computeIfAbsent(key, k -> createNewBucket(requestsPerMinute));
     }
 
