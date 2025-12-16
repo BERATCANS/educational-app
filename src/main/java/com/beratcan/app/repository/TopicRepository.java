@@ -18,4 +18,13 @@ public interface TopicRepository extends JpaRepository<Topic, Long> {
 
     @Query("SELECT MAX(t.sequenceNumber) FROM Topic t WHERE t.book.id = :bookId")
     Integer findMaxSequenceNumberByBookId(@Param("bookId") Long bookId);
+
+    /**
+     * Topics'ları tests ile birlikte getirir (JOIN FETCH)
+     * MultipleBagFetchException'ı önlemek için sadece tests fetch edilir
+     */
+    @Query("SELECT DISTINCT t FROM Topic t " +
+            "LEFT JOIN FETCH t.tests ts " +
+            "WHERE t.book.id = :bookId")
+    List<Topic> findByBookIdWithTests(@Param("bookId") Long bookId);
 }
