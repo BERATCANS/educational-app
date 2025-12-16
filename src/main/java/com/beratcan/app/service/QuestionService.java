@@ -47,7 +47,6 @@ public class QuestionService {
 
     private final QuestionRepository questionRepository;
     private final TestRepository testRepository;
-    private final BookAdminService bookAdminService;
     private final AIQuestionAnalyzer aiAnalyzer;
     private final FileService fileService;
 
@@ -85,13 +84,18 @@ public class QuestionService {
         question.setExamType(examType);
 
         question = questionRepository.save(question);
-        // Book data sayılarını asenkron olarak hesapla (ana işlemi bloklamaz)
-        // ApplicationContext üzerinden çağır (self-invocation sorununu çözmek için)
+        
+        // Response'u önce oluştur
+        QuestionResponse response = toQuestionResponse(question);
+        
         // bookId'yi transaction içinde al (lazy initialization sorununu önlemek için)
         Long bookId = test.getTopic().getBook().getId();
+        
+        // Response'u döndür, countBookDataAsync arkada async olarak çalışacak
         BookAdminService bookAdminServiceProxy = applicationContext.getBean(BookAdminService.class);
         bookAdminServiceProxy.countBookDataAsync(bookId);
-        return toQuestionResponse(question);
+        
+        return response;
     }
 
     // READ
@@ -200,7 +204,9 @@ public class QuestionService {
         Long bookId = question.getTest().getTopic().getBook().getId();
         questionRepository.delete(question);
         // Book data sayılarını asenkron olarak hesapla (ana işlemi bloklamaz)
-        bookAdminService.countBookDataAsync(bookId);
+        // ApplicationContext üzerinden çağır (self-invocation sorununu çözmek için)
+        BookAdminService bookAdminServiceProxy = applicationContext.getBean(BookAdminService.class);
+        bookAdminServiceProxy.countBookDataAsync(bookId);
     }
 
     @Transactional

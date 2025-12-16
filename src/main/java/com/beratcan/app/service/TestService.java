@@ -51,12 +51,6 @@ public class TestService {
         test.setSequenceNumber(sequenceNumber);
 
         test = testRepository.save(test);
-        // Book data sayılarını asenkron olarak hesapla (ana işlemi bloklamaz)
-        // ApplicationContext üzerinden çağır (self-invocation sorununu çözmek için)
-        // bookId'yi transaction içinde al (lazy initialization sorununu önlemek için)
-        Long bookId = test.getTopic().getBook().getId();
-        BookAdminService bookAdminServiceProxy = applicationContext.getBean(BookAdminService.class);
-        bookAdminServiceProxy.countBookDataAsync(bookId);
         return toTestResponse(test);
     }
 
@@ -93,12 +87,6 @@ public class TestService {
         }
 
         test = testRepository.save(test);
-        // Book data sayılarını asenkron olarak hesapla (ana işlemi bloklamaz)
-        // ApplicationContext üzerinden çağır (self-invocation sorununu çözmek için)
-        // bookId'yi transaction içinde al (lazy initialization sorununu önlemek için)
-        Long bookId = test.getTopic().getBook().getId();
-        BookAdminService bookAdminServiceProxy = applicationContext.getBean(BookAdminService.class);
-        bookAdminServiceProxy.countBookDataAsync(bookId);
         return toTestResponse(test);
     }
 

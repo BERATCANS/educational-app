@@ -10,6 +10,8 @@ import com.beratcan.app.exception.ConflictException;
 import com.beratcan.app.exception.TopicNotFoundException;
 import com.beratcan.app.repository.BookRepository;
 import com.beratcan.app.repository.TopicRepository;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationContext;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
@@ -22,7 +24,9 @@ public class TopicService {
 
     private final TopicRepository topicRepository;
     private final BookRepository bookRepository;
-    private final BookAdminService bookAdminService;
+
+    @Autowired
+    private ApplicationContext applicationContext;
 
     // Helper: Topic -> TopicResponse
     private TopicResponse toTopicResponse(Topic topic) {
@@ -86,9 +90,6 @@ public class TopicService {
         topic.setSequenceNumber(sequenceNumber);
 
         Topic saved = topicRepository.save(topic);
-        // Book data sayılarını asenkron olarak hesapla (ana işlemi bloklamaz)
-        // bookId parametresini kullan (lazy initialization sorununu önlemek için)
-        bookAdminService.countBookDataAsync(bookId);
         return toTopicResponse(saved);
     }
 
@@ -106,11 +107,6 @@ public class TopicService {
         }
 
         Topic updated = topicRepository.save(topic);
-        // Book data sayılarını asenkron olarak hesapla (ana işlemi bloklamaz)
-        // topic.getBook().getId() yerine önce bookId'yi al (lazy initialization
-        // sorununu önlemek için)
-        Long bookId = topic.getBook().getId();
-        bookAdminService.countBookDataAsync(bookId);
         return toTopicResponse(updated);
     }
 
@@ -121,7 +117,9 @@ public class TopicService {
         Long bookId = topic.getBook().getId();
         topicRepository.delete(topic);
         // Book data sayılarını asenkron olarak hesapla (ana işlemi bloklamaz)
-        bookAdminService.countBookDataAsync(bookId);
+        // ApplicationContext üzerinden çağır (self-invocation sorununu çözmek için)
+        BookAdminService bookAdminServiceProxy = applicationContext.getBean(BookAdminService.class);
+        bookAdminServiceProxy.countBookDataAsync(bookId);
     }
 
     @Transactional(readOnly = true)

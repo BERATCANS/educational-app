@@ -14,8 +14,6 @@ import com.beratcan.app.repository.TestRepository;
 import com.beratcan.app.repository.TopicRepository;
 import com.beratcan.app.repository.PublisherRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.ApplicationContext;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -35,9 +33,6 @@ public class BookAdminService {
     private final TopicRepository topicRepository;
     private final TestRepository testRepository;
     private final PublisherRepository publisherRepository;
-
-    @Autowired
-    private ApplicationContext applicationContext;
 
     @Transactional
     public BookResponse addBook(BookRequest request) {
@@ -64,10 +59,6 @@ public class BookAdminService {
         }
 
         Book savedBook = bookRepository.save(book);
-        // Book data sayılarını asenkron olarak hesapla (ana işlemi bloklamaz)
-        // ApplicationContext üzerinden çağır (self-invocation sorununu çözmek için)
-        BookAdminService self = applicationContext.getBean(BookAdminService.class);
-        self.countBookDataAsync(savedBook.getId());
         return toBookResponse(savedBook);
     }
 
