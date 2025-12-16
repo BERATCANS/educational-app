@@ -17,7 +17,11 @@ public class ImageFileValidator implements ConstraintValidator<ValidImageFile, M
 
     @Override
     public void initialize(ValidImageFile constraintAnnotation) {
-        this.maxSize = constraintAnnotation.maxSize();
+        // Minimum 5MB garantisi - annotation'da belirtilen değer 5MB'tan küçükse 5MB
+        // kullan
+        long annotationMaxSize = constraintAnnotation.maxSize();
+        long minSize = 5 * 1024 * 1024; // 5MB
+        this.maxSize = Math.max(annotationMaxSize, minSize);
         this.allowedTypes = constraintAnnotation.allowedTypes();
     }
 
