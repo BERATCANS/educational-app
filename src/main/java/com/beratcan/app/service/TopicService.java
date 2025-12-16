@@ -87,7 +87,8 @@ public class TopicService {
 
         Topic saved = topicRepository.save(topic);
         // Book data sayılarını asenkron olarak hesapla (ana işlemi bloklamaz)
-        bookAdminService.countBookDataAsync(saved.getBook().getId());
+        // bookId parametresini kullan (lazy initialization sorununu önlemek için)
+        bookAdminService.countBookDataAsync(bookId);
         return toTopicResponse(saved);
     }
 
@@ -106,7 +107,10 @@ public class TopicService {
 
         Topic updated = topicRepository.save(topic);
         // Book data sayılarını asenkron olarak hesapla (ana işlemi bloklamaz)
-        bookAdminService.countBookDataAsync(updated.getBook().getId());
+        // topic.getBook().getId() yerine önce bookId'yi al (lazy initialization
+        // sorununu önlemek için)
+        Long bookId = topic.getBook().getId();
+        bookAdminService.countBookDataAsync(bookId);
         return toTopicResponse(updated);
     }
 
