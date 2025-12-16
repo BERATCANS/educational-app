@@ -24,7 +24,6 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.math.BigDecimal;
 import java.util.List;
-import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -35,6 +34,7 @@ public class BookAdminService {
     private final TopicRepository topicRepository;
     private final TestRepository testRepository;
     private final PublisherRepository publisherRepository;
+    private final com.beratcan.app.repository.QuestionRepository questionRepository;
 
     @Transactional
     public BookResponse addBook(BookRequest request) {
@@ -122,101 +122,66 @@ public class BookAdminService {
      */
     @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
     public void countBookData(Long bookId) {
-        // 1. Book'u topics ile birlikte getir (sadece bir bag fetch)
-        Book book = bookRepository.findByIdWithTopics(bookId)
-                .orElseThrow(() -> new BookNotFoundException(bookId));
+        log.info("countBookData başlatıldı: bookId={}", bookId);
 
-        // 2. Topics'ları tests ile birlikte getir (sadece bir bag fetch)
-        List<Topic> topics = topicRepository.findByBookIdWithTests(bookId);
-
-        // 3. Topic ID'lerini topla
-        List<Long> topicIds = topics.stream()
-                .map(Topic::getId)
-                .toList();
-
-        // 4. Tests'leri questions ile birlikte getir (sadece bir bag fetch)
-        List<Test> testsWithQuestions = topicIds.isEmpty()
-                ? List.of()
-                : testRepository.findByTopicIdsWithQuestions(topicIds);
-
-        // 5. Test'leri topic ID'lerine göre grupla
-        Map<Long, List<Test>> testsByTopicId = new java.util.HashMap<>();
-        for (Test test : testsWithQuestions) {
-            Topic topic = test.getTopic();
-            if (topic != null) {
-                Long topicId = topic.getId();
-                testsByTopicId.computeIfAbsent(topicId, k -> new java.util.ArrayList<>()).add(test);
-            } else {
-                log.warn("Test'in topic'i null: testId={}", test.getId());
-            }
+        // 1. Kitabın var olduğunu kontrol et
+        if (!bookRepository.existsById(bookId)) {
+            throw new BookNotFoundException(bookId);
         }
 
-        // 6. Test ID'lerine göre questions sayısını map'le (performans için)
-        Map<Long, Integer> questionCountByTestId = testsWithQuestions.stream()
-                .collect(java.util.stream.Collectors.toMap(
-                        Test::getId,
-                        test -> test.getQuestions() != null ? test.getQuestions().size() : 0));
+        // 2. Bu kitaba ait tüm topic'leri al
+        List<Topic> topics = topicRepository.findByBookId(bookId);
 
-        int totalTopics = 0;
         int totalTests = 0;
         int totalQuestions = 0;
 
-        // Her topic için sayıları hesapla ve güncelle
+        // 3. Her topic için test ve soru sayılarını database'den direkt say ve güncelle
         for (Topic topic : topics) {
-            totalTopics++;
+            // Topic'e ait test sayısını database'den al
+            int testCount = testRepository.countByTopicId(topic.getId());
 
-            // testsWithQuestions listesinden bu topic'e ait test'leri al
-            List<Test> topicTests = testsByTopicId.getOrDefault(topic.getId(), List.of());
-            int topicTestCount = topicTests.size();
-            int topicQuestionCount = 0;
+            // Topic'e ait soru sayısını database'den al
+            int questionCount = questionRepository.countByTopicId(topic.getId());
 
-            log.debug("Topic için sayılar hesaplanıyor: topicId={}, testCount={}", topic.getId(), topicTestCount);
+            totalTests += testCount;
+            totalQuestions += questionCount;
 
-            // Her test için sayıları hesapla ve güncelle
-            for (Test test : topicTests) {
-                totalTests++;
-
-                // Questions sayısını map'ten al (fetch edilmiş test'lerden)
-                int testQuestionCount = questionCountByTestId.getOrDefault(test.getId(), 0);
-                topicQuestionCount += testQuestionCount;
-                totalQuestions += testQuestionCount;
-
-                // Test'in soru sayısını güncelle ve kaydet
-                // Test'i repository'den yeniden yükle (detached entity sorununu önlemek için)
-                Test testToUpdate = testRepository.findById(test.getId())
-                        .orElseThrow(() -> new TestNotFoundException(test.getId()));
-                int oldCount = testToUpdate.getNumberOfQuestions();
-                testToUpdate.setNumberOfQuestions(testQuestionCount);
-                testRepository.saveAndFlush(testToUpdate);
-                log.info("Test güncellendi: testId={}, oldNumberOfQuestions={}, newNumberOfQuestions={}",
-                        test.getId(), oldCount, testQuestionCount);
-            }
-
-            // Topic'in test ve soru sayılarını güncelle ve kaydet
-            // Topic'i repository'den yeniden yükle (detached entity sorununu önlemek için)
+            // Topic'i güncelle
             Topic topicToUpdate = topicRepository.findById(topic.getId())
                     .orElseThrow(() -> new TopicNotFoundException(topic.getId()));
-            int oldTestCount = topicToUpdate.getNumberOfTests();
-            int oldQuestionCount = topicToUpdate.getNumberOfQuestions();
-            topicToUpdate.setNumberOfTests(topicTestCount);
-            topicToUpdate.setNumberOfQuestions(topicQuestionCount);
+            topicToUpdate.setNumberOfTests(testCount);
+            topicToUpdate.setNumberOfQuestions(questionCount);
             topicRepository.saveAndFlush(topicToUpdate);
 
-            // Değişikliklerin persist edildiğini doğrula (yeni transaction'da)
-            // EntityManager'ı clear edip yeniden yükle (cache sorununu önlemek için)
-            Topic verifiedTopic = topicRepository.findById(topic.getId())
-                    .orElseThrow(() -> new TopicNotFoundException(topic.getId()));
-            log.info(
-                    "Topic güncellendi: topicId={}, oldNumberOfTests={}, newNumberOfTests={}, oldNumberOfQuestions={}, newNumberOfQuestions={}, verifiedNumberOfTests={}, verifiedNumberOfQuestions={}",
-                    topic.getId(), oldTestCount, topicTestCount, oldQuestionCount, topicQuestionCount,
-                    verifiedTopic.getNumberOfTests(), verifiedTopic.getNumberOfQuestions());
+            log.info("Topic güncellendi: topicId={}, numberOfTests={}, numberOfQuestions={}",
+                    topic.getId(), testCount, questionCount);
         }
 
-        // Book'un toplam sayılarını güncelle ve kaydet
-        book.setNumberOfTopics(totalTopics);
+        // 4. Her test için soru sayısını güncelle
+        for (Topic topic : topics) {
+            List<Test> tests = testRepository.findByTopicId(topic.getId());
+            for (Test test : tests) {
+                int questionCount = questionRepository.countByTestId(test.getId());
+
+                Test testToUpdate = testRepository.findById(test.getId())
+                        .orElseThrow(() -> new TestNotFoundException(test.getId()));
+                testToUpdate.setNumberOfQuestions(questionCount);
+                testRepository.saveAndFlush(testToUpdate);
+
+                log.info("Test güncellendi: testId={}, numberOfQuestions={}", test.getId(), questionCount);
+            }
+        }
+
+        // 5. Book'u güncelle
+        Book book = bookRepository.findById(bookId)
+                .orElseThrow(() -> new BookNotFoundException(bookId));
+        book.setNumberOfTopics(topics.size());
         book.setNumberOfTests(totalTests);
         book.setNumberOfQuestions(totalQuestions);
-        bookRepository.save(book);
+        bookRepository.saveAndFlush(book);
+
+        log.info("Book güncellendi: bookId={}, numberOfTopics={}, numberOfTests={}, numberOfQuestions={}",
+                bookId, topics.size(), totalTests, totalQuestions);
     }
 
     private Publisher resolvePublisher(BookRequest request) {

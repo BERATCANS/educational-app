@@ -61,4 +61,7 @@ public class Question {
     @Column(name = "ai_analysis_status")
     private AIAnalysisStatus aiAnalysisStatus = AIAnalysisStatus.PENDING; // AI analiz durumu
 
+    @OneToMany(mappedBy = "question", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<QuestionResult> questionResults = new ArrayList<>();
+
 }

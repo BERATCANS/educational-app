@@ -29,4 +29,10 @@ public interface TestRepository extends JpaRepository<Test, Long> {
             "LEFT JOIN FETCH t.questions q " +
             "WHERE t.topic.id IN :topicIds")
     List<Test> findByTopicIdsWithQuestions(@Param("topicIds") List<Long> topicIds);
+
+    /**
+     * Bir topic'e ait test sayısını döndürür
+     */
+    @Query("SELECT COUNT(t) FROM Test t WHERE t.topic.id = :topicId")
+    int countByTopicId(@Param("topicId") Long topicId);
 }

@@ -18,4 +18,16 @@ public interface QuestionRepository extends JpaRepository<Question, Long> {
 
     @Query("SELECT MAX(q.sequenceNumber) FROM Question q WHERE q.test.id = :testId")
     Integer findMaxSequenceNumberByTestId(@Param("testId") Long testId);
+
+    /**
+     * Bir test'e ait soru sayısını döndürür
+     */
+    @Query("SELECT COUNT(q) FROM Question q WHERE q.test.id = :testId")
+    int countByTestId(@Param("testId") Long testId);
+
+    /**
+     * Bir topic'e ait tüm soruların sayısını döndürür
+     */
+    @Query("SELECT COUNT(q) FROM Question q WHERE q.test.topic.id = :topicId")
+    int countByTopicId(@Param("topicId") Long topicId);
 }
