@@ -18,6 +18,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -127,6 +128,26 @@ public class UserController {
         emailVerificationService.verifyEmail(token);
         return ResponseEntity.ok(Map.of(
                 "message", "Email başarıyla doğrulandı",
+                "status", "success"));
+    }
+
+    /**
+     * Kullanıcının kendi hesabını silme endpoint'i
+     * DELETE /api/users/me
+     * Authenticated kullanıcı kendi hesabını silebilir
+     */
+    @DeleteMapping("/me")
+    public ResponseEntity<Map<String, String>> deleteOwnAccount(Authentication authentication) {
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return ResponseEntity.status(org.springframework.http.HttpStatus.UNAUTHORIZED)
+                    .body(Map.of("error", "Hesap silmek için giriş yapmalısınız."));
+        }
+
+        Long userId = Long.parseLong(authentication.getName());
+        userService.deleteOwnAccount(userId);
+
+        return ResponseEntity.ok(Map.of(
+                "message", "Hesabınız başarıyla silindi",
                 "status", "success"));
     }
 
