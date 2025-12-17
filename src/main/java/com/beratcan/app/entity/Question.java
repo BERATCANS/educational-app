@@ -61,7 +61,8 @@ public class Question {
     @Column(name = "ai_analysis_status")
     private AIAnalysisStatus aiAnalysisStatus = AIAnalysisStatus.PENDING; // AI analiz durumu
 
-    @OneToMany(mappedBy = "question", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<QuestionResult> questionResults = new ArrayList<>();
+    // QuestionResult relationship'i kaldırıldı
+    // Database seviyesinde ON DELETE CASCADE zaten var (V2 migration)
+    // Entity seviyesindeki relationship cascade delete sırasında sorun yaratıyordu
 
 }

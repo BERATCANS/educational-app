@@ -92,10 +92,12 @@ public class BookAdminService {
 
     @Transactional
     public void deleteBook(Long bookId) {
-        if (!bookRepository.existsById(bookId)) {
-            throw new BookNotFoundException(bookId);
-        }
-        bookRepository.deleteById(bookId);
+        // Entity'yi yükle ki cascade delete çalışsın
+        Book book = bookRepository.findById(bookId)
+                .orElseThrow(() -> new BookNotFoundException(bookId));
+
+        // Entity'yi yükledik, şimdi cascade delete çalışacak
+        bookRepository.delete(book);
     }
 
     /**
