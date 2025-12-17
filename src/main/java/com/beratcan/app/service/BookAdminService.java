@@ -42,6 +42,8 @@ public class BookAdminService {
             throw new IllegalArgumentException("BookRequest cannot be null");
         }
 
+        log.info("📚 Book ekleniyor - coverImageUrl: {}", request.getCoverImageUrl());
+
         Book book = new Book();
         book.setTitle(request.getTitle());
         Publisher publisher = resolvePublisher(request);

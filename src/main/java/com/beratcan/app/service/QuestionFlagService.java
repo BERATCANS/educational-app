@@ -91,7 +91,16 @@ public class QuestionFlagService {
     private FlaggedResponse toFlaggedResponse(Question question) {
         FlaggedResponse fr = new FlaggedResponse();
         fr.setQuestionId(question.getId());
-        fr.setImageUrl(question.getImageUrl());
+
+        // Database'de filename var, response'da URL oluştur
+        // Eğer zaten URL formatındaysa (eski kayıtlar için) olduğu gibi bırak
+        String imageUrl = question.getImageUrl();
+        if (imageUrl != null && !imageUrl.isEmpty() && !imageUrl.startsWith("api/files/")) {
+            fr.setImageUrl("api/files/" + imageUrl);
+        } else {
+            fr.setImageUrl(imageUrl);
+        }
+
         fr.setAnswerNumber(question.getAnswerNumber());
         fr.setCorrectAnswer(question.getCorrectAnswer().name());
         fr.setVideoUrl(question.getVideoUrl());

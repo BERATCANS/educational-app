@@ -27,6 +27,7 @@ public class FileController {
     public ResponseEntity<Map<String, String>> uploadFile(@RequestParam("file") MultipartFile file) {
         String filename = fileService.saveFile(file);
         String fileUrl = fileService.getFileUrl(filename);
+        log.info("📤 Dosya yüklendi - filename: {}, url: {}", filename, fileUrl);
         return ResponseEntity.ok(Map.of(
                 "filename", filename,
                 "url", fileUrl));
