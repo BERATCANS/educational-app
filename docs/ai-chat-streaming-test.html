@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Chat Streaming Test</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            border-radius: 10px;
+            padding: 30px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 30px;
+        }
+        .config {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        .config input {
+            width: 100%;
+            padding: 10px;
+            margin: 5px 0;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            box-sizing: border-box;
+        }
+        .chat-box {
+            height: 400px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            padding: 15px;
+            margin-bottom: 15px;
+            border-radius: 5px;
+            background: #fafafa;
+        }
+        .message {
+            margin-bottom: 15px;
+            padding: 10px;
+            border-radius: 8px;
+        }
+        .user-message {
+            background: #007bff;
+            color: white;
+            margin-left: 50px;
+            text-align: right;
+        }
+        .ai-message {
+            background: #e9ecef;
+            color: #333;
+            margin-right: 50px;
+        }
+        .streaming {
+            opacity: 0.7;
+            border-left: 3px solid #28a745;
+        }
+        .input-area {
+            display: flex;
+            gap: 10px;
+        }
+        .input-area input {
+            flex: 1;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .input-area button {
+            padding: 12px 30px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        .input-area button:hover {
+            background: #0056b3;
+        }
+        .input-area button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .status {
+            padding: 10px;
+            margin-bottom: 15px;
+            border-radius: 5px;
+            text-align: center;
+        }
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+        }
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        .status.info {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🤖 AI Chat Streaming Test</h1>
+        
+        <div class="config">
+            <h3>Konfigürasyon</h3>
+            <input type="text" id="baseUrl" placeholder="Base URL (örn: http://localhost:8080)" value="http://localhost:8080">
+            <input type="text" id="token" placeholder="Bearer Token">
+            <input type="number" id="questionId" placeholder="Question ID" value="1">
+        </div>
+
+        <div id="status" class="status" style="display: none;"></div>
+
+        <div class="chat-box" id="chatBox"></div>
+
+        <div class="input-area">
+            <input type="text" id="messageInput" placeholder="Mesajınızı yazın..." onkeypress="if(event.key==='Enter') sendMessage()">
+            <button onclick="sendMessage()" id="sendBtn">Gönder</button>
+        </div>
+
+        <div style="margin-top: 20px; padding: 15px; background: #fff3cd; border-radius: 5px;">
+            <strong>📝 Kullanım:</strong>
+            <ol>
+                <li>Base URL, Token ve Question ID girin</li>
+                <li>Mesajınızı yazın ve Enter'a basın veya Gönder'e tıklayın</li>
+                <li>AI yanıtı chunk chunk gelecek (real-time)</li>
+            </ol>
+        </div>
+    </div>
+
+    <script>
+        let currentAIMessageElement = null;
+        let isSending = false;
+
+        function showStatus(message, type) {
+            const statusDiv = document.getElementById('status');
+            statusDiv.textContent = message;
+            statusDiv.className = `status ${type}`;
+            statusDiv.style.display = 'block';
+            
+            if (type === 'success' || type === 'error') {
+                setTimeout(() => {
+                    statusDiv.style.display = 'none';
+                }, 3000);
+            }
+        }
+
+        function addUserMessage(message) {
+            const chatBox = document.getElementById('chatBox');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message user-message';
+            messageDiv.textContent = message;
+            chatBox.appendChild(messageDiv);
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        function createAIMessage() {
+            const chatBox = document.getElementById('chatBox');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message ai-message streaming';
+            messageDiv.innerHTML = '<em>AI düşünüyor...</em>';
+            chatBox.appendChild(messageDiv);
+            chatBox.scrollTop = chatBox.scrollHeight;
+            return messageDiv;
+        }
+
+        function updateAIMessage(element, content) {
+            element.innerHTML = content.replace(/\n/g, '<br>');
+            element.scrollIntoView({ behavior: 'smooth', block: 'end' });
+        }
+
+        function finalizeAIMessage(element) {
+            element.classList.remove('streaming');
+        }
+
+        async function sendMessage() {
+            if (isSending) return;
+
+            const baseUrl = document.getElementById('baseUrl').value;
+            const token = document.getElementById('token').value;
+            const questionId = document.getElementById('questionId').value;
+            const message = document.getElementById('messageInput').value.trim();
+
+            if (!baseUrl || !token || !questionId) {
+                showStatus('Lütfen tüm alanları doldurun!', 'error');
+                return;
+            }
+
+            if (!message) {
+                showStatus('Lütfen bir mesaj yazın!', 'error');
+                return;
+            }
+
+            isSending = true;
+            document.getElementById('sendBtn').disabled = true;
+            document.getElementById('messageInput').disabled = true;
+
+            // Kullanıcı mesajını göster
+            addUserMessage(message);
+            document.getElementById('messageInput').value = '';
+
+            // AI mesaj elementini oluştur
+            currentAIMessageElement = createAIMessage();
+            let aiMessage = '';
+
+            try {
+                showStatus('Bağlanıyor...', 'info');
+
+                // POST request için fetch kullan (EventSource sadece GET destekler)
+                const response = await fetch(
+                    `${baseUrl}/api/questions/${questionId}/ai/chat/messages/stream`,
+                    {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`
+                        },
+                        body: JSON.stringify({ message })
+                    }
+                );
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`HTTP ${response.status}: ${response.statusText} - ${errorText}`);
+                }
+
+                showStatus('Streaming başladı...', 'success');
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    
+                    if (done) {
+                        console.log('Stream bitti');
+                        break;
+                    }
+
+                    // Buffer'a ekle (çok satırlı chunk'lar için)
+                    buffer += decoder.decode(value, { stream: true });
+                    
+                    // Satır satır işle
+                    const lines = buffer.split('\n');
+                    // Son satır tamamlanmamış olabilir, buffer'da tut
+                    buffer = lines.pop() || '';
+
+                    for (const line of lines) {
+                        if (line.trim() === '') continue; // Boş satırları atla
+                        
+                        if (line.startsWith('data: ')) {
+                            try {
+                                const jsonStr = line.substring(6).trim();
+                                if (jsonStr === '') continue;
+                                
+                                const data = JSON.parse(jsonStr);
+                                
+                                if (data.type === 'chunk') {
+                                    aiMessage += data.content;
+                                    updateAIMessage(currentAIMessageElement, aiMessage);
+                                } else if (data.type === 'done') {
+                                    console.log('Stream tamamlandı, messageId:', data.messageId);
+                                    finalizeAIMessage(currentAIMessageElement);
+                                    showStatus('✅ Mesaj alındı!', 'success');
+                                }
+                            } catch (e) {
+                                console.warn('JSON parse hatası:', e, 'Line:', line);
+                            }
+                        } else if (line.startsWith('event: ')) {
+                            // Event type'ı parse et (isteğe bağlı)
+                            const eventType = line.substring(7).trim();
+                            console.log('Event type:', eventType);
+                        }
+                    }
+                }
+
+            } catch (error) {
+                console.error('Streaming error:', error);
+                showStatus('❌ Hata: ' + error.message, 'error');
+                if (currentAIMessageElement) {
+                    currentAIMessageElement.innerHTML = '<em style="color: red;">Hata oluştu: ' + error.message + '</em>';
+                }
+            } finally {
+                isSending = false;
+                document.getElementById('sendBtn').disabled = false;
+                document.getElementById('messageInput').disabled = false;
+                document.getElementById('messageInput').focus();
+            }
+        }
+
+        // Sayfa yüklendiğinde input'a focus
+        window.onload = () => {
+            document.getElementById('messageInput').focus();
+        };
+    </script>
+</body>
+</html>
+

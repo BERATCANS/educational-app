@@ -9,6 +9,7 @@ import org.springframework.security.config.annotation.authentication.configurati
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
@@ -16,6 +17,7 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import jakarta.annotation.PostConstruct;
 import java.util.Arrays;
 
 @Configuration
@@ -38,6 +40,15 @@ public class SecurityConfig {
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
         this.unauthorizedHandler = unauthorizedHandler;
         this.rateLimitFilter = rateLimitFilter;
+    }
+
+    /**
+     * SecurityContext'i async methodlara propagate et
+     * SSE gibi async operasyonlar için gerekli
+     */
+    @PostConstruct
+    public void enableSecurityContextInheritance() {
+        SecurityContextHolder.setStrategyName(SecurityContextHolder.MODE_INHERITABLETHREADLOCAL);
     }
 
     @Bean
@@ -106,8 +117,16 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
 
-        // ✅ Sadece belirlediğimiz origin'lere izin ver (wildcard kullanma!)
-        configuration.setAllowedOrigins(Arrays.asList(allowedOrigins.split(",")));
+        if ("prod".equals(activeProfile)) {
+            // Production: Sadece belirlediğimiz origin'lere izin ver
+            configuration.setAllowedOrigins(Arrays.asList(allowedOrigins.split(",")));
+            configuration.setAllowCredentials(true);
+        } else {
+            // Development: Tüm origin'lere izin ver (null origin dahil - file:// için)
+            // setAllowedOriginPatterns kullanarak null origin'i de kapsar
+            configuration.setAllowedOriginPatterns(Arrays.asList("*"));
+            configuration.setAllowCredentials(false); // null origin ile credentials kullanılamaz
+        }
 
         // İzin verilen HTTP metodları
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
@@ -121,9 +140,6 @@ public class SecurityConfig {
                 "Origin",
                 "Access-Control-Request-Method",
                 "Access-Control-Request-Headers"));
-
-        // Credentials (cookies, authorization headers) izni
-        configuration.setAllowCredentials(true);
 
         // Preflight cache süresi (1 saat)
         configuration.setMaxAge(AppConstants.CORS_MAX_AGE_SECONDS);

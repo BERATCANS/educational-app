@@ -20,10 +20,14 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import okhttp3.*;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
 import java.util.*;
 import java.util.Base64;
 import java.util.concurrent.TimeUnit;
@@ -219,6 +223,175 @@ public class QuestionAIChatService {
         return messages.stream()
                 .map(this::toMessageResponse)
                 .collect(Collectors.toList());
+    }
+
+    /**
+     * Mesaj gönder ve AI yanıtını stream et (SSE)
+     */
+    @Async("aiAnalysisExecutor")
+    @Transactional
+    public void sendMessageStream(Long questionId, Long userId, String userMessage, SseEmitter emitter) {
+        try {
+            // Validation
+            dailyLimitService.checkDailyAiConversationLimit(userId);
+
+            Question question = questionRepository.findById(questionId)
+                    .orElseThrow(() -> new QuestionNotFoundException(questionId));
+            User user = userRepository.findById(userId)
+                    .orElseThrow(() -> new UserNotFoundException(userId));
+
+            // Conversation getir/oluştur
+            QuestionAIConversation conversation = conversationRepository
+                    .findByQuestionIdAndUserId(questionId, userId)
+                    .orElseGet(() -> {
+                        QuestionAIConversation newConv = new QuestionAIConversation();
+                        newConv.setQuestion(question);
+                        newConv.setUser(user);
+                        return conversationRepository.save(newConv);
+                    });
+
+            // Kullanıcı mesajını kaydet
+            QuestionAIMessage userMsg = new QuestionAIMessage();
+            userMsg.setConversation(conversation);
+            userMsg.setContent(userMessage.trim());
+            userMsg.setRole(MessageRole.USER);
+            userMsg.setMessageType(MessageType.TEXT);
+            messageRepository.save(userMsg);
+
+            // History ve context
+            List<QuestionAIMessage> history = messageRepository
+                    .findByConversationIdOrderByCreatedAtAsc(conversation.getId());
+            String context = buildStudentChatContext(question, history);
+
+            // Görsel hazırla
+            String base64Image = prepareQuestionImage(question);
+            String imageMimeType = detectImageMimeType(question.getImageUrl());
+
+            // OpenAI Streaming API çağrısı
+            callOpenAIChatAPIStream(context, history, question, base64Image, imageMimeType,
+                    emitter, conversation);
+
+        } catch (Exception e) {
+            log.error("Stream error: questionId={}, userId={}, error={}",
+                    questionId, userId, e.getMessage(), e);
+            try {
+                emitter.completeWithError(e);
+            } catch (Exception ex) {
+                log.error("Emitter error notification failed", ex);
+            }
+        }
+    }
+
+    /**
+     * OpenAI Chat API - Streaming Mode
+     */
+    private void callOpenAIChatAPIStream(String context, List<QuestionAIMessage> history,
+            Question question, String base64Image, String imageMimeType,
+            SseEmitter emitter, QuestionAIConversation conversation) {
+        long startTime = System.currentTimeMillis();
+
+        try {
+            // Messages listesi oluştur
+            List<Map<String, Object>> messages = buildMessagesForAPI(context, history,
+                    base64Image, imageMimeType);
+
+            // Request body - STREAM=TRUE ekle
+            Map<String, Object> requestMap = new HashMap<>();
+            requestMap.put("model", model);
+            requestMap.put("messages", messages);
+            requestMap.put("max_tokens", 1000);
+            requestMap.put("temperature", chatTemperature);
+            requestMap.put("stream", true); // STREAMING ENABLE
+
+            String requestBody = objectMapper.writeValueAsString(requestMap);
+
+            Request request = new Request.Builder()
+                    .url("https://api.openai.com/v1/chat/completions")
+                    .header("Authorization", "Bearer " + apiKey)
+                    .header("Content-Type", "application/json")
+                    .post(RequestBody.create(requestBody, MediaType.parse("application/json")))
+                    .build();
+
+            StringBuilder fullResponse = new StringBuilder();
+
+            try (Response response = httpClient.newCall(request).execute()) {
+                if (!response.isSuccessful()) {
+                    String errorBody = response.body() != null ? response.body().string() : "No error body";
+                    log.error("OpenAI streaming API failed: status={}, error={}", response.code(), errorBody);
+                    emitter.completeWithError(new ExternalServiceException(
+                            "OpenAI API error: " + response.code()));
+                    return;
+                }
+
+                // Stream'i satır satır oku
+                BufferedReader reader = new BufferedReader(
+                        new InputStreamReader(response.body().byteStream()));
+                String line;
+
+                while ((line = reader.readLine()) != null) {
+                    if (line.startsWith("data: ")) {
+                        String data = line.substring(6);
+
+                        if ("[DONE]".equals(data)) {
+                            break;
+                        }
+
+                        // JSON parse
+                        JsonNode jsonChunk = objectMapper.readTree(data);
+                        JsonNode choices = jsonChunk.get("choices");
+                        if (choices != null && choices.size() > 0) {
+                            JsonNode delta = choices.get(0).get("delta");
+
+                            if (delta != null && delta.has("content")) {
+                                String chunk = delta.get("content").asText();
+                                fullResponse.append(chunk);
+
+                                // Frontend'e chunk gönder
+                                Map<String, String> event = new HashMap<>();
+                                event.put("type", "chunk");
+                                event.put("content", chunk);
+
+                                emitter.send(SseEmitter.event()
+                                        .name("message")
+                                        .data(event));
+                            }
+                        }
+                    }
+                }
+
+                // Tam yanıtı DB'ye kaydet
+                QuestionAIMessage aiMsg = new QuestionAIMessage();
+                aiMsg.setConversation(conversation);
+                aiMsg.setContent(fullResponse.toString());
+                aiMsg.setRole(MessageRole.ASSISTANT);
+                aiMsg.setMessageType(MessageType.ASSISTANT_TEXT);
+                messageRepository.save(aiMsg);
+
+                // Conversation güncelle
+                conversation.setLastMessageAt(aiMsg.getCreatedAt());
+                conversationRepository.save(conversation);
+
+                // Duration hesapla
+                long duration = System.currentTimeMillis() - startTime;
+                log.info("OpenAI streaming completed: duration={}ms, responseLength={}",
+                        duration, fullResponse.length());
+
+                // Stream'i tamamla
+                Map<String, Object> doneEvent = new HashMap<>();
+                doneEvent.put("type", "done");
+                doneEvent.put("messageId", aiMsg.getId());
+                emitter.send(SseEmitter.event().name("done").data(doneEvent));
+                emitter.complete();
+
+            }
+        } catch (Exception e) {
+            log.error("Streaming error: {}", e.getMessage(), e);
+            try {
+                emitter.completeWithError(e);
+            } catch (Exception ex) {
+                log.error("Emitter error notification failed", ex);
+            }
+        }
     }
 
     /**
@@ -650,5 +823,105 @@ public class QuestionAIChatService {
         response.setCreatedAt(message.getCreatedAt());
         // audioUrl sadece response oluşturulurken set edilecek (geçici audio için)
         return response;
+    }
+
+    /**
+     * OpenAI API için messages listesi oluştur
+     */
+    private List<Map<String, Object>> buildMessagesForAPI(String context,
+            List<QuestionAIMessage> history,
+            String base64Image,
+            String imageMimeType) {
+        List<Map<String, Object>> messages = new ArrayList<>();
+
+        // System message
+        Map<String, Object> systemMessage = new HashMap<>();
+        systemMessage.put("role", "system");
+        systemMessage.put("content", context);
+        messages.add(systemMessage);
+
+        // History (son 5 mesaj)
+        List<QuestionAIMessage> recentHistory = pickRecentHistory(history, 5);
+        boolean shouldSendImage = base64Image != null &&
+                (recentHistory.isEmpty() ||
+                        (recentHistory.size() == 1 && recentHistory.get(0).getRole() == MessageRole.USER));
+
+        boolean imageSent = false;
+        for (QuestionAIMessage msg : recentHistory) {
+            Map<String, Object> msgMap = new HashMap<>();
+            msgMap.put("role", msg.getRole().name().toLowerCase());
+
+            if (shouldSendImage && !imageSent && msg.getRole() == MessageRole.USER) {
+                // Image + text content
+                List<Map<String, Object>> content = new ArrayList<>();
+
+                Map<String, Object> textPart = new HashMap<>();
+                textPart.put("type", "text");
+                textPart.put("text", msg.getContent());
+                content.add(textPart);
+
+                Map<String, Object> imagePart = new HashMap<>();
+                imagePart.put("type", "image_url");
+                Map<String, String> imageUrl = new HashMap<>();
+                String mime = (imageMimeType != null && !imageMimeType.isEmpty())
+                        ? imageMimeType
+                        : "image/jpeg";
+                imageUrl.put("url", "data:" + mime + ";base64," + base64Image);
+                imagePart.put("image_url", imageUrl);
+                content.add(imagePart);
+
+                msgMap.put("content", content);
+                imageSent = true;
+            } else {
+                msgMap.put("content", msg.getContent());
+            }
+
+            messages.add(msgMap);
+        }
+
+        return messages;
+    }
+
+    /**
+     * Soru görselini hazırla (base64 encode)
+     */
+    private String prepareQuestionImage(Question question) {
+        if (question.getImageUrl() == null || question.getImageUrl().trim().isEmpty()) {
+            return null;
+        }
+
+        try {
+            org.springframework.core.io.Resource imageResource = fileService.getFile(question.getImageUrl());
+
+            if (imageResource.exists() && imageResource.isReadable()) {
+                byte[] imageBytes = imageResource.getInputStream().readAllBytes();
+                return Base64.getEncoder().encodeToString(imageBytes);
+            }
+        } catch (Exception e) {
+            log.warn("Soru görseli okunamadı: questionId={}, error={}",
+                    question.getId(), e.getMessage());
+        }
+
+        return null;
+    }
+
+    /**
+     * Görsel MIME type'ını tespit et
+     */
+    private String detectImageMimeType(String imageUrl) {
+        if (imageUrl == null)
+            return null;
+
+        String fileName = imageUrl.toLowerCase();
+        if (fileName.endsWith(".png"))
+            return "image/png";
+        if (fileName.endsWith(".jpg") || fileName.endsWith(".jpeg"))
+            return "image/jpeg";
+        if (fileName.endsWith(".gif"))
+            return "image/gif";
+        if (fileName.endsWith(".webp"))
+            return "image/webp";
+
+        return "image/jpeg"; // Default
     }
 }
