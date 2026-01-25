@@ -47,6 +47,7 @@ public class DotEnvConfig implements ApplicationContextInitializer<ConfigurableA
 
                 // ÖNCE SPRING_PROFILES_ACTIVE'i oku ve set et (diğer değişkenlerden önce)
                 String springProfilesActive = dotenv.get("SPRING_PROFILES_ACTIVE");
+                
                 if (springProfilesActive != null && !springProfilesActive.trim().isEmpty()) {
                     if (System.getProperty("spring.profiles.active") == null
                             && System.getenv("SPRING_PROFILES_ACTIVE") == null) {
@@ -62,6 +63,7 @@ public class DotEnvConfig implements ApplicationContextInitializer<ConfigurableA
                     activeProfile = System.getenv("SPRING_PROFILES_ACTIVE");
                 }
                 String profileInfo = "prod".equals(activeProfile) ? "production mode (local test)" : "development mode";
+
                 log.info(".env dosyası bulundu ve yüklendi. {} değişken yüklendi ({})", envVars.size(), profileInfo);
 
                 // Diğer tüm değişkenleri yükle (SPRING_PROFILES_ACTIVE hariç, zaten yüklendi)
