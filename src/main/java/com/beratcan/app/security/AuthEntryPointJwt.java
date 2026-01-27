@@ -41,6 +41,12 @@ public class AuthEntryPointJwt implements AuthenticationEntryPoint {
             HttpServletResponse response,
             AuthenticationException authException) throws IOException {
 
+        // Response zaten commit edilmişse işlem yapma
+        if (response.isCommitted()) {
+            log.warn("Response already committed, cannot send error response for path: {}", request.getServletPath());
+            return;
+        }
+
         // DETAYLI LOG (her zaman - sadece server'da)
         log.error("Unauthorized error: path={}, error={}",
                 request.getServletPath(),

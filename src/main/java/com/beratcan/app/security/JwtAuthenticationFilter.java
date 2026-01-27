@@ -74,10 +74,15 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 }
             }
         } catch (Exception e) {
-            log.error("Cannot set user authentication: {}", e.getMessage());
+            log.error("Cannot set user authentication: {}", e.getMessage(), e);
+            // Exception oluştu ama response commit edilmediyse filter chain'i devam ettir
+            // Spring Security'nin exception handler'ı devreye girecek
         }
 
-        filterChain.doFilter(request, response);
+        // Response commit edilmediyse filter chain'i devam ettir
+        if (!response.isCommitted()) {
+            filterChain.doFilter(request, response);
+        }
     }
 
     private void authenticateUser(HttpServletRequest request, String token, boolean isAccessToken, boolean isRefreshToken) {
@@ -139,6 +144,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
      * Unauthorized response gönder
      */
     private void sendUnauthorizedResponse(HttpServletResponse response, String message) throws IOException {
+        // Response zaten commit edilmişse işlem yapma
+        if (response.isCommitted()) {
+            log.warn("Response already committed, cannot send unauthorized response");
+            return;
+        }
+        
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
         response.getWriter().write(String.format(
