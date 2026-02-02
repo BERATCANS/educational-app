@@ -4,6 +4,7 @@ import com.beratcan.app.exception.FileStorageException;
 import lombok.extern.slf4j.Slf4j;
 import jakarta.annotation.PostConstruct;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Profile;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.UrlResource;
 import org.springframework.stereotype.Service;
@@ -19,7 +20,7 @@ import java.io.IOException;
 
 @Slf4j
 @Service
-// Her zaman aktif - dosyalar her zaman buluta (Spaces) yüklenir
+@Profile("prod") // Sadece Production ortamında aktif
 public class CloudStorageService implements StorageService {
 
     @Value("${do.spaces.endpoint:}")
