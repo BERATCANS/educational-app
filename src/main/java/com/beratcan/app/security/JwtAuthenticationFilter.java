@@ -10,6 +10,7 @@ import org.springframework.lang.NonNull;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.web.context.SecurityContextRepository;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
@@ -29,10 +30,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtUtil jwtUtil;
     private final UserDetailsService userDetailsService;
+    private final SecurityContextRepository securityContextRepository;
 
-    public JwtAuthenticationFilter(JwtUtil jwtUtil, UserDetailsService userDetailsService) {
+    public JwtAuthenticationFilter(JwtUtil jwtUtil, UserDetailsService userDetailsService,
+            SecurityContextRepository securityContextRepository) {
         this.jwtUtil = jwtUtil;
         this.userDetailsService = userDetailsService;
+        this.securityContextRepository = securityContextRepository;
     }
 
     @Override
@@ -57,7 +61,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 boolean isAccessToken = jwtUtil.isAccessToken(token);
                 boolean isRefreshToken = jwtUtil.isRefreshToken(token);
 
-                authenticateUser(request, token, isAccessToken, isRefreshToken);
+                authenticateUser(request, response, token, isAccessToken, isRefreshToken);
             } else {
                 // Header yoksa query param'a bak (SSE / EventSource için gerekli)
                 String token = request.getParameter("token");
@@ -69,7 +73,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     boolean isAccessToken = jwtUtil.isAccessToken(token);
                     // Query param ile gelen refresh token kabul edilmez (güvenlik)
                     if (isAccessToken && jwtUtil.validateToken(token)) {
-                        authenticateUser(request, token, true, false);
+                        authenticateUser(request, response, token, true, false);
                     }
                 }
             }
@@ -85,7 +89,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
     }
 
-    private void authenticateUser(HttpServletRequest request, String token, boolean isAccessToken, boolean isRefreshToken) {
+    private void authenticateUser(HttpServletRequest request, HttpServletResponse response, String token, boolean isAccessToken, boolean isRefreshToken) {
         // Access token geçerli mi kontrol et
         if (isAccessToken && jwtUtil.validateToken(token)) {
             String username = jwtUtil.extractUsername(token);
@@ -107,6 +111,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
             // SecurityContext'e kullanıcıyı ekle
             SecurityContextHolder.getContext().setAuthentication(authentication);
+            // Async dispatch (SSE tamamlanınca) için request attribute'a kaydet
+            securityContextRepository.saveContext(SecurityContextHolder.getContext(), request, response);
 
             log.debug("User authenticated with roles: {}", userDetails.getAuthorities());
         }
@@ -133,6 +139,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
             // SecurityContext'e kullanıcıyı ekle
             SecurityContextHolder.getContext().setAuthentication(authentication);
+            securityContextRepository.saveContext(SecurityContextHolder.getContext(), request, response);
 
             log.debug("User authenticated with refresh token for refresh endpoint");
         } else {
