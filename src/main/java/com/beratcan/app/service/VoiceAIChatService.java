@@ -220,6 +220,17 @@ public class VoiceAIChatService {
         // 3. Async Streaming Başlat
         SseEmitter emitter = new SseEmitter(180_000L); // 3 dk timeout
 
+        // Kullanıcının çevrilen metnini hemen gönder
+        try {
+            Map<String, Object> userData = new HashMap<>();
+            userData.put("type", "user_transcript");
+            userData.put("text", userMessageText);
+            emitter.send(SseEmitter.event().name("user_transcript").data(userData));
+        } catch (IOException e) {
+            log.error("User transcript gönderilemedi: {}", e.getMessage());
+            // Akışı bozma, devam et
+        }
+
         executorService.submit(() -> {
             try {
                 // OpenAI Stream Çağrısı
