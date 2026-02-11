@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import java.time.LocalDateTime;
 import java.util.stream.Collectors;
+import com.beratcan.app.exception.DailyLimitExceededException;
 
 @RestControllerAdvice
 @Slf4j
@@ -92,6 +93,18 @@ public class GlobalExceptionHandler {
                 ErrorDetails errorDetails = buildErrorDetails(
                                 ex.getMessage(),
                                 "Bad request",
+                                HttpStatus.BAD_REQUEST);
+                return ResponseEntity.badRequest().body(errorDetails);
+        }
+
+        @ExceptionHandler(DailyLimitExceededException.class)
+        public ResponseEntity<ErrorDetails> handleDailyLimitExceeded(
+                        DailyLimitExceededException ex, HttpServletRequest request) {
+                log.warn("Daily limit exceeded: path={}, error={}", request.getRequestURI(), ex.getMessage());
+
+                ErrorDetails errorDetails = buildErrorDetails(
+                                ex.getMessage(),
+                                "Daily limit exceeded",
                                 HttpStatus.BAD_REQUEST);
                 return ResponseEntity.badRequest().body(errorDetails);
         }

@@ -5,6 +5,7 @@ import com.beratcan.app.entity.*;
 import com.beratcan.app.entity.enums.MessageRole;
 import com.beratcan.app.entity.enums.MessageType;
 import com.beratcan.app.exception.BadRequestException;
+import com.beratcan.app.exception.DailyLimitExceededException;
 import com.beratcan.app.exception.ExternalServiceException;
 import com.beratcan.app.exception.QuestionNotFoundException;
 import com.beratcan.app.exception.UserNotFoundException;
@@ -168,17 +169,27 @@ public class VoiceAIChatService {
             throw new BadRequestException("Audio dosyası boş olamaz");
         }
 
-        // Günlük AI konuşma limitini kontrol et
-        dailyLimitService.checkDailyAiConversationLimit(userId);
+        // 1. Emitter'ı en başta oluştur
+        SseEmitter emitter = new SseEmitter(180_000L); // 3 dk timeout
+
+        // 2. Günlük Limit Kontrolü (Hata alınırsa SSE error gönderiliyor)
+        try {
+            dailyLimitService.checkDailyAiConversationLimit(userId);
+        } catch (DailyLimitExceededException e) {
+            log.warn("Günlük limit aşıldı, SSE error gönderiliyor: userId={}", userId);
+            sendErrorEvent(emitter, e.getMessage(), "DAILY_LIMIT_EXCEEDED");
+            return emitter;
+        }
 
         log.info("Voice stream isteği: questionId={}, userId={}", questionId, userId);
 
-        // 1. Audio'yu text'e çevir (Senkron - MultipartFile güvenliği için)
+        // 3. Audio'yu text'e çevir (Senkron - MultipartFile güvenliği için)
         String userMessageText;
         try {
             userMessageText = speechProcessingService.speechToText(audioFile);
         } catch (Exception e) {
             log.error("STT hatası: {}", e.getMessage());
+            // STT hatasını da event olarak gönderebiliriz ama şimdilik exception fırlatıyor
             throw new BadRequestException("Voice mesaj işlenemedi: " + e.getMessage());
         }
 
@@ -186,7 +197,7 @@ public class VoiceAIChatService {
             throw new BadRequestException("Ses anlaşılamadı");
         }
 
-        // 2. Veritabanı işlemleri (User msg kaydet)
+        // 4. Veritabanı işlemleri (User msg kaydet)
         Question question = questionRepository.findById(questionId)
                 .orElseThrow(() -> new QuestionNotFoundException(questionId));
         User user = userRepository.findById(userId)
@@ -217,10 +228,7 @@ public class VoiceAIChatService {
         String base64Image = aiChatHelper.prepareQuestionImage(question);
         String imageMimeType = aiChatHelper.detectImageMimeType(question.getImageUrl());
 
-        // 3. Async Streaming Başlat
-        SseEmitter emitter = new SseEmitter(180_000L); // 3 dk timeout
-
-        // Kullanıcının çevrilen metnini hemen gönder
+        // 5. User Transcript gönder ve Async İşlemi Başlat
         try {
             Map<String, Object> userData = new HashMap<>();
             userData.put("type", "user_transcript");
@@ -228,8 +236,9 @@ public class VoiceAIChatService {
             emitter.send(SseEmitter.event().name("user_transcript").data(userData));
         } catch (IOException e) {
             log.error("User transcript gönderilemedi: {}", e.getMessage());
-            // Akışı bozma, devam et
         }
+
+        // Async Streaming...
 
         executorService.submit(() -> {
             try {
@@ -381,5 +390,18 @@ public class VoiceAIChatService {
         context.append("Yanıtın tamamen DÜZ METİN olmalı, sanki birine sesli konuşuyormuşsun gibi.\n\n");
 
         return context.toString();
+    }
+
+    private void sendErrorEvent(SseEmitter emitter, String message, String code) {
+        try {
+            Map<String, Object> errorData = new HashMap<>();
+            errorData.put("message", message);
+            errorData.put("code", code);
+            errorData.put("type", "error");
+            emitter.send(SseEmitter.event().name("error").data(errorData));
+            emitter.complete();
+        } catch (IOException ex) {
+            log.error("Error event gönderilemedi: {}", ex.getMessage());
+        }
     }
 }
