@@ -13,6 +13,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.UUID;
+
 /**
  * Authentication Service
  * Login, token refresh ve logout işlemlerini yönetir
@@ -46,9 +48,14 @@ public class AuthService {
         // Streak güncelleme artık ProfileService.getCurrentUser() içinde yapılıyor
         // (Her uygulama açılışında profile/me çağrıldığında otomatik güncellenir)
 
-        // Token'ları oluştur
-        String accessToken = jwtUtil.generateAccessToken(user.getUsername(), user.getId());
-        String refreshToken = jwtUtil.generateRefreshToken(user.getUsername(), user.getId());
+        // Yeni oturum ID'si oluştur ve kaydet (Concurrent Session Control)
+        String sessionId = UUID.randomUUID().toString();
+        user.setActiveSessionId(sessionId);
+        userRepository.save(user); // Session ID'yi DB'ye kaydet
+
+        // Token'ları oluştur (Session ID ile)
+        String accessToken = jwtUtil.generateAccessToken(user.getUsername(), user.getId(), sessionId);
+        String refreshToken = jwtUtil.generateRefreshToken(user.getUsername(), user.getId(), sessionId);
 
         // JwtResponse oluştur
         JwtResponse response = new JwtResponse();
@@ -109,8 +116,8 @@ public class AuthService {
                 .orElseThrow(() -> new UserNotFoundException("User not found: " + username));
 
         // 5. YENİ tokenlar oluştur
-        String newAccessToken = jwtUtil.generateAccessToken(username, userId);
-        String newRefreshToken = jwtUtil.generateRefreshToken(username, userId);
+        String newAccessToken = jwtUtil.generateAccessToken(username, userId, user.getActiveSessionId());
+        String newRefreshToken = jwtUtil.generateRefreshToken(username, userId, user.getActiveSessionId());
 
         // 6. ESKİ refresh token'ı blacklist'e ekle (tek kullanımlık - token rotation)
         jwtUtil.blacklistToken(refreshToken);

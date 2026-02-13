@@ -39,19 +39,21 @@ public class JwtUtil {
     /**
      * Access Token oluştur (kısa ömürlü, her API çağrısında kullanılır)
      * 
-     * @param username Kullanıcı adı
-     * @param userId   Kullanıcı ID
+     * @param username        Kullanıcı adı
+     * @param userId          Kullanıcı ID
+     * @param activeSessionId Aktif oturum ID'si
      * @return Access JWT token
      */
-    public String generateAccessToken(String username, Long userId) {
+    public String generateAccessToken(String username, Long userId, String activeSessionId) {
         Date now = new Date();
         Date expiryDate = new Date(now.getTime() + expirationTime);
 
-        log.debug("Generating ACCESS token for user: {} (ID: {}), expires at: {}", username, userId, expiryDate);
+        log.debug("Generating ACCESS token for user: {} (ID: {}), session: {}, expires at: {}", username, userId, activeSessionId, expiryDate);
 
         return Jwts.builder()
                 .setSubject(username)
                 .claim("userId", userId)
+                .claim("sid", activeSessionId) // Oturum ID'sini ekle
                 .claim("type", "ACCESS") // Token tipini belirt
                 .setIssuedAt(now)
                 .setExpiration(expiryDate)
@@ -62,19 +64,21 @@ public class JwtUtil {
     /**
      * Refresh Token oluştur (uzun ömürlü, token yenileme için kullanılır)
      * 
-     * @param username Kullanıcı adı
-     * @param userId   Kullanıcı ID
+     * @param username        Kullanıcı adı
+     * @param userId          Kullanıcı ID
+     * @param activeSessionId Aktif oturum ID'si
      * @return Refresh JWT token
      */
-    public String generateRefreshToken(String username, Long userId) {
+    public String generateRefreshToken(String username, Long userId, String activeSessionId) {
         Date now = new Date();
         Date expiryDate = new Date(now.getTime() + refreshExpirationTime);
 
-        log.debug("Generating REFRESH token for user: {} (ID: {}), expires at: {}", username, userId, expiryDate);
+        log.debug("Generating REFRESH token for user: {} (ID: {}), session: {}, expires at: {}", username, userId, activeSessionId, expiryDate);
 
         return Jwts.builder()
                 .setSubject(username)
                 .claim("userId", userId)
+                .claim("sid", activeSessionId) // Oturum ID'sini ekle
                 .claim("type", "REFRESH") // Token tipini belirt
                 .setIssuedAt(now)
                 .setExpiration(expiryDate)
@@ -89,7 +93,7 @@ public class JwtUtil {
      */
     @Deprecated
     public String generateToken(String username, Long userId) {
-        return generateAccessToken(username, userId);
+        return generateAccessToken(username, userId, null);
     }
 
     /**
@@ -111,6 +115,17 @@ public class JwtUtil {
     public Long extractUserId(String token) {
         Claims claims = extractAllClaims(token);
         return claims.get("userId", Long.class);
+    }
+
+    /**
+     * Token'dan session ID çıkar
+     * 
+     * @param token JWT token
+     * @return session ID (sid)
+     */
+    public String extractSessionId(String token) {
+        Claims claims = extractAllClaims(token);
+        return claims.get("sid", String.class);
     }
 
     /**
@@ -277,6 +292,50 @@ public class JwtUtil {
         }
 
         return false;
+    }
+
+    /**
+     * Token geçerli mi kontrol et (UserDetails ile tam kontrol - Session ID dahil)
+     * 
+     * @param token       JWT token
+     * @param userDetails UserDetails (DB'den gelen güncel bilgi)
+     * @return true ise geçerli
+     */
+    public Boolean validateToken(String token, UserDetailsImpl userDetails) {
+        try {
+            // 1. Temel validasyon (imza, süre, username)
+            if (!validateToken(token, userDetails.getUsername())) {
+                return false;
+            }
+
+            // 2. Session ID kontrolü (Concurrent Session Prevention)
+            String tokenSessionId = extractSessionId(token);
+            String dbSessionId = userDetails.getActiveSessionId();
+
+            // Eğer token'da session ID varsa, DB'deki ile eşleşmek ZORUNDA
+            if (tokenSessionId != null) {
+                if (dbSessionId == null || !tokenSessionId.equals(dbSessionId)) {
+                    log.warn("Session mismatch! Token sid: {}, DB session: {}. User: {}",
+                            tokenSessionId, dbSessionId, userDetails.getUsername());
+                    return false;
+                }
+            } else {
+                 // Geriye dönük uyumluluk: Eğer token'da session ID yoksa (eski token),
+                 // ve DB'de session ID varsa, bu token GEÇERSİZ olmalı mı?
+                 // Güvenlik politikası: Strict Single Session ise EVET, geçersiz olmalı.
+                 // Ancak geçiş sürecinde eski tokenları öldürmek istiyoruz.
+                 if (dbSessionId != null) {
+                     log.warn("Legacy token without session ID used while active session exists. User: {}",
+                             userDetails.getUsername());
+                     return false; 
+                 }
+            }
+
+            return true;
+        } catch (Exception e) {
+            log.error("Token/User validation error: {}", e.getMessage());
+            return false;
+        }
     }
 
     /**

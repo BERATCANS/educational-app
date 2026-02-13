@@ -25,6 +25,7 @@ public class UserDetailsImpl implements UserDetails {
     private String username;
     private String email;
     private String password;
+    private String activeSessionId;
     private Collection<? extends GrantedAuthority> authorities;
 
     /**
@@ -43,6 +44,7 @@ public class UserDetailsImpl implements UserDetails {
                 user.getUsername(),
                 user.getEmail(),
                 user.getPassword(),
+                user.getActiveSessionId(),
                 authorities);
     }
 

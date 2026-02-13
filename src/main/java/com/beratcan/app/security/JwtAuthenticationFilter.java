@@ -93,12 +93,18 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         // Access token geçerli mi kontrol et
         if (isAccessToken && jwtUtil.validateToken(token)) {
             String username = jwtUtil.extractUsername(token);
-            Long userId = jwtUtil.extractUserId(token);
-
-            log.debug("Authenticated request for user: {} (ID: {})", username, userId);
-
+            
             // UserDetailsService ile kullanıcıyı yükle (role bilgisi ile birlikte)
             UserDetails userDetails = userDetailsService.loadUserByUsername(username);
+
+            // CRITICAL CHECK: Token'ı userDetails ile doğrula (Session ID kontrolü burada yapılır)
+            if (!jwtUtil.validateToken(token, (UserDetailsImpl) userDetails)) {
+                log.warn("Token session mismatch or validation failed for user: {}", username);
+                return; // Authentication başarısız
+            }
+
+            Long userId = jwtUtil.extractUserId(token);
+            log.debug("Authenticated request for user: {} (ID: {})", username, userId);
 
             // Authorities (role'ler) ile authentication oluştur
             UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
@@ -127,6 +133,14 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
             // UserDetailsService ile kullanıcıyı yükle (role bilgisi ile birlikte)
             UserDetails userDetails = userDetailsService.loadUserByUsername(username);
+
+            // Session ID kontrolü (Concurrent Session Prevention)
+            if (userDetails instanceof UserDetailsImpl) {
+                if (!jwtUtil.validateToken(token, (UserDetailsImpl) userDetails)) {
+                    log.warn("Session validation failed for refresh token: {}", username);
+                    return;
+                }
+            }
 
             // Authorities (role'ler) ile authentication oluştur
             UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(

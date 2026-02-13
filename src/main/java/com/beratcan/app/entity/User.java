@@ -94,6 +94,9 @@ public class User {
         @Column
         private java.time.LocalDateTime emailVerifiedAt; // Email ne zaman doğrulandı
 
+        @Column
+        private String activeSessionId; // Tekil oturum ID'si (UUID) - Concurrent session kontrolü için
+
         @ManyToMany
         @JoinTable(name = "user_books", joinColumns = @JoinColumn(name = "user_id"), inverseJoinColumns = @JoinColumn(name = "book_id"), uniqueConstraints = @UniqueConstraint(name = "uk_user_book", columnNames = {
                         "user_id", "book_id" }))
