@@ -16,7 +16,7 @@ import java.nio.file.Paths;
 
 @Slf4j
 @Service
-@Profile("never") // Devre dışı - artık kullanılmıyor, her zaman buluta yükleniyor
+@Profile({"dev", "default"}) // Sadece Development ortamında aktif
 public class LocalStorageService implements StorageService {
 
     @Value("${file.upload.dir:uploads/}")

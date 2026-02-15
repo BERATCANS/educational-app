@@ -4,6 +4,7 @@ import com.beratcan.app.constants.AppConstants;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
@@ -13,6 +14,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.web.context.RequestAttributeSecurityContextRepository;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -34,7 +36,7 @@ public class SecurityConfig {
     @Value("${spring.profiles.active:dev}")
     private String activeProfile;
 
-    public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter,
+    public SecurityConfig(@Lazy JwtAuthenticationFilter jwtAuthenticationFilter,
             AuthEntryPointJwt unauthorizedHandler,
             RateLimitFilter rateLimitFilter) {
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
@@ -83,8 +85,11 @@ public class SecurityConfig {
                             .requestMatchers("/api/users/cities").permitAll() // Şehir listesi herkese açık
                             .anyRequest().authenticated(); // ✅ DİĞER TÜM ENDPOINT'LER AUTH GEREKTİRİR!
                 })
-                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)); // JWT
-                                                                                                               // stateless
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)) // JWT stateless
+                // SecurityContext request attribute'da saklansın → async dispatch (SSE bittiğinde) aynı request'te context geri yüklensin
+                .securityContext(sec -> sec
+                        .securityContextRepository(requestAttributeSecurityContextRepository())
+                        .requireExplicitSave(true));
 
         // Rate limit filter ÖNCE ekle (tüm requestleri kontrol et)
         http.addFilterBefore(rateLimitFilter, UsernamePasswordAuthenticationFilter.class);
@@ -147,6 +152,15 @@ public class SecurityConfig {
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
         return source;
+    }
+
+    /**
+     * Request attribute'da SecurityContext saklar; async dispatch (SSE tamamlanınca) aynı request'te context geri yüklenir.
+     * @Lazy JwtAuthenticationFilter ile circular dependency kırıldığı için bean burada tanımlanabilir.
+     */
+    @Bean
+    public RequestAttributeSecurityContextRepository requestAttributeSecurityContextRepository() {
+        return new RequestAttributeSecurityContextRepository();
     }
 
     @Bean

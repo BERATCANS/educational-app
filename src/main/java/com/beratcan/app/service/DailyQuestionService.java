@@ -135,7 +135,8 @@ public class DailyQuestionService {
         question.setDisplayDate(request.getDisplayDate());
         question.setStartTime(request.getStartTime());
         question.setEndTime(request.getEndTime());
-        question.setActive(false); // Başlangıçta pasif, scheduler aktifleştirecek
+        question.setEndTime(request.getEndTime());
+        question.setActive(false); // Deprecated field, calculated on-the-fly
 
         DailyQuestion saved = dailyQuestionRepository.save(question);
         log.info("Günlük soru oluşturuldu: questionId={}", saved.getId());
@@ -267,7 +268,14 @@ public class DailyQuestionService {
         response.setDisplayDate(question.getDisplayDate());
         response.setStartTime(question.getStartTime());
         response.setEndTime(question.getEndTime());
-        response.setActive(question.isActive());
+        
+        // Active durumunu dinamik olarak hesapla
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime startTime = LocalDateTime.of(question.getDisplayDate(), question.getStartTime());
+        LocalDateTime endTime = LocalDateTime.of(question.getDisplayDate(), question.getEndTime());
+        
+        boolean isActive = now.isAfter(startTime) && now.isBefore(endTime);
+        response.setActive(isActive);
 
         // Kullanıcının cevap bilgisi
         answerRepository.findByDailyQuestionIdAndUserId(question.getId(), userId).ifPresent(answer -> {
@@ -279,8 +287,6 @@ public class DailyQuestionService {
         });
 
         // Bitiş zamanı geçtiyse ek bilgileri ekle
-        LocalDateTime now = LocalDateTime.now();
-        LocalDateTime endTime = LocalDateTime.of(question.getDisplayDate(), question.getEndTime());
         if (now.isAfter(endTime)) {
             DailyQuestionResponse.AfterEndTimeInfo afterEndTime = new DailyQuestionResponse.AfterEndTimeInfo();
             afterEndTime.setCorrectAnswer(question.getCorrectAnswer());
@@ -327,7 +333,12 @@ public class DailyQuestionService {
         response.setDisplayDate(question.getDisplayDate());
         response.setStartTime(question.getStartTime());
         response.setEndTime(question.getEndTime());
-        response.setActive(question.isActive());
+        // Active durumunu dinamik olarak hesapla
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime startTime = LocalDateTime.of(question.getDisplayDate(), question.getStartTime());
+        LocalDateTime endTime = LocalDateTime.of(question.getDisplayDate(), question.getEndTime());
+        boolean isActive = now.isAfter(startTime) && now.isBefore(endTime);
+        response.setActive(isActive);
 
         // Admin için her zaman doğru cevap, açıklama ve istatistikleri göster
         DailyQuestionResponse.AfterEndTimeInfo afterEndTime = new DailyQuestionResponse.AfterEndTimeInfo();
