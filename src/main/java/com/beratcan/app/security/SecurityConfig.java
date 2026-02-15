@@ -83,6 +83,7 @@ public class SecurityConfig {
                             // (ProfileController'da)
                             .requestMatchers("/api/books/store").permitAll() // Kitap mağazası herkese açık
                             .requestMatchers("/api/users/cities").permitAll() // Şehir listesi herkese açık
+                            .requestMatchers("/api/files/**").permitAll() // ✅ Dosyalara (Görseller) herkese açık erişim
                             .anyRequest().authenticated(); // ✅ DİĞER TÜM ENDPOINT'LER AUTH GEREKTİRİR!
                 })
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)) // JWT stateless
