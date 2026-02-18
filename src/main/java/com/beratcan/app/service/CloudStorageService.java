@@ -17,6 +17,7 @@ import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.*;
 
 import java.io.IOException;
+import java.time.Instant;
 
 @Slf4j
 @Service
@@ -194,5 +195,67 @@ public class CloudStorageService implements StorageService {
 
         // Direkt key olarak döndür
         return filename;
+    }
+
+    @Override
+    public String saveFile(String path, byte[] content, String contentType) {
+        if (content == null || content.length == 0) {
+            throw new FileStorageException("Dosya içeriği boş olamaz");
+        }
+
+        try {
+            // S3'e yükle
+            PutObjectRequest putObjectRequest = PutObjectRequest.builder()
+                    .bucket(bucketName)
+                    .key(path)
+                    .contentType(contentType)
+                    .acl(ObjectCannedACL.PUBLIC_READ) // Public read access
+                    .build();
+
+            getS3Client().putObject(putObjectRequest,
+                    RequestBody.fromBytes(content));
+
+            log.info("Dosya yüklendi (cloud): {}", path);
+            return path;
+        } catch (Exception e) {
+            log.error("Dosya yükleme hatası: ", e);
+            throw new FileStorageException("Dosya yüklenemedi: " + e.getMessage(), e);
+        }
+    }
+
+    @Override
+    public void deleteOldFiles(String prefix, long hours) {
+        try {
+            ListObjectsV2Request listRequest = ListObjectsV2Request.builder()
+                    .bucket(bucketName)
+                    .prefix(prefix)
+                    .build();
+
+            ListObjectsV2Response listResponse = getS3Client().listObjectsV2(listRequest);
+            
+            Instant now = Instant.now();
+            long maxAgeSeconds = hours * 3600;
+
+            for (S3Object s3Object : listResponse.contents()) {
+                Instant lastModified = s3Object.lastModified();
+                long ageSeconds = java.time.Duration.between(lastModified, now).getSeconds();
+
+                if (ageSeconds > maxAgeSeconds) {
+                    try {
+                        DeleteObjectRequest deleteRequest = DeleteObjectRequest.builder()
+                                .bucket(bucketName)
+                                .key(s3Object.key())
+                                .build();
+                        
+                        getS3Client().deleteObject(deleteRequest);
+                        log.info("Eski dosya silindi (cloud): {}", s3Object.key());
+                    } catch (Exception e) {
+                        log.error("Dosya silinemedi: {}", s3Object.key(), e);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.error("Eski dosyaları temizleme hatası: ", e);
+        }
     }
 }

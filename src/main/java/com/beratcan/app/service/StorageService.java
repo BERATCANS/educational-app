@@ -18,6 +18,16 @@ public interface StorageService {
     String saveFile(MultipartFile file);
 
     /**
+     * Save a file from byte array
+     *
+     * @param path The path/filename to save as
+     * @param content The file content
+     * @param contentType The content type (e.g. "audio/mpeg")
+     * @return Filename (for local) or full URL (for cloud storage)
+     */
+    String saveFile(String path, byte[] content, String contentType);
+
+    /**
      * Get a file as Resource
      * 
      * @param filename The filename or key
@@ -31,6 +41,14 @@ public interface StorageService {
      * @param filename The filename or key to delete
      */
     void deleteFile(String filename);
+
+    /**
+     * Delete files older than specified hours with given prefix
+     *
+     * @param prefix The directory prefix (e.g. "audio/temp/")
+     * @param hours The age threshold in hours
+     */
+    void deleteOldFiles(String prefix, long hours);
 
     /**
      * Get the full URL for a file

@@ -122,4 +122,58 @@ public class LocalStorageService implements StorageService {
 
         return "/api/files/" + actualFilename;
     }
+
+    @Override
+    public String saveFile(String path, byte[] content, String contentType) {
+        if (content == null || content.length == 0) {
+            throw new FileStorageException("Dosya içeriği boş olamaz");
+        }
+
+        try {
+            Path filePath = Paths.get(uploadDir + path).normalize();
+            Files.createDirectories(filePath.getParent());
+            Files.write(filePath, content);
+
+            log.info("Dosya kaydedildi (local): {}", path);
+            return path;
+        } catch (IOException e) {
+            log.error("Dosya kaydetme hatası: ", e);
+            throw new FileStorageException("Dosya kaydedilemedi: " + e.getMessage(), e);
+        }
+    }
+
+    @Override
+    public void deleteOldFiles(String prefix, long hours) {
+        try {
+            Path dirPath = Paths.get(uploadDir + prefix).normalize();
+            if (!Files.exists(dirPath)) {
+                return;
+            }
+
+            // Güvenlik: Sadece uploadDir altındaki prefix'leri kabul et
+            if (!dirPath.startsWith(Paths.get(uploadDir).normalize())) {
+                log.warn("Güvenlik uyarısı: Upload dizini dışı temizlik denemesi: {}", prefix);
+                return;
+            }
+
+            long now = System.currentTimeMillis();
+            long maxAgeMillis = hours * 60 * 60 * 1000;
+
+            Files.walk(dirPath)
+                    .filter(Files::isRegularFile)
+                    .forEach(file -> {
+                        try {
+                            long lastModified = Files.getLastModifiedTime(file).toMillis();
+                            if (now - lastModified > maxAgeMillis) {
+                                Files.delete(file);
+                                log.info("Eski dosya silindi (local): {}", file.getFileName());
+                            }
+                        } catch (IOException e) {
+                            log.error("Dosya silinemedi: {}", file, e);
+                        }
+                    });
+        } catch (IOException e) {
+            log.error("Eski dosyaları temizleme hatası: ", e);
+        }
+    }
 }
