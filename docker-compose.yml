@@ -1,4 +1,4 @@
-version: "3.9"
+
 
 services:
   # Backend Spring Boot Application
@@ -65,8 +65,8 @@ services:
     container_name: app-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: ${DB_USERNAME:-berat}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-123}
+      POSTGRES_USER: berat
+      POSTGRES_PASSWORD: 123
       POSTGRES_DB: soruapp
     ports:
       - "5432:5432"

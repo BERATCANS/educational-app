@@ -1,18 +1,10 @@
 package com.beratcan.app.scheduler;
 
+import com.beratcan.app.service.StorageService;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.nio.file.attribute.BasicFileAttributes;
-import java.time.Instant;
-import java.time.temporal.ChronoUnit;
-import java.util.stream.Stream;
 
 /**
  * Geçici ses dosyalarını temizleyen zamanlanmış görev.
@@ -22,10 +14,13 @@ import java.util.stream.Stream;
  */
 @Slf4j
 @Component
+@RequiredArgsConstructor
 public class AudioCleanupScheduler {
 
-    @Value("${audio.temp.dir:uploads/audio/temp/}")
-    private String tempAudioDir;
+    private final StorageService storageService;
+
+    // StorageService içinde prefix olarak kullanılıyor
+    private static final String AUDIO_TEMP_PREFIX = "audio/temp/";
 
     // 1 Saatlik (3600 sn) ömür
     private static final long FILE_AGE_THRESHOLD_HOURS = 1;
@@ -36,37 +31,13 @@ public class AudioCleanupScheduler {
      */
     @Scheduled(fixedRate = 1800000)
     public void cleanupTempAudioFiles() {
-        log.info("🧹 Audio cleanup başladı: {}", tempAudioDir);
+        log.info("🧹 Audio cleanup başladı: {}", AUDIO_TEMP_PREFIX);
         
-        Path dirPath = Paths.get(tempAudioDir);
-        if (!Files.exists(dirPath)) {
-            log.debug("Temp audio dizini mevcut değil, işlem atlanıyor.");
-            return;
-        }
-
-        try (Stream<Path> files = Files.list(dirPath)) {
-            files.forEach(this::checkAndDeleteFile);
-        } catch (IOException e) {
-            log.error("Audio cleanup sırasında dizin okuma hatası: {}", e.getMessage());
-        }
-    }
-
-    private void checkAndDeleteFile(Path file) {
-        if (!Files.isRegularFile(file)) return;
-
         try {
-            BasicFileAttributes attrs = Files.readAttributes(file, BasicFileAttributes.class);
-            Instant lastModified = attrs.lastModifiedTime().toInstant();
-            Instant now = Instant.now();
-
-            long hoursOld = ChronoUnit.HOURS.between(lastModified, now);
-
-            if (hoursOld >= FILE_AGE_THRESHOLD_HOURS) {
-                Files.delete(file); // Dosyayı sil
-                log.info("🗑️ Eski audio dosyası silindi: {} ({} saat eski)", file.getFileName(), hoursOld);
-            }
-        } catch (IOException e) {
-            log.error("Dosya silinirken hata oluştu: {} ({})", file.getFileName(), e.getMessage());
+            storageService.deleteOldFiles(AUDIO_TEMP_PREFIX, FILE_AGE_THRESHOLD_HOURS);
+            log.info("Audio cleanup tamamlandı.");
+        } catch (Exception e) {
+            log.error("Audio cleanup sırasında hata: {}", e.getMessage());
         }
     }
 }

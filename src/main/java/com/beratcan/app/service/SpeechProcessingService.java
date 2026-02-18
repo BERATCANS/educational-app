@@ -34,6 +34,8 @@ public class SpeechProcessingService {
             .readTimeout(120, TimeUnit.SECONDS)
             .build();
 
+    private final StorageService storageService;
+
     @Value("${openai.api.key}")
     private String apiKey;
 
@@ -46,8 +48,8 @@ public class SpeechProcessingService {
     @Value("${openai.tts.response.format:mp3}")
     private String ttsFormat;
 
-    @Value("${audio.temp.dir:uploads/audio/temp/}")
-    private String tempAudioDir;
+    // audio.temp.dir artık StorageService tarafından yönetiliyor (prefix olarak)
+    private static final String AUDIO_TEMP_PREFIX = "audio/temp/";
 
     /**
      * Speech-to-Text: Audio dosyasını text'e çevirir (OpenAI Whisper API)
@@ -164,26 +166,23 @@ public class SpeechProcessingService {
      * Temp dizine kaydeder, kalıcı storage'a konmaz
      *
      * @param audioBytes Audio byte array
-     * @return Audio URL path (relative)
+     * @return Audio URL path (relative or abs depending on storage)
      */
     public String saveTemporaryAudio(byte[] audioBytes) {
         try {
-            // Temp dizini oluştur
-            Path tempDir = Paths.get(tempAudioDir);
-            Files.createDirectories(tempDir);
-
             // Dosya adı oluştur
             String filename = System.currentTimeMillis() + "_" + UUID.randomUUID().toString().substring(0, 8) + ".mp3";
-            Path filePath = tempDir.resolve(filename);
+            String path = AUDIO_TEMP_PREFIX + filename;
 
-            // Dosyayı kaydet
-            Files.write(filePath, audioBytes);
+            // StorageService ile kaydet
+            storageService.saveFile(path, audioBytes, "audio/mpeg");
 
-            // Relative path döndür (API endpoint'inde kullanılacak)
-            String relativePath = "audio/temp/" + filename;
-            log.debug("Geçici audio kaydedildi: filename={}, size={}KB", filename, audioBytes.length / 1024);
+            // URL döndür (StorageService'den full URL veya relative path al)
+            String fileUrl = storageService.getFileUrl(path);
+            
+            log.debug("Geçici audio kaydedildi: path={}, url={}, size={}KB", path, fileUrl, audioBytes.length / 1024);
 
-            return relativePath;
+            return fileUrl;
         } catch (Exception e) {
             log.error("Geçici audio kaydetme hatası: {}", e.getMessage(), e);
             throw new AudioProcessingException("Audio dosyası kaydedilemedi: " + e.getMessage(), e);
