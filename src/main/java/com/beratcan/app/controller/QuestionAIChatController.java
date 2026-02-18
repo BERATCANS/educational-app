@@ -8,14 +8,14 @@ import com.beratcan.app.service.QuestionAIChatService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.core.io.Resource;
-import org.springframework.http.MediaType;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import com.beratcan.app.exception.BadRequestException;
+
 
 @Slf4j
 @RestController
@@ -24,7 +24,6 @@ import com.beratcan.app.exception.BadRequestException;
 public class QuestionAIChatController {
 
     private final QuestionAIChatService chatService;
-    private final com.beratcan.app.service.FileService fileService;
 
     /**
      * Conversation getir veya oluştur
@@ -82,7 +81,7 @@ public class QuestionAIChatController {
         if (authentication == null || !authentication.isAuthenticated()
                 || "anonymousUser".equals(authentication.getName())) {
             log.error("❌ Authentication failed in streaming endpoint");
-            throw new BadRequestException("Authentication required");
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Authentication required");
         }
 
         Long userId = Long.parseLong(authentication.getName());
@@ -95,42 +94,6 @@ public class QuestionAIChatController {
         chatService.sendMessageStream(questionId, userId, request.getMessage(), emitter);
 
         return emitter;
-    }
-
-    /**
-     * Voice mesaj gönder ve AI yanıtı al (Audio)
-     */
-    @PostMapping(value = "/messages/voice", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @RateLimit(requestsPerMinute = 10, keyType = "USER", message = "Çok fazla voice mesaj gönderiliyor, lütfen daha sonra tekrar deneyin.")
-    public ResponseEntity<AIMessageResponse> sendVoiceMessage(
-            @PathVariable Long questionId,
-            @RequestParam("audioFile") MultipartFile audioFile,
-            Authentication authentication) {
-        Long userId = Long.parseLong(authentication.getName());
-        AIMessageResponse response = chatService.sendVoiceMessage(questionId, userId, audioFile);
-        return ResponseEntity.ok(response);
-    }
-
-    /**
-     * Geçici audio dosyasını getir
-     * Voice mesaj yanıtları için geçici audio dosyalarını serve eder
-     */
-    @GetMapping("/audio/temp/{filename:.+}")
-    public ResponseEntity<Resource> getTemporaryAudio(
-            @PathVariable String filename) {
-        // Güvenlik: Path traversal önleme
-        if (filename.contains("..") || filename.contains("/") || filename.contains("\\")) {
-            throw new com.beratcan.app.exception.BadRequestException("Geçersiz dosya adı");
-        }
-
-        // Audio temp dizininden dosyayı al
-        String audioPath = "audio/temp/" + filename;
-        Resource resource = fileService.getFile(audioPath);
-
-        return ResponseEntity.ok()
-                .contentType(MediaType.parseMediaType("audio/mpeg"))
-                .header("Content-Disposition", "inline; filename=\"" + filename + "\"")
-                .body(resource);
     }
 
 }

@@ -23,13 +23,11 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.util.*;
-import java.util.Base64;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
@@ -42,9 +40,8 @@ public class QuestionAIChatService {
     private final QuestionAIMessageRepository messageRepository;
     private final QuestionRepository questionRepository;
     private final UserRepository userRepository;
-    private final SpeechProcessingService speechProcessingService;
     private final DailyLimitService dailyLimitService;
-    private final FileService fileService;
+    private final AIChatHelper aiChatHelper;
     private final ObjectMapper objectMapper;
     private final OkHttpClient httpClient = new OkHttpClient.Builder()
             .connectTimeout(AppConstants.HTTP_CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
@@ -124,7 +121,7 @@ public class QuestionAIChatService {
         userMsg.setConversation(conversation);
         userMsg.setContent(userMessage.trim());
         userMsg.setRole(MessageRole.USER);
-        userMsg.setMessageType(MessageType.TEXT); // Text mesaj
+        userMsg.setMessageType(MessageType.TEXT);
         messageRepository.save(userMsg);
 
         // Conversation history al
@@ -134,57 +131,16 @@ public class QuestionAIChatService {
         // Soru context'i oluştur (history ile birlikte)
         String context = buildStudentChatContext(question, history);
 
-        // Soru görselini base64'e çevir
-        String base64Image = null;
-        String imageMimeType = null; // MIME type'ı da sakla
-        try {
-            if (question.getImageUrl() != null && !question.getImageUrl().trim().isEmpty()) {
-                // StorageService üzerinden dosyayı oku
-                try {
-                    org.springframework.core.io.Resource imageResource = fileService.getFile(question.getImageUrl());
-
-                    if (imageResource.exists() && imageResource.isReadable()) {
-                        byte[] imageBytes = imageResource.getInputStream().readAllBytes();
-                        base64Image = Base64.getEncoder().encodeToString(imageBytes);
-
-                        // Dosya uzantısına göre MIME type belirle
-                        String fileName = question.getImageUrl().toLowerCase();
-                        if (fileName.endsWith(".png")) {
-                            imageMimeType = "image/png";
-                        } else if (fileName.endsWith(".jpg") || fileName.endsWith(".jpeg")) {
-                            imageMimeType = "image/jpeg";
-                        } else if (fileName.endsWith(".gif")) {
-                            imageMimeType = "image/gif";
-                        } else if (fileName.endsWith(".webp")) {
-                            imageMimeType = "image/webp";
-                        } else {
-                            // Varsayılan olarak JPEG (çoğu görsel JPEG)
-                            imageMimeType = "image/jpeg";
-                            log.warn("Bilinmeyen görsel formatı, JPEG olarak varsayılıyor: questionId={}, fileName={}",
-                                    questionId, fileName);
-                        }
-
-                        log.debug("Soru görseli base64'e çevrildi: questionId={}, size={}KB, mimeType={}",
-                                questionId, imageBytes.length / 1024, imageMimeType);
-                    } else {
-                        log.warn("Soru görseli bulunamadı veya okunamıyor: questionId={}, imageUrl={}",
-                                questionId, question.getImageUrl());
-                    }
-                } catch (Exception ex) {
-                    log.warn("Soru görseli okunamadı: questionId={}, imageUrl={}, error={}",
-                            questionId, question.getImageUrl(), ex.getMessage());
-                }
-            }
-        } catch (Exception e) {
-            log.warn("Soru görseli okunamadı: questionId={}, error={}", questionId, e.getMessage());
-            // Görsel okunamazsa devam et, sadece text ile gönder
-        }
+        // Soru görselini hazırla
+        String base64Image = aiChatHelper.prepareQuestionImage(question);
+        String imageMimeType = aiChatHelper.detectImageMimeType(question.getImageUrl());
 
         // OpenAI API çağrısı
         String aiResponse;
         Integer tokenCount;
         try {
-            Map<String, Object> result = callOpenAIChatAPI(context, history, question, base64Image, imageMimeType);
+            Map<String, Object> result = aiChatHelper.callOpenAIChatAPI(context, history,
+                    base64Image, imageMimeType, "text");
             aiResponse = (String) result.get("content");
             tokenCount = (Integer) result.get("tokenCount");
         } catch (Exception e) {
@@ -197,7 +153,7 @@ public class QuestionAIChatService {
         aiMsg.setConversation(conversation);
         aiMsg.setContent(aiResponse);
         aiMsg.setRole(MessageRole.ASSISTANT);
-        aiMsg.setMessageType(MessageType.ASSISTANT_TEXT); // Text yanıt
+        aiMsg.setMessageType(MessageType.ASSISTANT_TEXT);
         aiMsg.setTokenCount(tokenCount);
         messageRepository.save(aiMsg);
 
@@ -205,7 +161,7 @@ public class QuestionAIChatService {
         conversation.setLastMessageAt(aiMsg.getCreatedAt());
         conversationRepository.save(conversation);
 
-        return toMessageResponse(aiMsg);
+        return aiChatHelper.toMessageResponse(aiMsg);
     }
 
     /**
@@ -221,7 +177,7 @@ public class QuestionAIChatService {
                 .findByConversationIdOrderByCreatedAtAsc(conversation.getId());
 
         return messages.stream()
-                .map(this::toMessageResponse)
+                .map(aiChatHelper::toMessageResponse)
                 .collect(Collectors.toList());
     }
 
@@ -264,8 +220,8 @@ public class QuestionAIChatService {
             String context = buildStudentChatContext(question, history);
 
             // Görsel hazırla
-            String base64Image = prepareQuestionImage(question);
-            String imageMimeType = detectImageMimeType(question.getImageUrl());
+            String base64Image = aiChatHelper.prepareQuestionImage(question);
+            String imageMimeType = aiChatHelper.detectImageMimeType(question.getImageUrl());
 
             // OpenAI Streaming API çağrısı
             callOpenAIChatAPIStream(context, history, question, base64Image, imageMimeType,
@@ -292,7 +248,7 @@ public class QuestionAIChatService {
 
         try {
             // Messages listesi oluştur
-            List<Map<String, Object>> messages = buildMessagesForAPI(context, history,
+            List<Map<String, Object>> messages = aiChatHelper.buildMessagesForAPI(context, history,
                     base64Image, imageMimeType);
 
             // Request body - STREAM=TRUE ekle
@@ -460,164 +416,6 @@ public class QuestionAIChatService {
     }
 
     /**
-     * Son N mesajı al (hem USER hem ASSISTANT)
-     */
-    private List<QuestionAIMessage> pickRecentHistory(List<QuestionAIMessage> history, int maxMessages) {
-        if (history.size() <= maxMessages) {
-            return history;
-        }
-        return history.subList(history.size() - maxMessages, history.size());
-    }
-
-    /**
-     * OpenAI Chat Completions API çağrısı
-     * 
-     * Değişiklikler:
-     * - History'den son 5 mesaj alınıyor (USER + ASSISTANT)
-     * - Görsel sadece ilk mesajda gönderiliyor (history boşsa veya çok kısaysa)
-     * - Tam çözüm kontrolü kaldırıldı, AI kendisi karar verecek
-     */
-    private Map<String, Object> callOpenAIChatAPI(String context, List<QuestionAIMessage> history,
-            Question question, String base64Image, String imageMimeType) {
-        long startTime = System.currentTimeMillis();
-
-        try {
-            // Messages listesi oluştur
-            List<Map<String, Object>> messages = new ArrayList<>();
-
-            // System message (context)
-            Map<String, Object> systemMessage = new HashMap<>();
-            systemMessage.put("role", "system");
-            systemMessage.put("content", context);
-            messages.add(systemMessage);
-
-            // Conversation history: Son 5 mesaj (hem USER hem ASSISTANT)
-            List<QuestionAIMessage> recentHistory = pickRecentHistory(history, 5);
-
-            // Görsel gönderim kontrolü:
-            // - History boşsa (ilk mesaj) -> görsel gönder
-            // - History'de sadece 1 mesaj varsa (ilk USER mesajı, henüz cevap yok) ->
-            // görsel gönder
-            // - Diğer durumlarda görsel gönderme (zaten ilk mesajda gönderilmiş)
-            boolean shouldSendImage = base64Image != null &&
-                    (recentHistory.isEmpty() ||
-                            (recentHistory.size() == 1 && recentHistory.get(0).getRole() == MessageRole.USER));
-
-            // History mesajlarını ekle
-            boolean imageSent = false;
-            for (QuestionAIMessage msg : recentHistory) {
-                Map<String, Object> msgMap = new HashMap<>();
-                msgMap.put("role", msg.getRole().name().toLowerCase());
-
-                // İlk USER mesajıysa ve görsel gönderilmesi gerekiyorsa, görseli ekle
-                if (shouldSendImage && !imageSent && msg.getRole() == MessageRole.USER) {
-                    List<Map<String, Object>> content = new ArrayList<>();
-
-                    // Text part
-                    Map<String, Object> textPart = new HashMap<>();
-                    textPart.put("type", "text");
-                    textPart.put("text", msg.getContent());
-                    content.add(textPart);
-
-                    // Image part
-                    Map<String, Object> imagePart = new HashMap<>();
-                    imagePart.put("type", "image_url");
-                    Map<String, String> imageUrl = new HashMap<>();
-
-                    String mime = (imageMimeType != null && !imageMimeType.isEmpty())
-                            ? imageMimeType
-                            : "image/jpeg";
-                    imageUrl.put("url", "data:" + mime + ";base64," + base64Image);
-                    imagePart.put("image_url", imageUrl);
-                    content.add(imagePart);
-
-                    msgMap.put("content", content);
-                    imageSent = true;
-                } else {
-                    // Normal text mesaj
-                    msgMap.put("content", msg.getContent());
-                }
-
-                messages.add(msgMap);
-            }
-
-            // Request body
-            Map<String, Object> requestMap = new HashMap<>();
-            requestMap.put("model", model);
-            requestMap.put("messages", messages);
-            requestMap.put("max_tokens", 1000); // AI kendi karar verecek, sabit limit
-            requestMap.put("temperature", chatTemperature);
-
-            String requestBody = objectMapper.writeValueAsString(requestMap);
-
-            Request request = new Request.Builder()
-                    .url("https://api.openai.com/v1/chat/completions")
-                    .header("Authorization", "Bearer " + apiKey)
-                    .header("Content-Type", "application/json")
-                    .post(RequestBody.create(requestBody, MediaType.parse("application/json")))
-                    .build();
-
-            // Response al
-            try (Response response = httpClient.newCall(request).execute()) {
-                long duration = System.currentTimeMillis() - startTime;
-
-                if (!response.isSuccessful()) {
-                    String errorBody = response.body() != null ? response.body().string() : "No error body";
-                    log.error("OpenAI API failed: status={}, duration={}ms, error={}",
-                            response.code(), duration, errorBody);
-                    throw new ExternalServiceException(
-                            String.format("OpenAI API hatası: HTTP %d - %s", response.code(), errorBody));
-                }
-
-                String responseBody = response.body().string();
-                JsonNode jsonResponse = objectMapper.readTree(responseBody);
-
-                // Content çıkar
-                String content = jsonResponse.get("choices").get(0).get("message").get("content").asText();
-
-                // Token kullanımı çıkar
-                Integer tokenCount = null;
-                Integer promptTokens = null;
-                Integer completionTokens = null;
-                if (jsonResponse.has("usage")) {
-                    JsonNode usage = jsonResponse.get("usage");
-                    if (usage.has("total_tokens")) {
-                        tokenCount = usage.get("total_tokens").asInt();
-                    }
-                    if (usage.has("prompt_tokens")) {
-                        promptTokens = usage.get("prompt_tokens").asInt();
-                    }
-                    if (usage.has("completion_tokens")) {
-                        completionTokens = usage.get("completion_tokens").asInt();
-                    }
-                }
-
-                // Estimated cost calculation
-                double estimatedCost = estimateAICost(model, promptTokens != null ? promptTokens : 0,
-                        completionTokens != null ? completionTokens : 0);
-
-                log.info(
-                        "OpenAI API call: model={} | duration={}ms | tokens={} (prompt={}, completion={}) | estimatedCost=${}",
-                        model, duration, tokenCount != null ? tokenCount : 0,
-                        promptTokens != null ? promptTokens : 0,
-                        completionTokens != null ? completionTokens : 0,
-                        String.format("%.4f", estimatedCost));
-
-                Map<String, Object> result = new HashMap<>();
-                result.put("content", content);
-                result.put("tokenCount", tokenCount);
-                return result;
-            }
-
-        } catch (ExternalServiceException e) {
-            throw e;
-        } catch (Exception e) {
-            log.error("OpenAI API çağrısı sırasında hata: {}", e.getMessage(), e);
-            throw new ExternalServiceException("OpenAI API çağrısı başarısız: " + e.getMessage(), e);
-        }
-    }
-
-    /**
      * Entity'yi Response DTO'ya çevir
      */
     private QuestionAIConversationResponse toConversationResponse(QuestionAIConversation conversation) {
@@ -629,299 +427,10 @@ public class QuestionAIChatService {
 
         List<AIMessageResponse> messages = conversation.getMessages().stream()
                 .sorted(Comparator.comparing(QuestionAIMessage::getCreatedAt))
-                .map(this::toMessageResponse)
+                .map(aiChatHelper::toMessageResponse)
                 .collect(Collectors.toList());
         response.setMessages(messages);
 
         return response;
-    }
-
-    /**
-     * Voice mesaj gönder ve AI yanıtı al (audio olarak)
-     */
-    @Transactional
-    public AIMessageResponse sendVoiceMessage(Long questionId, Long userId, MultipartFile audioFile) {
-        if (audioFile == null || audioFile.isEmpty()) {
-            throw new BadRequestException("Audio dosyası boş olamaz");
-        }
-
-        // Günlük AI konuşma limitini kontrol et
-        dailyLimitService.checkDailyAiConversationLimit(userId);
-
-        log.info("Voice mesaj alındı: questionId={}, userId={}, filename={}, size={}KB",
-                questionId, userId, audioFile.getOriginalFilename(), audioFile.getSize() / 1024);
-
-        // 1. Audio'yu text'e çevir (Whisper API)
-        String userMessageText;
-        try {
-            userMessageText = speechProcessingService.speechToText(audioFile);
-            log.info("Voice mesaj text'e çevrildi: questionId={}, textLength={} chars",
-                    questionId, userMessageText.length());
-        } catch (Exception e) {
-            log.error("Voice mesaj text'e çevrilemedi: questionId={}, error={}", questionId, e.getMessage(), e);
-            throw new BadRequestException("Voice mesaj text'e çevrilemedi: " + e.getMessage());
-        }
-
-        if (userMessageText == null || userMessageText.trim().isEmpty()) {
-            throw new BadRequestException("Voice mesajdan text çıkarılamadı");
-        }
-
-        Question question = questionRepository.findById(questionId)
-                .orElseThrow(() -> new QuestionNotFoundException(questionId));
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new UserNotFoundException(userId));
-
-        // Conversation getir veya oluştur
-        QuestionAIConversation conversation = conversationRepository
-                .findByQuestionIdAndUserId(questionId, userId)
-                .orElseGet(() -> {
-                    QuestionAIConversation newConv = new QuestionAIConversation();
-                    newConv.setQuestion(question);
-                    newConv.setUser(user);
-                    return conversationRepository.save(newConv);
-                });
-
-        // 2. Kullanıcı voice mesajını text olarak kaydet
-        QuestionAIMessage userMsg = new QuestionAIMessage();
-        userMsg.setConversation(conversation);
-        userMsg.setContent(userMessageText.trim());
-        userMsg.setRole(MessageRole.USER);
-        userMsg.setMessageType(MessageType.VOICE_INPUT); // Voice mesajdan çevrilmiş text
-        messageRepository.save(userMsg);
-
-        // 3. Conversation history al
-        List<QuestionAIMessage> history = messageRepository
-                .findByConversationIdOrderByCreatedAtAsc(conversation.getId());
-
-        // 4. Soru context'i oluştur
-        String context = buildStudentChatContext(question, history);
-
-        // 5. Soru görselini base64'e çevir (mevcut logic)
-        String base64Image = null;
-        String imageMimeType = null;
-        try {
-            if (question.getImageUrl() != null && !question.getImageUrl().trim().isEmpty()) {
-                // StorageService üzerinden dosyayı oku
-                try {
-                    org.springframework.core.io.Resource imageResource = fileService.getFile(question.getImageUrl());
-
-                    if (imageResource.exists() && imageResource.isReadable()) {
-                        byte[] imageBytes = imageResource.getInputStream().readAllBytes();
-                        base64Image = Base64.getEncoder().encodeToString(imageBytes);
-
-                        String fileName = question.getImageUrl().toLowerCase();
-                        if (fileName.endsWith(".png")) {
-                            imageMimeType = "image/png";
-                        } else if (fileName.endsWith(".jpg") || fileName.endsWith(".jpeg")) {
-                            imageMimeType = "image/jpeg";
-                        } else if (fileName.endsWith(".gif")) {
-                            imageMimeType = "image/gif";
-                        } else if (fileName.endsWith(".webp")) {
-                            imageMimeType = "image/webp";
-                        } else {
-                            imageMimeType = "image/jpeg";
-                        }
-                    }
-                } catch (Exception ex) {
-                    log.warn("Soru görseli okunamadı: questionId={}, imageUrl={}, error={}",
-                            questionId, question.getImageUrl(), ex.getMessage());
-                }
-            }
-        } catch (Exception e) {
-            log.warn("Soru görseli okunamadı: questionId={}, error={}", questionId, e.getMessage());
-        }
-
-        // 6. OpenAI Chat API çağrısı (text response al)
-        String aiResponse;
-        Integer tokenCount;
-        try {
-            Map<String, Object> result = callOpenAIChatAPI(context, history, question, base64Image,
-                    imageMimeType);
-            aiResponse = (String) result.get("content");
-            tokenCount = (Integer) result.get("tokenCount");
-        } catch (Exception e) {
-            log.error("OpenAI API çağrısı başarısız: {}", e.getMessage(), e);
-            throw new ExternalServiceException("AI yanıtı alınamadı: " + e.getMessage());
-        }
-
-        // 7. AI text yanıtını kaydet
-        QuestionAIMessage aiMsg = new QuestionAIMessage();
-        aiMsg.setConversation(conversation);
-        aiMsg.setContent(aiResponse);
-        aiMsg.setRole(MessageRole.ASSISTANT);
-        aiMsg.setMessageType(MessageType.ASSISTANT_TEXT); // Text yanıt
-        aiMsg.setTokenCount(tokenCount);
-        messageRepository.save(aiMsg);
-
-        // 8. Conversation'ı güncelle
-        conversation.setLastMessageAt(aiMsg.getCreatedAt());
-        conversationRepository.save(conversation);
-
-        // 9. AI text yanıtını audio'ya çevir (TTS)
-        String audioUrl = null;
-        try {
-            byte[] audioBytes = speechProcessingService.textToSpeech(aiResponse);
-            audioUrl = speechProcessingService.saveTemporaryAudio(audioBytes);
-            log.info("AI yanıtı audio'ya çevrildi: questionId={}, audioUrl={}", questionId, audioUrl);
-        } catch (Exception e) {
-            log.error("AI yanıtı audio'ya çevrilemedi: questionId={}, error={}", questionId, e.getMessage(), e);
-            // Audio çevrilemezse devam et, sadece text response döndür
-        }
-
-        // 10. Response oluştur
-        AIMessageResponse response = toMessageResponse(aiMsg);
-        response.setAudioUrl(audioUrl); // Geçici audio URL (nullable)
-        return response;
-    }
-
-    /**
-     * OpenAI API maliyetini tahmin eder (token bazlı)
-     * Pricing (approximate as of 2024):
-     * - gpt-4o-mini: $0.15/1M input tokens, $0.60/1M output tokens
-     * - gpt-4o: $2.50/1M input tokens, $10.00/1M output tokens
-     * - gpt-4-turbo: $10.00/1M input tokens, $30.00/1M output tokens
-     * 
-     * @param modelName        Model adı
-     * @param promptTokens     Prompt token sayısı
-     * @param completionTokens Completion token sayısı
-     * @return Tahmini maliyet (USD)
-     */
-    private double estimateAICost(String modelName, int promptTokens, int completionTokens) {
-        double inputPricePerMillion;
-        double outputPricePerMillion;
-
-        if (modelName.contains("gpt-4o-mini") || modelName.contains("mini")) {
-            inputPricePerMillion = 0.15;
-            outputPricePerMillion = 0.60;
-        } else if (modelName.contains("gpt-4o")) {
-            inputPricePerMillion = 2.50;
-            outputPricePerMillion = 10.00;
-        } else if (modelName.contains("gpt-4-turbo") || modelName.contains("gpt-4")) {
-            inputPricePerMillion = 10.00;
-            outputPricePerMillion = 30.00;
-        } else {
-            // Default estimate for unknown models
-            inputPricePerMillion = 1.0;
-            outputPricePerMillion = 3.0;
-        }
-
-        double inputCost = (promptTokens / 1_000_000.0) * inputPricePerMillion;
-        double outputCost = (completionTokens / 1_000_000.0) * outputPricePerMillion;
-
-        return inputCost + outputCost;
-    }
-
-    /**
-     * Message entity'yi Response DTO'ya çevir
-     */
-    private AIMessageResponse toMessageResponse(QuestionAIMessage message) {
-        AIMessageResponse response = new AIMessageResponse();
-        response.setId(message.getId());
-        response.setContent(message.getContent());
-        response.setRole(message.getRole().name());
-        response.setMessageType(message.getMessageType() != null ? message.getMessageType().name() : null);
-        response.setCreatedAt(message.getCreatedAt());
-        // audioUrl sadece response oluşturulurken set edilecek (geçici audio için)
-        return response;
-    }
-
-    /**
-     * OpenAI API için messages listesi oluştur
-     */
-    private List<Map<String, Object>> buildMessagesForAPI(String context,
-            List<QuestionAIMessage> history,
-            String base64Image,
-            String imageMimeType) {
-        List<Map<String, Object>> messages = new ArrayList<>();
-
-        // System message
-        Map<String, Object> systemMessage = new HashMap<>();
-        systemMessage.put("role", "system");
-        systemMessage.put("content", context);
-        messages.add(systemMessage);
-
-        // History (son 5 mesaj)
-        List<QuestionAIMessage> recentHistory = pickRecentHistory(history, 5);
-        boolean shouldSendImage = base64Image != null &&
-                (recentHistory.isEmpty() ||
-                        (recentHistory.size() == 1 && recentHistory.get(0).getRole() == MessageRole.USER));
-
-        boolean imageSent = false;
-        for (QuestionAIMessage msg : recentHistory) {
-            Map<String, Object> msgMap = new HashMap<>();
-            msgMap.put("role", msg.getRole().name().toLowerCase());
-
-            if (shouldSendImage && !imageSent && msg.getRole() == MessageRole.USER) {
-                // Image + text content
-                List<Map<String, Object>> content = new ArrayList<>();
-
-                Map<String, Object> textPart = new HashMap<>();
-                textPart.put("type", "text");
-                textPart.put("text", msg.getContent());
-                content.add(textPart);
-
-                Map<String, Object> imagePart = new HashMap<>();
-                imagePart.put("type", "image_url");
-                Map<String, String> imageUrl = new HashMap<>();
-                String mime = (imageMimeType != null && !imageMimeType.isEmpty())
-                        ? imageMimeType
-                        : "image/jpeg";
-                imageUrl.put("url", "data:" + mime + ";base64," + base64Image);
-                imagePart.put("image_url", imageUrl);
-                content.add(imagePart);
-
-                msgMap.put("content", content);
-                imageSent = true;
-            } else {
-                msgMap.put("content", msg.getContent());
-            }
-
-            messages.add(msgMap);
-        }
-
-        return messages;
-    }
-
-    /**
-     * Soru görselini hazırla (base64 encode)
-     */
-    private String prepareQuestionImage(Question question) {
-        if (question.getImageUrl() == null || question.getImageUrl().trim().isEmpty()) {
-            return null;
-        }
-
-        try {
-            org.springframework.core.io.Resource imageResource = fileService.getFile(question.getImageUrl());
-
-            if (imageResource.exists() && imageResource.isReadable()) {
-                byte[] imageBytes = imageResource.getInputStream().readAllBytes();
-                return Base64.getEncoder().encodeToString(imageBytes);
-            }
-        } catch (Exception e) {
-            log.warn("Soru görseli okunamadı: questionId={}, error={}",
-                    question.getId(), e.getMessage());
-        }
-
-        return null;
-    }
-
-    /**
-     * Görsel MIME type'ını tespit et
-     */
-    private String detectImageMimeType(String imageUrl) {
-        if (imageUrl == null)
-            return null;
-
-        String fileName = imageUrl.toLowerCase();
-        if (fileName.endsWith(".png"))
-            return "image/png";
-        if (fileName.endsWith(".jpg") || fileName.endsWith(".jpeg"))
-            return "image/jpeg";
-        if (fileName.endsWith(".gif"))
-            return "image/gif";
-        if (fileName.endsWith(".webp"))
-            return "image/webp";
-
-        return "image/jpeg"; // Default
     }
 }

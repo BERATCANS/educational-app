@@ -2,6 +2,7 @@ package com.beratcan.app.service;
 
 import com.beratcan.app.config.DailyLimitConfig;
 import com.beratcan.app.exception.BadRequestException;
+import com.beratcan.app.exception.DailyLimitExceededException;
 import io.github.bucket4j.Bucket;
 import io.github.bucket4j.ConsumptionProbe;
 import lombok.RequiredArgsConstructor;
@@ -41,7 +42,7 @@ public class DailyLimitService {
             log.warn("Daily AI conversation limit exceeded: userId={}, limit={}, remaining={}",
                     userId, DAILY_AI_CONVERSATION_LIMIT, remaining);
 
-            throw new BadRequestException(
+            throw new DailyLimitExceededException(
                     "Günlük AI konuşma limitinize ulaştınız. Limitiniz günlük " +
                             DAILY_AI_CONVERSATION_LIMIT + " konuşmadır. Yarın tekrar deneyebilirsiniz.");
         }
