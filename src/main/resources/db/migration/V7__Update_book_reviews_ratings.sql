@@ -3,33 +3,54 @@
 -- ==========================================
 
 -- 1. Modify book_reviews table
--- Add the new rating columns
-ALTER TABLE book_reviews 
-    ADD COLUMN content_quality_rating INT NOT NULL DEFAULT 5,
-    ADD COLUMN difficulty_rating INT NOT NULL DEFAULT 5,
-    ADD COLUMN overall_rating INT NOT NULL DEFAULT 5,
-    ADD COLUMN video_quality_rating INT NOT NULL DEFAULT 5;
+-- Add the new rating columns (idempotent)
+ALTER TABLE book_reviews
+    ADD COLUMN IF NOT EXISTS content_quality_rating INT NOT NULL DEFAULT 5,
+    ADD COLUMN IF NOT EXISTS difficulty_rating INT NOT NULL DEFAULT 5,
+    ADD COLUMN IF NOT EXISTS overall_rating INT NOT NULL DEFAULT 5,
+    ADD COLUMN IF NOT EXISTS video_quality_rating INT NOT NULL DEFAULT 5;
 
--- Update the overall_rating to match the existing rating to preserve some historical data (optional but good practice)
-UPDATE book_reviews SET overall_rating = rating;
+-- If legacy rating column exists, carry its value to overall_rating
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'book_reviews'
+          AND column_name = 'rating'
+    ) THEN
+        EXECUTE 'UPDATE book_reviews SET overall_rating = rating';
+    END IF;
+END $$;
 
--- Drop the old rating and comment columns
-ALTER TABLE book_reviews 
-    DROP COLUMN comment,
-    DROP COLUMN rating;
-
+-- Drop old columns if they still exist
+ALTER TABLE book_reviews
+    DROP COLUMN IF EXISTS comment,
+    DROP COLUMN IF EXISTS rating;
 
 -- 2. Modify books table to support new average ratings
--- Add the new average rating columns
+-- Add the new average rating columns (idempotent)
 ALTER TABLE books
-    ADD COLUMN average_content_quality_rating REAL NOT NULL DEFAULT 0.0,
-    ADD COLUMN average_difficulty_rating REAL NOT NULL DEFAULT 0.0,
-    ADD COLUMN average_overall_rating REAL NOT NULL DEFAULT 0.0,
-    ADD COLUMN average_video_quality_rating REAL NOT NULL DEFAULT 0.0;
+    ADD COLUMN IF NOT EXISTS average_content_quality_rating REAL NOT NULL DEFAULT 0.0,
+    ADD COLUMN IF NOT EXISTS average_difficulty_rating REAL NOT NULL DEFAULT 0.0,
+    ADD COLUMN IF NOT EXISTS average_overall_rating REAL NOT NULL DEFAULT 0.0,
+    ADD COLUMN IF NOT EXISTS average_video_quality_rating REAL NOT NULL DEFAULT 0.0;
 
--- Update the average_overall_rating to match the existing average_rating
-UPDATE books SET average_overall_rating = average_rating;
+-- If legacy average_rating exists, carry its value to average_overall_rating
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'books'
+          AND column_name = 'average_rating'
+    ) THEN
+        EXECUTE 'UPDATE books SET average_overall_rating = average_rating';
+    END IF;
+END $$;
 
--- Drop the old average_rating column
+-- Drop old average_rating if it still exists
 ALTER TABLE books
-    DROP COLUMN average_rating;
+    DROP COLUMN IF EXISTS average_rating;
