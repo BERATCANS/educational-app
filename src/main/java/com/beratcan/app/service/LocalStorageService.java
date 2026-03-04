@@ -49,19 +49,11 @@ public class LocalStorageService implements StorageService {
     @Override
     public Resource getFile(String filename) {
         try {
-            // URL'den sadece filename'i çıkar (eğer /api/files/ prefix'i varsa)
-            String actualFilename = filename;
-            if (filename.startsWith("/api/files/")) {
-                actualFilename = filename.substring("/api/files/".length());
-            } else if (filename.startsWith("api/files/")) {
-                actualFilename = filename.substring("api/files/".length());
-            }
-
-            Path filePath = Paths.get(uploadDir + actualFilename);
+            Path filePath = Paths.get(uploadDir + filename);
             Resource resource = new UrlResource(filePath.toUri());
 
             if (!resource.exists() || !resource.isReadable()) {
-                throw new FileStorageException("Dosya bulunamadı veya okunamıyor: " + actualFilename);
+                throw new FileStorageException("Dosya bulunamadı veya okunamıyor: " + filename);
             }
 
             return resource;
@@ -78,15 +70,7 @@ public class LocalStorageService implements StorageService {
         }
 
         try {
-            // URL'den sadece filename'i çıkar (eğer /api/files/ prefix'i varsa)
-            String actualFilename = filename;
-            if (filename.startsWith("/api/files/")) {
-                actualFilename = filename.substring("/api/files/".length());
-            } else if (filename.startsWith("api/files/")) {
-                actualFilename = filename.substring("api/files/".length());
-            }
-
-            Path filePath = Paths.get(uploadDir + actualFilename).normalize();
+            Path filePath = Paths.get(uploadDir + filename).normalize();
 
             // Güvenlik kontrolü: uploadDir dışına çıkmayı engelle
             Path uploadDirPath = Paths.get(uploadDir).normalize();
@@ -96,9 +80,9 @@ public class LocalStorageService implements StorageService {
 
             if (Files.exists(filePath)) {
                 Files.delete(filePath);
-                log.info("Dosya silindi (local): {}", actualFilename);
+                log.info("Dosya silindi (local): {}", filename);
             } else {
-                log.warn("Silinecek dosya bulunamadı: {}", actualFilename);
+                log.warn("Silinecek dosya bulunamadı: {}", filename);
                 // Dosya yoksa exception fırlatmıyoruz, sadece log yazıyoruz
             }
         } catch (IOException e) {
@@ -109,18 +93,7 @@ public class LocalStorageService implements StorageService {
 
     @Override
     public String getFileUrl(String filename) {
-        // Local storage için relative URL döndür
-        // URL'den sadece filename'i çıkar (eğer /api/files/ prefix'i varsa)
-        String actualFilename = filename;
-        if (filename.startsWith("/api/files/")) {
-            actualFilename = filename.substring("/api/files/".length());
-        } else if (filename.startsWith("api/files/")) {
-            actualFilename = filename.substring("api/files/".length());
-        } else if (filename.startsWith(baseUrl + "/api/files/")) {
-            actualFilename = filename.substring((baseUrl + "/api/files/").length());
-        }
-
-        return "/api/files/" + actualFilename;
+        return filename;
     }
 
     @Override

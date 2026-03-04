@@ -186,13 +186,6 @@ public class CloudStorageService implements StorageService {
             }
         }
 
-        // Eğer /api/files/ prefix'i varsa çıkar
-        if (filename.startsWith("/api/files/")) {
-            return filename.substring("/api/files/".length());
-        } else if (filename.startsWith("api/files/")) {
-            return filename.substring("api/files/".length());
-        }
-
         // Direkt key olarak döndür
         return filename;
     }
