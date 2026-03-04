@@ -30,10 +30,16 @@ public class BookReview {
     private User user;
 
     @Column(nullable = false)
-    private int rating;
+    private int overallRating;
 
-    @Column(columnDefinition = "TEXT")
-    private String comment;
+    @Column(nullable = false)
+    private int contentQualityRating;
+
+    @Column(nullable = false)
+    private int difficultyRating;
+
+    @Column(nullable = false)
+    private int videoQualityRating;
 
     @Column(nullable = false)
     private LocalDateTime createdAt;

@@ -26,6 +26,9 @@ public class BookDetailResponse {
     private BigDecimal price;
     private String description;
     private boolean isOwned;
-    private Double averageRating;
+    private Double averageOverallRating;
+    private Double averageContentQualityRating;
+    private Double averageDifficultyRating;
+    private Double averageVideoQualityRating;
     private Long reviewCount;
 }

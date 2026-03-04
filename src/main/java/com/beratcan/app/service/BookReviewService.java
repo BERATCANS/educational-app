@@ -43,10 +43,17 @@ public class BookReviewService {
             throw new BadRequestException("Yorum bilgisi eksik.");
         }
 
-        int rating = request.getRating();
-        if (rating < AppConstants.MIN_RATING || rating > AppConstants.MAX_RATING) {
+        int overallRating = request.getOverallRating();
+        int contentQualityRating = request.getContentQualityRating();
+        int difficultyRating = request.getDifficultyRating();
+        int videoQualityRating = request.getVideoQualityRating();
+
+        if (overallRating < AppConstants.MIN_RATING || overallRating > AppConstants.MAX_RATING ||
+            contentQualityRating < AppConstants.MIN_RATING || contentQualityRating > AppConstants.MAX_RATING ||
+            difficultyRating < AppConstants.MIN_RATING || difficultyRating > AppConstants.MAX_RATING ||
+            videoQualityRating < AppConstants.MIN_RATING || videoQualityRating > AppConstants.MAX_RATING) {
             throw new BadRequestException(
-                    "Puan " + AppConstants.MIN_RATING + " ile " + AppConstants.MAX_RATING + " arasında olmalıdır.");
+                    "Puanlar " + AppConstants.MIN_RATING + " ile " + AppConstants.MAX_RATING + " arasında olmalıdır.");
         }
 
         User user = userRepository.findById(userId)
@@ -75,8 +82,10 @@ public class BookReviewService {
         review.setUser(user);
         review.setCreatedAt(now);
         review.setUpdatedAt(now);
-        review.setRating(rating);
-        review.setComment(request.getComment());
+        review.setOverallRating(overallRating);
+        review.setContentQualityRating(contentQualityRating);
+        review.setDifficultyRating(difficultyRating);
+        review.setVideoQualityRating(videoQualityRating);
 
         bookReviewRepository.save(review);
 
@@ -92,10 +101,17 @@ public class BookReviewService {
             throw new BadRequestException("Yorum bilgisi eksik.");
         }
 
-        int rating = request.getRating();
-        if (rating < AppConstants.MIN_RATING || rating > AppConstants.MAX_RATING) {
+        int overallRating = request.getOverallRating();
+        int contentQualityRating = request.getContentQualityRating();
+        int difficultyRating = request.getDifficultyRating();
+        int videoQualityRating = request.getVideoQualityRating();
+
+        if (overallRating < AppConstants.MIN_RATING || overallRating > AppConstants.MAX_RATING ||
+            contentQualityRating < AppConstants.MIN_RATING || contentQualityRating > AppConstants.MAX_RATING ||
+            difficultyRating < AppConstants.MIN_RATING || difficultyRating > AppConstants.MAX_RATING ||
+            videoQualityRating < AppConstants.MIN_RATING || videoQualityRating > AppConstants.MAX_RATING) {
             throw new BadRequestException(
-                    "Puan " + AppConstants.MIN_RATING + " ile " + AppConstants.MAX_RATING + " arasında olmalıdır.");
+                    "Puanlar " + AppConstants.MIN_RATING + " ile " + AppConstants.MAX_RATING + " arasında olmalıdır.");
         }
 
         User user = userRepository.findById(userId)
@@ -113,8 +129,10 @@ public class BookReviewService {
             throw new UnauthorizedOperationException("Yalnızca kendi yorumunuzu düzenleyebilirsiniz.");
         }
 
-        review.setRating(rating);
-        review.setComment(request.getComment());
+        review.setOverallRating(overallRating);
+        review.setContentQualityRating(contentQualityRating);
+        review.setDifficultyRating(difficultyRating);
+        review.setVideoQualityRating(videoQualityRating);
         review.setUpdatedAt(LocalDateTime.now());
 
         bookReviewRepository.save(review);
@@ -216,8 +234,10 @@ public class BookReviewService {
                 review.getId(),
                 reviewUser != null ? reviewUser.getId() : null,
                 userName,
-                review.getRating(),
-                review.getComment(),
+                review.getOverallRating(),
+                review.getContentQualityRating(),
+                review.getDifficultyRating(),
+                review.getVideoQualityRating(),
                 review.getCreatedAt(),
                 review.getUpdatedAt(),
                 false); // isMyReview artık kullanılmıyor, false olarak bırakıyoruz
@@ -231,15 +251,29 @@ public class BookReviewService {
         List<BookReview> reviews = bookReviewRepository.findByBookIdOrderByCreatedAtDesc(book.getId());
 
         if (reviews == null || reviews.isEmpty()) {
-            book.setAverageRating(0.0);
+            book.setAverageOverallRating(0.0);
+            book.setAverageContentQualityRating(0.0);
+            book.setAverageDifficultyRating(0.0);
+            book.setAverageVideoQualityRating(0.0);
             book.setReviewCount(0L);
         } else {
-            double totalRating = reviews.stream()
-                    .mapToInt(BookReview::getRating)
-                    .sum();
-            double average = totalRating / reviews.size();
-            book.setAverageRating(Math.round(average * AppConstants.RATING_DECIMAL_MULTIPLIER)
-                    / AppConstants.RATING_DECIMAL_MULTIPLIER);
+            double totalOverall = 0;
+            double totalContent = 0;
+            double totalDifficulty = 0;
+            double totalVideo = 0;
+
+            for (BookReview r : reviews) {
+                totalOverall += r.getOverallRating();
+                totalContent += r.getContentQualityRating();
+                totalDifficulty += r.getDifficultyRating();
+                totalVideo += r.getVideoQualityRating();
+            }
+
+            int size = reviews.size();
+            book.setAverageOverallRating(Math.round((totalOverall / size) * AppConstants.RATING_DECIMAL_MULTIPLIER) / (double) AppConstants.RATING_DECIMAL_MULTIPLIER);
+            book.setAverageContentQualityRating(Math.round((totalContent / size) * AppConstants.RATING_DECIMAL_MULTIPLIER) / (double) AppConstants.RATING_DECIMAL_MULTIPLIER);
+            book.setAverageDifficultyRating(Math.round((totalDifficulty / size) * AppConstants.RATING_DECIMAL_MULTIPLIER) / (double) AppConstants.RATING_DECIMAL_MULTIPLIER);
+            book.setAverageVideoQualityRating(Math.round((totalVideo / size) * AppConstants.RATING_DECIMAL_MULTIPLIER) / (double) AppConstants.RATING_DECIMAL_MULTIPLIER);
             book.setReviewCount((long) reviews.size());
         }
 

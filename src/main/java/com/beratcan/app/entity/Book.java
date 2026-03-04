@@ -88,7 +88,16 @@ public class Book {
     private Integer numberOfQuestions = 0;
 
     @Column(nullable = false, columnDefinition = "REAL DEFAULT 0.0")
-    private Double averageRating = 0.0; // Ortalama puan (1-5 arası)
+    private Double averageOverallRating = 0.0;
+
+    @Column(nullable = false, columnDefinition = "REAL DEFAULT 0.0")
+    private Double averageContentQualityRating = 0.0;
+
+    @Column(nullable = false, columnDefinition = "REAL DEFAULT 0.0")
+    private Double averageDifficultyRating = 0.0;
+
+    @Column(nullable = false, columnDefinition = "REAL DEFAULT 0.0")
+    private Double averageVideoQualityRating = 0.0;
 
     @Column(nullable = false, columnDefinition = "BIGINT DEFAULT 0")
     private Long reviewCount = 0L; // Toplam yorum sayısı

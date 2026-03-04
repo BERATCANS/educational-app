@@ -11,11 +11,23 @@ import lombok.Setter;
 @Setter
 public class BookReviewRequest {
 
-    @NotNull(message = "Puan boş olamaz")
+    @NotNull(message = "Genel puan boş olamaz")
     @Min(value = 1, message = "Puan en az 1 olmalıdır")
     @Max(value = 5, message = "Puan en fazla 5 olabilir")
-    private Integer rating;
+    private Integer overallRating;
 
-    @Size(max = 1000, message = "Yorum en fazla 1000 karakter olabilir")
-    private String comment;
+    @NotNull(message = "İçerik puanı boş olamaz")
+    @Min(value = 1, message = "Puan en az 1 olmalıdır")
+    @Max(value = 5, message = "Puan en fazla 5 olabilir")
+    private Integer contentQualityRating;
+
+    @NotNull(message = "Zorluk puanı boş olamaz")
+    @Min(value = 1, message = "Puan en az 1 olmalıdır")
+    @Max(value = 5, message = "Puan en fazla 5 olabilir")
+    private Integer difficultyRating;
+
+    @NotNull(message = "Video puanı boş olamaz")
+    @Min(value = 1, message = "Puan en az 1 olmalıdır")
+    @Max(value = 5, message = "Puan en fazla 5 olabilir")
+    private Integer videoQualityRating;
 }
