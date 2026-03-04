@@ -18,7 +18,10 @@ public class BookStoreResponse {
     private String publisher;
     private boolean paid;
     private BigDecimal price;
-    private Double averageRating;
+    private Double averageOverallRating;
+    private Double averageContentQualityRating;
+    private Double averageDifficultyRating;
+    private Double averageVideoQualityRating;
     private boolean isOwned;
     private Long reviewCount;
 }

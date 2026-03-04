@@ -140,7 +140,10 @@ public class BookCatalogService {
                 response.setPrice(book.getPrice());
                 response.setDescription(book.getDescription());
                 response.setOwned(isOwned);
-                response.setAverageRating(book.getAverageRating() != null ? book.getAverageRating() : 0.0);
+                response.setAverageOverallRating(book.getAverageOverallRating() != null ? book.getAverageOverallRating() : 0.0);
+                response.setAverageContentQualityRating(book.getAverageContentQualityRating() != null ? book.getAverageContentQualityRating() : 0.0);
+                response.setAverageDifficultyRating(book.getAverageDifficultyRating() != null ? book.getAverageDifficultyRating() : 0.0);
+                response.setAverageVideoQualityRating(book.getAverageVideoQualityRating() != null ? book.getAverageVideoQualityRating() : 0.0);
                 response.setReviewCount(book.getReviewCount() != null ? book.getReviewCount() : 0L);
 
                 return response;
@@ -162,7 +165,10 @@ public class BookCatalogService {
                 response.setPaid(book.isPaid());
                 response.setPrice(book.getPrice());
                 response.setOwned(isOwned != null && isOwned);
-                response.setAverageRating(book.getAverageRating() != null ? book.getAverageRating() : 0.0);
+                response.setAverageOverallRating(book.getAverageOverallRating() != null ? book.getAverageOverallRating() : 0.0);
+                response.setAverageContentQualityRating(book.getAverageContentQualityRating() != null ? book.getAverageContentQualityRating() : 0.0);
+                response.setAverageDifficultyRating(book.getAverageDifficultyRating() != null ? book.getAverageDifficultyRating() : 0.0);
+                response.setAverageVideoQualityRating(book.getAverageVideoQualityRating() != null ? book.getAverageVideoQualityRating() : 0.0);
                 response.setReviewCount(book.getReviewCount() != null ? book.getReviewCount() : 0L);
                 return response;
         }

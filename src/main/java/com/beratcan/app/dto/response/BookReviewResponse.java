@@ -15,8 +15,10 @@ public class BookReviewResponse {
     private Long id;
     private Long userId;
     private String userName;
-    private int rating;
-    private String comment;
+    private int overallRating;
+    private int contentQualityRating;
+    private int difficultyRating;
+    private int videoQualityRating;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private boolean isMyReview; // Kullanıcının kendi yorumu mu?
