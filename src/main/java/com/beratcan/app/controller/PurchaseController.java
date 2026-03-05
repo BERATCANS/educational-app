@@ -4,9 +4,7 @@ import com.beratcan.app.annotation.RateLimit;
 import com.beratcan.app.dto.request.PurchaseRequest;
 import com.beratcan.app.dto.response.PurchaseResponse;
 import com.beratcan.app.service.PurchaseService;
-import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
@@ -19,26 +17,6 @@ import java.util.List;
 public class PurchaseController {
 
     private final PurchaseService purchaseService;
-
-    /**
-     * Kitap satın al
-     * POST /api/purchases/buy/{bookId}
-     */
-    @PostMapping("/buy/{bookId}")
-    @RateLimit(requestsPerMinute = 5, keyType = "USER", message = "Too many purchase attempts. Please try again later.")
-    public ResponseEntity<?> buyBook(
-            @PathVariable Long bookId,
-            @Valid @RequestBody(required = false) PurchaseRequest request,
-            Authentication authentication) {
-        Long userId = Long.parseLong(authentication.getName());
-
-        if (request == null) {
-            request = new PurchaseRequest();
-        }
-
-        PurchaseResponse response = purchaseService.buyBook(userId, bookId, request);
-        return ResponseEntity.status(HttpStatus.CREATED).body(response);
-    }
 
     /**
      * Kullanıcının tüm satın alma geçmişini getir

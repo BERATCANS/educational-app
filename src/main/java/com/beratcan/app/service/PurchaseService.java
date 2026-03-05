@@ -44,131 +44,6 @@ public class PurchaseService {
     private final CartRepository cartRepository;
     private final DiscountCodeService discountCodeService;
 
-    @Transactional
-    public PurchaseResponse buyBook(Long userId, Long bookId, PurchaseRequest request) {
-        log.info("Starting book purchase: userId={}, bookId={}, paymentMethod={}",
-                userId, bookId, request.getPaymentMethod());
-
-        // Kullanıcıyı getir
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> {
-                    UserNotFoundException ex = new UserNotFoundException(userId);
-                    log.error("User not found for purchase: userId={}", userId, ex);
-                    return ex;
-                });
-
-        // Kitabı getir
-        Book book = bookRepository.findById(bookId)
-                .orElseThrow(() -> {
-                    BookNotFoundException ex = new BookNotFoundException(bookId);
-                    log.error("Book not found for purchase: bookId={}, userId={}", bookId, userId, ex);
-                    return ex;
-                });
-
-        // Kitap ücretsiz mi kontrol et
-        if (!book.isPaid()) {
-            log.warn("Attempted to purchase free book: userId={}, bookId={}, title={}",
-                    userId, bookId, book.getTitle());
-            throw new BadRequestException("Bu kitap zaten ücretsizdir");
-        }
-
-        // Kitabın fiyatı var mı kontrol et
-        if (book.getPrice() == null || book.getPrice().signum() <= 0) {
-            log.error("Invalid book price: bookId={}, price={}", bookId, book.getPrice());
-            throw new BadRequestException("Kitap fiyatı geçerli değil");
-        }
-
-        // Kullanıcı bu kitabı daha önce satın almış mı kontrol et
-        boolean alreadyOwned = userRepository.existsByUserIdAndBookId(userId, bookId);
-
-        if (alreadyOwned) {
-            log.info("Book already owned by user: userId={}, bookId={}, title={}",
-                    userId, bookId, book.getTitle());
-
-            // ✅ Exception değil, bilgi mesajı olarak dön
-            // Önceki satın alma kaydını bul
-            Purchase existingPurchase = purchaseRepository
-                    .findByUserIdAndBookIdAndStatus(userId, bookId, PurchaseStatus.COMPLETED)
-                    .orElse(null);
-
-            PurchaseResponse response;
-            if (existingPurchase != null) {
-                response = mapToResponse(existingPurchase);
-            } else {
-                // Kayıt yoksa yeni bir response oluştur
-                response = new PurchaseResponse();
-                response.setUserId(userId);
-                response.setUserName(user.getFirstName() + " " + user.getLastName());
-                response.setBookId(bookId);
-                response.setBookTitle(book.getTitle());
-                response.setBookCoverImageUrl(book.getCoverImageUrl());
-                response.setBookPublisher(book.getPublisher() != null ? book.getPublisher().getName() : null);
-                response.setPrice(book.getPrice());
-                response.setStatus(PurchaseStatus.COMPLETED);
-            }
-            response.setInfoMessage(
-                    "'" + book.getTitle() + "' zaten kütüphanenizde mevcut. Tekrar satın almanıza gerek yok.");
-            return response;
-        }
-
-        // Tamamlanmış bir satın alma kaydı var mı kontrol et (gereksiz oldu ama
-        // bırakalım)
-        purchaseRepository.findByUserIdAndBookIdAndStatus(userId, bookId, PurchaseStatus.COMPLETED)
-                .ifPresent(p -> {
-                    // Bu duruma artık gelmeyecek çünkü yukarıda yakaladık
-                });
-
-        // Purchase kaydı oluştur
-        String transactionId = generateTransactionId();
-
-        Purchase purchase = new Purchase();
-        purchase.setUser(user);
-        purchase.setBook(book);
-        purchase.setPrice(book.getPrice());
-        purchase.setPurchaseDate(LocalDateTime.now());
-        purchase.setPaymentMethod(request.getPaymentMethod());
-        purchase.setTransactionId(transactionId);
-
-        log.info("Processing payment: userId={}, bookId={}, amount={}, transactionId={}",
-                userId, bookId, book.getPrice(), transactionId);
-
-        // Burada gerçek ödeme işlemi yapılacak
-        // Şimdilik her satın alma işlemini başarılı kabul ediyoruz
-        boolean paymentSuccess = processPayment(purchase, request);
-
-        if (paymentSuccess) {
-            purchase.setStatus(PurchaseStatus.COMPLETED);
-            log.info("Payment successful: userId={}, bookId={}, transactionId={}",
-                    userId, bookId, transactionId);
-
-            // Kitabı kullanıcının kütüphanesine ekle
-            try {
-                user.getOwnedBooks().add(book);
-                userRepository.save(user);
-            } catch (DataIntegrityViolationException e) {
-                // DB constraint hatası (duplicate entry) yakalandı
-                if (e.getMessage() != null && e.getMessage().contains("uk_user_book")) {
-                    log.warn("Duplicate book ownership attempt prevented by DB constraint: userId={}, bookId={}",
-                            userId, bookId);
-                    // Kitap zaten kütüphanede, ama purchase kaydı oluşturuldu - bu normal bir durum
-                    // (kullanıcı daha önce eklemiş ama purchase kaydı yok olabilir)
-                } else {
-                    throw e; // Diğer constraint hataları için
-                }
-            }
-        } else {
-            purchase.setStatus(PurchaseStatus.FAILED);
-            log.error("Payment failed: userId={}, bookId={}, transactionId={}",
-                    userId, bookId, transactionId);
-        }
-
-        // Purchase kaydını kaydet
-        Purchase savedPurchase = purchaseRepository.save(purchase);
-        log.info("Purchase completed: purchaseId={}, userId={}, bookId={}, status={}, transactionId={}",
-                savedPurchase.getId(), userId, bookId, savedPurchase.getStatus(), transactionId);
-
-        return mapToResponse(savedPurchase);
-    }
 
     @Transactional(readOnly = true)
     public List<PurchaseResponse> getUserPurchases(Long userId) {
@@ -378,30 +253,35 @@ public class PurchaseService {
         List<Purchase> pendingPurchases = new ArrayList<>();
         LocalDateTime purchaseDate = LocalDateTime.now();
 
-        // İndirim tutarını kitaplara dağıt (accumulator pattern - rounding sorununu
-        // çözer)
+        // İndirim tutarını kitaplara orantılı dağıt (accumulator pattern - rounding sorununu çözer)
+        // Her kitabın payı = (kitapFiyatı / toplamFiyat) * indirimTutarı
         BigDecimal totalDiscountDistributed = BigDecimal.ZERO;
-        BigDecimal discountPerBook = BigDecimal.ZERO;
-        if (discountAmount.compareTo(BigDecimal.ZERO) > 0 && validBooks.size() > 0) {
-            discountPerBook = discountAmount.divide(
-                    new BigDecimal(validBooks.size()), 2, RoundingMode.HALF_UP);
-        }
 
         int bookIndex = 0;
         for (Book book : validBooks) {
 
-            // Son kitaba kalan farkı ekle (rounding sorununu çözer)
-            BigDecimal bookDiscount = discountPerBook;
+            BigDecimal bookDiscount = BigDecimal.ZERO;
             boolean isLastBook = (bookIndex == validBooks.size() - 1);
-            if (isLastBook && discountAmount.compareTo(BigDecimal.ZERO) > 0) {
-                // Son kitaba kalan farkı ekle
-                BigDecimal remainingDiscount = discountAmount.subtract(totalDiscountDistributed);
-                bookDiscount = remainingDiscount;
-            } else {
-                totalDiscountDistributed = totalDiscountDistributed.add(bookDiscount);
+
+            if (discountAmount.compareTo(BigDecimal.ZERO) > 0) {
+                if (isLastBook) {
+                    // Son kitaba kalan farkı ekle (rounding sorununu çözer)
+                    bookDiscount = discountAmount.subtract(totalDiscountDistributed);
+                } else {
+                    // Orantılı indirim: (kitapFiyatı / toplamFiyat) * indirimTutarı
+                    bookDiscount = book.getPrice()
+                            .divide(totalAmount, 10, RoundingMode.HALF_UP)
+                            .multiply(discountAmount)
+                            .setScale(2, RoundingMode.HALF_UP);
+                    totalDiscountDistributed = totalDiscountDistributed.add(bookDiscount);
+                }
             }
 
             BigDecimal bookFinalPrice = book.getPrice().subtract(bookDiscount);
+            // Negatif fiyat koruması
+            if (bookFinalPrice.compareTo(BigDecimal.ZERO) < 0) {
+                bookFinalPrice = BigDecimal.ZERO;
+            }
 
             Purchase purchase = new Purchase();
             purchase.setUser(user);
