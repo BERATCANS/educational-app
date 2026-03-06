@@ -1,11 +1,13 @@
 package com.beratcan.app.service;
 
 import com.beratcan.app.dto.request.PurchaseRequest;
+import com.beratcan.app.dto.response.PurchaseItemResponse;
 import com.beratcan.app.dto.response.PurchaseResponse;
 import com.beratcan.app.entity.Book;
 import com.beratcan.app.entity.Cart;
 import com.beratcan.app.entity.CartItem;
 import com.beratcan.app.entity.Purchase;
+import com.beratcan.app.entity.PurchaseItem;
 import com.beratcan.app.entity.User;
 import com.beratcan.app.entity.enums.PurchaseStatus;
 import com.beratcan.app.exception.BadRequestException;
@@ -72,7 +74,7 @@ public class PurchaseService {
 
     @Transactional(readOnly = true)
     public PurchaseResponse getPurchaseById(Long purchaseId, Long userId) {
-        // JOIN FETCH ile User, Book, Publisher ve DiscountCode'u tek query'de yükle
+        // JOIN FETCH ile User, Items, Book, Publisher ve DiscountCode'u tek query'de yükle
         Purchase purchase = purchaseRepository.findByIdWithUserAndBook(purchaseId)
                 .orElseThrow(() -> {
                     PurchaseNotFoundException ex = new PurchaseNotFoundException(purchaseId);
@@ -80,8 +82,7 @@ public class PurchaseService {
                     return ex;
                 });
 
-        // Kullanıcının kendi satın alma kaydını görmesini sağla (User zaten JOIN FETCH
-        // ile yüklü)
+        // Kullanıcının kendi satın alma kaydını görmesini sağla
         if (!purchase.getUser().getId().equals(userId)) {
             log.warn("Unauthorized purchase access attempt: purchaseId={}, requestingUserId={}, ownerUserId={}",
                     purchaseId, userId, purchase.getUser().getId());
@@ -94,9 +95,10 @@ public class PurchaseService {
     /**
      * Sepetteki tüm kitapları toplu olarak satın al
      * TEK ÖDEME işlemi ile tüm sepeti satın alır
+     * Tek bir Purchase kaydı + her kitap için PurchaseItem kaydı oluşturur
      */
     @Transactional
-    public List<PurchaseResponse> checkoutCart(Long userId) {
+    public PurchaseResponse checkoutCart(Long userId) {
         long startTime = System.currentTimeMillis();
 
         log.info("EVENT: Cart checkout started | userId={}", userId);
@@ -110,7 +112,6 @@ public class PurchaseService {
                 });
 
         // Sepeti getir (pessimistic lock ile - concurrent checkout'u önlemek için)
-        // JOIN FETCH ile tüm ilişkileri yükle (N+1 query önleme)
         Cart cart = cartRepository.findByUserIdWithLockAndItems(userId)
                 .orElseThrow(() -> {
                     CartNotFoundException ex = new CartNotFoundException(userId);
@@ -148,8 +149,7 @@ public class PurchaseService {
                 continue;
             }
 
-            // 2. Kitap ID ile tekrar kontrol et (lazy loading sorunları ve silinme kontrolü
-            // için)
+            // 2. Kitap ID ile tekrar kontrol et
             final Book book;
             try {
                 Book verifiedBook = bookRepository.findById(bookFromCart.getId())
@@ -161,7 +161,6 @@ public class PurchaseService {
                             userId);
                     continue;
                 }
-                // Verified book'u kullan (güncel veri için)
                 book = verifiedBook;
             } catch (Exception e) {
                 log.error("Error verifying book existence: bookId={}, userId={}", bookFromCart.getId(), userId, e);
@@ -177,7 +176,8 @@ public class PurchaseService {
             if (priceAtAdd != null && currentPrice != null &&
                     priceAtAdd.compareTo(currentPrice) != 0) {
                 validationErrors.add(book.getTitle() +
-                        ": Fiyat değişti (Sepete eklendiğinde: " + priceAtAdd + " TL, Şimdi: " + currentPrice + " TL)");
+                        ": Fiyat değişti (Sepete eklendiğinde: " + priceAtAdd + " TL, Şimdi: " + currentPrice
+                        + " TL)");
                 log.warn("Price changed for book in cart: bookId={}, priceAtAdd={}, currentPrice={}, userId={}",
                         book.getId(), priceAtAdd, currentPrice, userId);
                 continue;
@@ -221,10 +221,9 @@ public class PurchaseService {
         // ADIM 2: İndirim kontrolü ve uygulama
         BigDecimal discountAmount = BigDecimal.ZERO;
         BigDecimal finalTotalAmount = totalAmount;
-        String discountCodeWarning = null; // İndirim kodu uyarısı için
+        String discountCodeWarning = null;
 
         if (cart.getAppliedDiscountCode() != null) {
-            // İndirim kodunu tekrar validate et (son kontrol)
             com.beratcan.app.dto.response.DiscountValidationResult validation = discountCodeService
                     .validateDiscountCode(cart.getAppliedDiscountCode().getCode(), userId, cart);
 
@@ -236,25 +235,34 @@ public class PurchaseService {
             } else {
                 log.warn("Discount code validation failed during checkout: userId={}, code={}, error={}",
                         userId, cart.getAppliedDiscountCode().getCode(), validation.getErrorMessage());
-                // İndirim geçersiz, kullanıcıyı bilgilendir
                 discountCodeWarning = "İndirim kodu geçersiz: " + validation.getErrorMessage() +
                         " Ödeme indirimsiz olarak devam edecek.";
-                // İndirim bilgilerini temizle
                 cart.setAppliedDiscountCode(null);
                 cart.setDiscountAmount(null);
                 cart.setTotalPriceAfterDiscount(null);
             }
         }
 
-        // ADIM 3: Önce Purchase kayıtlarını PENDING olarak oluştur (güvenli yaklaşım)
-        // Bu sayede ödeme başarısız olursa transaction rollback olur ve kayıtlar FAILED
-        // olarak kalır
+        // ADIM 3: Tek bir Purchase kaydı oluştur (PENDING)
         String transactionId = generateTransactionId();
-        List<Purchase> pendingPurchases = new ArrayList<>();
         LocalDateTime purchaseDate = LocalDateTime.now();
 
-        // İndirim tutarını kitaplara orantılı dağıt (accumulator pattern - rounding sorununu çözer)
-        // Her kitabın payı = (kitapFiyatı / toplamFiyat) * indirimTutarı
+        Purchase purchase = new Purchase();
+        purchase.setUser(user);
+        purchase.setTotalPrice(totalAmount);
+        purchase.setTotalDiscount(discountAmount);
+        purchase.setFinalPrice(finalTotalAmount);
+        purchase.setItemCount(validBooks.size());
+        purchase.setPurchaseDate(purchaseDate);
+        purchase.setPaymentMethod("Sepet ile satın alma");
+        purchase.setTransactionId(transactionId);
+        purchase.setStatus(PurchaseStatus.PENDING);
+
+        if (cart.getAppliedDiscountCode() != null && discountAmount.compareTo(BigDecimal.ZERO) > 0) {
+            purchase.setDiscountCode(cart.getAppliedDiscountCode());
+        }
+
+        // ADIM 4: Her kitap için PurchaseItem oluştur (orantılı indirim dağıtımı)
         BigDecimal totalDiscountDistributed = BigDecimal.ZERO;
 
         int bookIndex = 0;
@@ -283,41 +291,29 @@ public class PurchaseService {
                 bookFinalPrice = BigDecimal.ZERO;
             }
 
-            Purchase purchase = new Purchase();
-            purchase.setUser(user);
-            purchase.setBook(book);
-            purchase.setPrice(book.getPrice()); // İndirim öncesi fiyat
-            purchase.setPurchaseDate(purchaseDate);
-            purchase.setPaymentMethod("Sepet ile satın alma");
-            purchase.setTransactionId(transactionId); // Aynı transaction ID
-            purchase.setStatus(PurchaseStatus.PENDING); // Önce PENDING olarak oluştur (ödeme yapılmadan önce)
+            PurchaseItem item = new PurchaseItem();
+            item.setBook(book);
+            item.setPrice(book.getPrice());
+            item.setDiscountAmount(bookDiscount);
+            item.setFinalPrice(bookFinalPrice);
 
-            // İndirim bilgileri
-            if (cart.getAppliedDiscountCode() != null && discountAmount.compareTo(BigDecimal.ZERO) > 0) {
-                purchase.setDiscountCode(cart.getAppliedDiscountCode());
-                purchase.setDiscountAmount(bookDiscount);
-                purchase.setFinalPrice(bookFinalPrice);
-            } else {
-                purchase.setFinalPrice(book.getPrice()); // İndirim yoksa normal fiyat
-            }
-
-            // Purchase'ı PENDING olarak kaydet
-            Purchase savedPurchase = purchaseRepository.save(purchase);
-            pendingPurchases.add(savedPurchase); // Geçici olarak listeye ekle
-
-            bookIndex++; // Sonraki kitap için index'i artır
+            purchase.addItem(item);
+            bookIndex++;
         }
 
-        // Kullanıcıyı kaydet (ownedBooks güncellemeleri için - henüz kitap eklenmedi)
+        // Purchase ve tüm PurchaseItem'ları kaydet (cascade)
+        Purchase savedPurchase = purchaseRepository.save(purchase);
+
+        // Kullanıcıyı kaydet
         userRepository.save(user);
 
-        // ADIM 5: Şimdi ödeme işlemini yap
+        // ADIM 5: Ödeme işlemini yap
         PurchaseRequest paymentRequest = new PurchaseRequest();
         paymentRequest.setPaymentMethod("Sepet ile satın alma");
 
         // Dummy purchase objesi oluştur (sadece processPayment için)
         Purchase dummyPurchase = new Purchase();
-        dummyPurchase.setPrice(finalTotalAmount); // İndirim sonrası toplam tutar
+        dummyPurchase.setTotalPrice(finalTotalAmount);
         dummyPurchase.setTransactionId(transactionId);
 
         log.info("Processing payment: userId={}, finalTotalAmount={}, transactionId={}",
@@ -325,48 +321,30 @@ public class PurchaseService {
 
         boolean paymentSuccess = processPayment(dummyPurchase, paymentRequest);
 
-        // ADIM 6: Ödeme sonucuna göre purchase kayıtlarını güncelle
-        List<PurchaseResponse> purchaseResponses = new ArrayList<>();
-
+        // ADIM 6: Ödeme sonucuna göre güncelle
         if (paymentSuccess) {
             log.info("Payment successful: userId={}, finalTotalAmount={}, transactionId={}",
                     userId, finalTotalAmount, transactionId);
 
-            // Ödeme başarılı - Tüm purchase kayıtlarını COMPLETED yap ve kütüphaneye ekle
-            for (int i = 0; i < pendingPurchases.size(); i++) {
-                Purchase purchase = pendingPurchases.get(i);
-                Book book = validBooks.get(i);
+            savedPurchase.setStatus(PurchaseStatus.COMPLETED);
 
-                purchase.setStatus(PurchaseStatus.COMPLETED);
-
-                // Kitabı kullanıcının kütüphanesine ekle
+            // Kitapları kullanıcının kütüphanesine ekle
+            for (Book book : validBooks) {
                 try {
                     user.getOwnedBooks().add(book);
                 } catch (DataIntegrityViolationException e) {
-                    // DB constraint hatası (duplicate entry) yakalandı
                     if (e.getMessage() != null && e.getMessage().contains("uk_user_book")) {
                         log.warn("Book already in library (checkout): userId={}, bookId={}", userId, book.getId());
-                        // Kitap zaten kütüphanede, purchase kaydı oluşturmaya devam et
                     } else {
-                        throw e; // Diğer constraint hataları için
+                        throw e;
                     }
                 }
-
-                // Purchase'ı güncelle
-                Purchase updatedPurchase = purchaseRepository.save(purchase);
-                PurchaseResponse purchaseResponse = mapToResponse(updatedPurchase);
-                // İndirim kodu uyarısı varsa ekle (sadece ilk purchase'a)
-                if (discountCodeWarning != null && i == 0) {
-                    purchaseResponse.setInfoMessage(discountCodeWarning);
-                }
-                purchaseResponses.add(purchaseResponse);
             }
 
-            // Kullanıcıyı kaydet (ownedBooks güncellemeleri için)
+            purchaseRepository.save(savedPurchase);
             userRepository.save(user);
 
-            // İndirim kodunu kullan (kaydet) - Purchase kayıtları başarıyla oluşturulduktan
-            // SONRA
+            // İndirim kodunu kullan
             if (cart.getAppliedDiscountCode() != null && discountAmount.compareTo(BigDecimal.ZERO) > 0) {
                 discountCodeService.useDiscountCode(
                         cart.getAppliedDiscountCode().getId(),
@@ -379,19 +357,14 @@ public class PurchaseService {
             log.error("Payment failed: userId={}, finalTotalAmount={}, transactionId={}",
                     userId, finalTotalAmount, transactionId);
 
-            // Ödeme başarısız - Tüm purchase kayıtlarını FAILED yap
-            for (Purchase purchase : pendingPurchases) {
-                purchase.setStatus(PurchaseStatus.FAILED);
-                purchaseRepository.save(purchase);
-            }
+            savedPurchase.setStatus(PurchaseStatus.FAILED);
+            purchaseRepository.save(savedPurchase);
 
-            // Transaction rollback olacak ama purchase kayıtları FAILED olarak kalacak
-            // (gerçek ödeme gateway'i entegre edilirken refund işlemi yapılmalı)
             throw new ExternalServiceException("Ödeme işlemi başarısız oldu. Toplam tutar: " +
                     finalTotalAmount + " TL. Lütfen tekrar deneyin.");
         }
 
-        // Sepeti temizle (items ve indirim kodu bilgileri)
+        // Sepeti temizle
         cart.getItems().clear();
         cart.setAppliedDiscountCode(null);
         cart.setDiscountAmount(null);
@@ -407,28 +380,27 @@ public class PurchaseService {
 
         long duration = System.currentTimeMillis() - startTime;
         log.info(
-                "EVENT: Cart checkout completed | userId={} | purchaseCount={} | totalAmount={} | transactionId={} | duration={}ms",
-                userId, purchaseResponses.size(), finalTotalAmount, transactionId, duration);
+                "EVENT: Cart checkout completed | userId={} | itemCount={} | totalAmount={} | transactionId={} | duration={}ms",
+                userId, savedPurchase.getItemCount(), finalTotalAmount, transactionId, duration);
 
-        // Performance warning for slow operations (5 second threshold)
         if (duration > 5000) {
             log.warn("PERF: Cart checkout slow | duration={}ms | threshold=5000ms | userId={} | transactionId={}",
                     duration, userId, transactionId);
         }
 
-        return purchaseResponses;
+        PurchaseResponse response = mapToResponse(savedPurchase);
+        if (discountCodeWarning != null) {
+            response.setInfoMessage(discountCodeWarning);
+        }
+        return response;
     }
 
-    // Simüle edilmiş ödeme işlemi (ileride gerçek ödeme gateway'i entegre
-    // edilebilir)
+    // Simüle edilmiş ödeme işlemi
     private boolean processPayment(Purchase purchase, PurchaseRequest request) {
-
         // TODO: Gerçek ödeme gateway'i (Stripe, iyzico, vb.) ile entegrasyon
-        // Şimdilik her ödemeyi başarılı kabul ediyoruz
         boolean success = true;
 
-        if (success) {
-        } else {
+        if (!success) {
             log.error("Payment processing failed: transactionId={}", purchase.getTransactionId());
         }
 
@@ -437,8 +409,7 @@ public class PurchaseService {
 
     // Benzersiz işlem numarası oluştur
     private String generateTransactionId() {
-        String transactionId = "TXN-" + UUID.randomUUID().toString();
-        return transactionId;
+        return "TXN-" + UUID.randomUUID().toString();
     }
 
     // Purchase entity'sini PurchaseResponse'a dönüştür
@@ -447,13 +418,10 @@ public class PurchaseService {
         response.setId(purchase.getId());
         response.setUserId(purchase.getUser().getId());
         response.setUserName(purchase.getUser().getFirstName() + " " + purchase.getUser().getLastName());
-        response.setBookId(purchase.getBook().getId());
-        response.setBookTitle(purchase.getBook().getTitle());
-        response.setBookCoverImageUrl(purchase.getBook().getCoverImageUrl());
-        response.setBookPublisher(purchase.getBook().getPublisher() != null
-                ? purchase.getBook().getPublisher().getName()
-                : null);
-        response.setPrice(purchase.getPrice());
+        response.setTotalPrice(purchase.getTotalPrice());
+        response.setTotalDiscount(purchase.getTotalDiscount());
+        response.setFinalPrice(purchase.getFinalPrice());
+        response.setItemCount(purchase.getItemCount());
         response.setPurchaseDate(purchase.getPurchaseDate());
         response.setStatus(purchase.getStatus());
         response.setTransactionId(purchase.getTransactionId());
@@ -463,9 +431,30 @@ public class PurchaseService {
         if (purchase.getDiscountCode() != null) {
             response.setDiscountCode(purchase.getDiscountCode().getCode());
         }
-        response.setDiscountAmount(purchase.getDiscountAmount());
-        response.setFinalPrice(purchase.getFinalPrice());
 
+        // Sipariş kalemlerini ekle
+        if (purchase.getItems() != null) {
+            response.setItems(purchase.getItems().stream()
+                    .map(this::mapToItemResponse)
+                    .collect(Collectors.toList()));
+        }
+
+        return response;
+    }
+
+    // PurchaseItem entity'sini PurchaseItemResponse'a dönüştür
+    private PurchaseItemResponse mapToItemResponse(PurchaseItem item) {
+        PurchaseItemResponse response = new PurchaseItemResponse();
+        response.setId(item.getId());
+        response.setBookId(item.getBook().getId());
+        response.setBookTitle(item.getBook().getTitle());
+        response.setBookCoverImageUrl(item.getBook().getCoverImageUrl());
+        response.setBookPublisher(item.getBook().getPublisher() != null
+                ? item.getBook().getPublisher().getName()
+                : null);
+        response.setPrice(item.getPrice());
+        response.setDiscountAmount(item.getDiscountAmount());
+        response.setFinalPrice(item.getFinalPrice());
         return response;
     }
 }

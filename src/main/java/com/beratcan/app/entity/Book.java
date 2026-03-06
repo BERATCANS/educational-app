@@ -71,9 +71,9 @@ public class Book {
     @OneToMany(mappedBy = "book", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private List<CartItem> cartItems = new ArrayList<>();
 
-    // ✅ Purchase ile bidirectional ilişki (Bu kitabın satın alma geçmişi)
+    // ✅ PurchaseItem ile bidirectional ilişki (Bu kitabın satın alma geçmişi)
     @OneToMany(mappedBy = "book", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
-    private List<Purchase> purchases = new ArrayList<>();
+    private List<PurchaseItem> purchaseItems = new ArrayList<>();
 
     @OneToMany(mappedBy = "book", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<BookReview> reviews = new ArrayList<>();

@@ -14,33 +14,52 @@ import java.util.Optional;
 @Repository
 public interface PurchaseRepository extends JpaRepository<Purchase, Long> {
 
-    // Kullanıcının tüm satın almalarını getir (N+1 query önleme için @EntityGraph)
-    @EntityGraph(attributePaths = { "user", "book", "book.publisher", "discountCode" })
-    @Query("SELECT p FROM Purchase p WHERE p.user.id = :userId ORDER BY p.purchaseDate DESC")
-    List<Purchase> findByUserIdOrderByPurchaseDateDesc(Long userId);
+    // Kullanıcının tüm satın almalarını getir (items ve book'larıyla birlikte)
+    @Query("SELECT DISTINCT p FROM Purchase p " +
+            "LEFT JOIN FETCH p.items i " +
+            "LEFT JOIN FETCH i.book b " +
+            "LEFT JOIN FETCH b.publisher " +
+            "LEFT JOIN FETCH p.discountCode " +
+            "LEFT JOIN FETCH p.user u " +
+            "WHERE p.user.id = :userId " +
+            "ORDER BY p.purchaseDate DESC")
+    List<Purchase> findByUserIdOrderByPurchaseDateDesc(@Param("userId") Long userId);
 
-    // Kullanıcının belirli bir kitap için satın almasını kontrol et
-    @EntityGraph(attributePaths = { "user", "book", "book.publisher", "discountCode" })
-    Optional<Purchase> findByUserIdAndBookIdAndStatus(Long userId, Long bookId, PurchaseStatus status);
+    // Kullanıcının belirli bir kitap için satın almasını kontrol et (items üzerinden)
+    @Query("SELECT DISTINCT p FROM Purchase p " +
+            "JOIN p.items i " +
+            "WHERE p.user.id = :userId " +
+            "AND i.book.id = :bookId " +
+            "AND p.status = :status")
+    Optional<Purchase> findByUserIdAndBookIdAndStatus(
+            @Param("userId") Long userId,
+            @Param("bookId") Long bookId,
+            @Param("status") PurchaseStatus status);
 
-    // Kullanıcının tamamlanmış satın almalarını getir (N+1 query önleme için
-    // @EntityGraph)
-    @EntityGraph(attributePaths = { "user", "book", "book.publisher", "discountCode" })
-    @Query("SELECT p FROM Purchase p WHERE p.user.id = :userId AND p.status = :status ORDER BY p.purchaseDate DESC")
-    List<Purchase> findByUserIdAndStatusOrderByPurchaseDateDesc(Long userId, PurchaseStatus status);
+    // Kullanıcının tamamlanmış satın almalarını getir
+    @Query("SELECT DISTINCT p FROM Purchase p " +
+            "LEFT JOIN FETCH p.items i " +
+            "LEFT JOIN FETCH i.book b " +
+            "LEFT JOIN FETCH b.publisher " +
+            "LEFT JOIN FETCH p.discountCode " +
+            "LEFT JOIN FETCH p.user u " +
+            "WHERE p.user.id = :userId AND p.status = :status " +
+            "ORDER BY p.purchaseDate DESC")
+    List<Purchase> findByUserIdAndStatusOrderByPurchaseDateDesc(
+            @Param("userId") Long userId,
+            @Param("status") PurchaseStatus status);
 
-    // Bir kitabın toplam satış sayısı
-    @Query("SELECT COUNT(p) FROM Purchase p WHERE p.book.id = :bookId AND p.status = 'COMPLETED'")
-    Long countCompletedPurchasesByBookId(Long bookId);
+    // Bir kitabın toplam satış sayısı (items üzerinden)
+    @Query("SELECT COUNT(i) FROM PurchaseItem i " +
+            "WHERE i.book.id = :bookId " +
+            "AND i.purchase.status = 'COMPLETED'")
+    Long countCompletedPurchasesByBookId(@Param("bookId") Long bookId);
 
-    /**
-     * Purchase'ı User, Book, Publisher ve DiscountCode ile birlikte getirir (JOIN
-     * FETCH)
-     * LazyInitializationException önlemek için
-     */
+    // Purchase'ı tüm ilişkileriyle birlikte getirir
     @Query("SELECT p FROM Purchase p " +
             "JOIN FETCH p.user u " +
-            "JOIN FETCH p.book b " +
+            "LEFT JOIN FETCH p.items i " +
+            "LEFT JOIN FETCH i.book b " +
             "LEFT JOIN FETCH b.publisher pub " +
             "LEFT JOIN FETCH p.discountCode d " +
             "WHERE p.id = :purchaseId")

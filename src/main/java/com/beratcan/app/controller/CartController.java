@@ -92,11 +92,11 @@ public class CartController {
     @RateLimit(requestsPerMinute = 3, keyType = "USER", message = "Too many checkout attempts. Please try again later.")
     public ResponseEntity<?> checkout(Authentication authentication) {
         Long userId = Long.parseLong(authentication.getName());
-        List<PurchaseResponse> purchases = purchaseService.checkoutCart(userId);
+        PurchaseResponse purchase = purchaseService.checkoutCart(userId);
         return ResponseEntity.status(HttpStatus.CREATED).body(Map.of(
                 "message", "Sepetteki tüm kitaplar başarıyla satın alındı",
-                "purchases", purchases,
-                "totalItems", purchases.size()));
+                "purchase", purchase,
+                "totalItems", purchase.getItemCount()));
     }
 
     @PostMapping("/apply-discount")
