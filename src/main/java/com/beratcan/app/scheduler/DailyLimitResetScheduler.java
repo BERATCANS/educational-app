@@ -23,7 +23,7 @@ public class DailyLimitResetScheduler {
      * Her gece yarısı (00:00:00) çalışarak tüm kullanıcıların
      * günlük limit bucket'larını temizler
      */
-    @Scheduled(cron = "0 0 0 * * *") // Her gün 00:00:00'da
+    @Scheduled(cron = "0 0 0 * * *", zone = "Europe/Istanbul") // Her gün Türkiye saatiyle 00:00:00'da
     public void resetAllDailyLimitBuckets() {
         try {
             int cacheSizeBefore = dailyLimitConfig.getCacheSize();

@@ -5,12 +5,15 @@ import com.beratcan.app.dto.response.DiscountCodeResponse;
 import com.beratcan.app.entity.Book;
 import com.beratcan.app.entity.DiscountCode;
 import com.beratcan.app.entity.Publisher;
+import com.beratcan.app.entity.User;
 import com.beratcan.app.exception.BadRequestException;
 import com.beratcan.app.exception.ConflictException;
 import com.beratcan.app.exception.DiscountCodeNotFoundException;
 import com.beratcan.app.repository.BookRepository;
 import com.beratcan.app.repository.DiscountCodeRepository;
 import com.beratcan.app.repository.PublisherRepository;
+import com.beratcan.app.repository.UserRepository;
+import com.beratcan.app.exception.UserNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -32,6 +35,7 @@ public class DiscountCodeAdminService {
     private final DiscountCodeRepository discountCodeRepository;
     private final PublisherRepository publisherRepository;
     private final BookRepository bookRepository;
+    private final UserRepository userRepository;
 
     /**
      * Admin: İndirim kodu oluştur
@@ -76,6 +80,16 @@ public class DiscountCodeAdminService {
                             .orElseThrow(() -> new BookNotFoundException(bookId)))
                     .collect(Collectors.toSet());
             discountCode.setApplicableBooks(books);
+        }
+
+        // Kullanıcılar (username ile)
+        if (request.getApplicableUsernames() != null && !request.getApplicableUsernames().isEmpty()) {
+            Set<User> users = request.getApplicableUsernames().stream()
+                    .map(username -> userRepository.findByUsername(username)
+                            .orElseThrow(() -> new BadRequestException(
+                                    "Kullanıcı adı bulunamadı: " + username)))
+                    .collect(Collectors.toSet());
+            discountCode.setApplicableUsers(users);
         }
 
         discountCode = discountCodeRepository.save(discountCode);
@@ -181,6 +195,20 @@ public class DiscountCodeAdminService {
             }
         }
 
+        // Kullanıcılar güncelle (username ile)
+        if (request.getApplicableUsernames() != null) {
+            if (request.getApplicableUsernames().isEmpty()) {
+                discountCode.getApplicableUsers().clear();
+            } else {
+                Set<User> users = request.getApplicableUsernames().stream()
+                        .map(username -> userRepository.findByUsername(username)
+                                .orElseThrow(() -> new BadRequestException(
+                                        "Kullanıcı adı bulunamadı: " + username)))
+                        .collect(Collectors.toSet());
+                discountCode.setApplicableUsers(users);
+            }
+        }
+
         discountCode = discountCodeRepository.save(discountCode);
         log.info("Discount code updated successfully: id={}, code={}", discountCode.getId(), discountCode.getCode());
 
@@ -241,6 +269,9 @@ public class DiscountCodeAdminService {
         }
         if (code.getApplicableBooks() != null) {
             response.setApplicableBookCount(code.getApplicableBooks().size());
+        }
+        if (code.getApplicableUsers() != null) {
+            response.setApplicableUserCount(code.getApplicableUsers().size());
         }
 
         return response;

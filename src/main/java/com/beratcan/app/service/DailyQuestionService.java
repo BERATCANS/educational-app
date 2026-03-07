@@ -23,6 +23,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.ZoneId;
 import java.util.HashMap;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -33,6 +35,8 @@ import java.util.Map;
 @Service
 @RequiredArgsConstructor
 public class DailyQuestionService {
+
+    private static final ZoneId TURKEY_ZONE = ZoneId.of("Europe/Istanbul");
 
     private final DailyQuestionRepository dailyQuestionRepository;
     private final DailyQuestionAnswerRepository answerRepository;
@@ -49,7 +53,7 @@ public class DailyQuestionService {
         userRepository.findById(userId)
                 .orElseThrow(() -> new UserNotFoundException(userId));
 
-        DailyQuestion question = dailyQuestionRepository.findByDisplayDate(LocalDate.now())
+        DailyQuestion question = dailyQuestionRepository.findByDisplayDate(LocalDate.now(TURKEY_ZONE))
                 .orElse(null);
 
         if (question == null) {
@@ -86,7 +90,7 @@ public class DailyQuestionService {
                 .orElseThrow(() -> new ResourceNotFoundException("Soru bulunamadı"));
 
         // Zaman kontrolü
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now(TURKEY_ZONE);
         LocalDateTime startTime = LocalDateTime.of(question.getDisplayDate(), question.getStartTime());
         LocalDateTime endTime = LocalDateTime.of(question.getDisplayDate(), question.getEndTime());
 
@@ -263,7 +267,7 @@ public class DailyQuestionService {
         response.setEndTime(question.getEndTime());
         
         // Active durumunu dinamik olarak hesapla
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now(TURKEY_ZONE);
         LocalDateTime startTime = LocalDateTime.of(question.getDisplayDate(), question.getStartTime());
         LocalDateTime endTime = LocalDateTime.of(question.getDisplayDate(), question.getEndTime());
         
@@ -321,7 +325,7 @@ public class DailyQuestionService {
         response.setStartTime(question.getStartTime());
         response.setEndTime(question.getEndTime());
         // Active durumunu dinamik olarak hesapla
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now(TURKEY_ZONE);
         LocalDateTime startTime = LocalDateTime.of(question.getDisplayDate(), question.getStartTime());
         LocalDateTime endTime = LocalDateTime.of(question.getDisplayDate(), question.getEndTime());
         boolean isActive = now.isAfter(startTime) && now.isBefore(endTime);

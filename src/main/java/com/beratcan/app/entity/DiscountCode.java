@@ -78,6 +78,13 @@ public class DiscountCode {
     @Column
     private Integer maxUsagePerUser; // null ise sınırsız
 
+    // Kullanıcıya özel kod (opsiyonel)
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(name = "discount_code_users",
+            joinColumns = @JoinColumn(name = "discount_code_id"),
+            inverseJoinColumns = @JoinColumn(name = "user_id"))
+    private Set<User> applicableUsers = new HashSet<>(); // boş ise herkese açık
+
     @Column(nullable = false)
     private LocalDateTime createdAt;
 

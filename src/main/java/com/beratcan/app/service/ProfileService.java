@@ -19,11 +19,14 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.time.LocalDate;
+import java.time.ZoneId;
 
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class ProfileService {
+
+    private static final ZoneId TURKEY_ZONE = ZoneId.of("Europe/Istanbul");
 
     private final UserService userService;
     private final UserRepository userRepository;
@@ -263,7 +266,7 @@ public class ProfileService {
     @Transactional(readOnly = true)
     public QuestionTargetResponse getQuestionTarget(Long userId) {
         User user = userService.getUserById(userId);
-        LocalDate today = LocalDate.now();
+        LocalDate today = LocalDate.now(TURKEY_ZONE);
         int target = user.getDailyQuestionTarget() != null ? user.getDailyQuestionTarget() : 0;
         int solvedToday = user.getDailySolvedQuestions() != null ? user.getDailySolvedQuestions() : 0;
         int remaining = Math.max(target - solvedToday, 0);
@@ -300,7 +303,7 @@ public class ProfileService {
      * @return true eğer streak güncellendiyse, false eğer değişmediyse
      */
     private boolean updateStreak(User user) {
-        LocalDate today = LocalDate.now();
+        LocalDate today = LocalDate.now(TURKEY_ZONE);
         LocalDate lastActivity = user.getLastActivityDate();
 
         // İlk aktivite veya lastActivity null ise

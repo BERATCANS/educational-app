@@ -23,6 +23,7 @@ public class DiscountCodeResponse {
     private String applicablePublisherName;
     private Integer applicableBookCount;
     private Integer maxUsagePerUser;
+    private Integer applicableUserCount;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

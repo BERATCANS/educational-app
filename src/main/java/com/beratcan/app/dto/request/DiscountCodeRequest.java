@@ -56,4 +56,6 @@ public class DiscountCodeRequest {
 
     @Min(value = 1, message = "Kullanıcı başına limit en az 1 olmalıdır")
     private Integer maxUsagePerUser; // Kullanıcı başına limit (opsiyonel)
+
+    private List<String> applicableUsernames; // Kullanıcı adları (opsiyonel, boş=herkes)
 }

@@ -22,7 +22,7 @@ public class DailySolvedQuestionsResetScheduler {
      * Her gece yarısı (00:00:00) çalışarak tüm kullanıcıların
      * günlük çözülen soru sayısını sıfırlar
      */
-    @Scheduled(cron = "0 0 0 * * *") // Her gün 00:00:00'da
+    @Scheduled(cron = "0 0 0 * * *", zone = "Europe/Istanbul") // Her gün Türkiye saatiyle 00:00:00'da
     @Transactional
     public void resetAllDailySolvedQuestions() {
         try {

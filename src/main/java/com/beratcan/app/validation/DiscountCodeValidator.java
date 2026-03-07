@@ -93,6 +93,15 @@ public class DiscountCodeValidator implements ConstraintValidator<ValidDiscountC
             }
         }
 
+        // Publisher ve Books aynı anda dolu olamaz (OR mantığı — ya biri ya öteki)
+        if (request.getApplicablePublisherId() != null &&
+                request.getApplicableBookIds() != null && !request.getApplicableBookIds().isEmpty()) {
+            context.buildConstraintViolationWithTemplate(
+                    "Yayınevi ve kitap filtreleri aynı anda kullanılamaz. Ya yayınevi ya da kitap filtresi seçin.")
+                    .addConstraintViolation();
+            isValid = false;
+        }
+
         return isValid;
     }
 }
