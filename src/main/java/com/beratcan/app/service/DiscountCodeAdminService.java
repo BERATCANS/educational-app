@@ -2,8 +2,10 @@ package com.beratcan.app.service;
 
 import com.beratcan.app.dto.request.DiscountCodeRequest;
 import com.beratcan.app.dto.response.DiscountCodeResponse;
+import com.beratcan.app.dto.response.DiscountCodeUsageResponse;
 import com.beratcan.app.entity.Book;
 import com.beratcan.app.entity.DiscountCode;
+import com.beratcan.app.entity.DiscountCodeUsage;
 import com.beratcan.app.entity.Publisher;
 import com.beratcan.app.entity.User;
 import com.beratcan.app.exception.BadRequestException;
@@ -11,6 +13,7 @@ import com.beratcan.app.exception.ConflictException;
 import com.beratcan.app.exception.DiscountCodeNotFoundException;
 import com.beratcan.app.repository.BookRepository;
 import com.beratcan.app.repository.DiscountCodeRepository;
+import com.beratcan.app.repository.DiscountCodeUsageRepository;
 import com.beratcan.app.repository.PublisherRepository;
 import com.beratcan.app.repository.UserRepository;
 import com.beratcan.app.exception.PublisherNotFoundException;
@@ -33,6 +36,7 @@ import java.util.stream.Collectors;
 public class DiscountCodeAdminService {
 
     private final DiscountCodeRepository discountCodeRepository;
+    private final DiscountCodeUsageRepository discountCodeUsageRepository;
     private final PublisherRepository publisherRepository;
     private final BookRepository bookRepository;
     private final UserRepository userRepository;
@@ -107,6 +111,24 @@ public class DiscountCodeAdminService {
         Pageable pageable = PageRequest.of(page, size);
         Page<DiscountCode> discountCodes = discountCodeRepository.findAll(pageable);
         return discountCodes.map(this::toDiscountCodeResponse);
+    }
+
+    /**
+     * Admin: İndirim kodunun kullanım detaylarını getir (sayfalayarak)
+     */
+    @Transactional(readOnly = true)
+    public Page<DiscountCodeUsageResponse> getDiscountCodeUsages(Long id, int page, int size) {
+        log.info("Fetching usages for discount code: id={}", id);
+
+        // Kodu bul, yoksa hata at
+        if (!discountCodeRepository.existsById(id)) {
+            throw new DiscountCodeNotFoundException(id);
+        }
+
+        Pageable pageable = PageRequest.of(page, size);
+        Page<DiscountCodeUsage> usages = discountCodeUsageRepository.findByDiscountCodeIdOrderByUsedAtDesc(id, pageable);
+
+        return usages.map(this::toDiscountCodeUsageResponse);
     }
 
     /**
@@ -291,6 +313,20 @@ public class DiscountCodeAdminService {
             response.setApplicableUsernames(usernames);
         }
 
+        return response;
+    }
+
+    /**
+     * DiscountCodeUsage'u DiscountCodeUsageResponse'a dönüştür
+     */
+    private DiscountCodeUsageResponse toDiscountCodeUsageResponse(DiscountCodeUsage usage) {
+        DiscountCodeUsageResponse response = new DiscountCodeUsageResponse();
+        response.setId(usage.getId());
+        response.setUserId(usage.getUser().getId());
+        response.setUsername(usage.getUser().getUsername());
+        response.setEmail(usage.getUser().getEmail());
+        response.setUsedAt(usage.getUsedAt());
+        response.setTransactionId(usage.getTransactionId());
         return response;
     }
 }

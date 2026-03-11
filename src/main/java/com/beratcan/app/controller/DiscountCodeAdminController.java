@@ -4,6 +4,7 @@ import com.beratcan.app.annotation.RateLimit;
 import com.beratcan.app.constants.AppConstants;
 import com.beratcan.app.dto.request.DiscountCodeRequest;
 import com.beratcan.app.dto.response.DiscountCodeResponse;
+import com.beratcan.app.dto.response.DiscountCodeUsageResponse;
 import com.beratcan.app.service.DiscountCodeAdminService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -63,6 +64,20 @@ public class DiscountCodeAdminController {
     public ResponseEntity<DiscountCodeResponse> getDiscountCodeById(@PathVariable Long id) {
         DiscountCodeResponse response = discountCodeAdminService.getDiscountCodeById(id);
         return ResponseEntity.ok(response);
+    }
+
+    /**
+     * İndirim kodunun kullanım geçmişini getir
+     * GET /api/admin/discount-codes/{id}/usages?page=0&size=20
+     */
+    @GetMapping("/{id}/usages")
+    @RateLimit(requestsPerMinute = 20, keyType = "USER", message = "Too many discount code usage detail requests.")
+    public ResponseEntity<Page<DiscountCodeUsageResponse>> getDiscountCodeUsages(
+            @PathVariable Long id,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "" + AppConstants.DEFAULT_PAGE_SIZE) int size) {
+        Page<DiscountCodeUsageResponse> usages = discountCodeAdminService.getDiscountCodeUsages(id, page, size);
+        return ResponseEntity.ok(usages);
     }
 
     /**

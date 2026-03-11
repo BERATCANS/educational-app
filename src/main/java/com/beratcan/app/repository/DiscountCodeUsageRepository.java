@@ -6,8 +6,13 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+
 @Repository
 public interface DiscountCodeUsageRepository extends JpaRepository<DiscountCodeUsage, Long> {
     @Query("SELECT COUNT(du) FROM DiscountCodeUsage du WHERE du.discountCode.id = :discountCodeId AND du.user.id = :userId")
     long countByDiscountCodeIdAndUserId(@Param("discountCodeId") Long discountCodeId, @Param("userId") Long userId);
+
+    Page<DiscountCodeUsage> findByDiscountCodeIdOrderByUsedAtDesc(Long discountCodeId, Pageable pageable);
 }
