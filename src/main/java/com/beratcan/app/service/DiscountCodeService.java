@@ -144,7 +144,7 @@ public class DiscountCodeService {
      * İkisi de boşsa tüm kitaplar geçerlidir.
      */
     private List<CartItem> getApplicableCartItems(Cart cart, DiscountCode code) {
-        boolean hasPublisherFilter = code.getApplicablePublisher() != null;
+        boolean hasPublisherFilter = code.getApplicablePublishers() != null && !code.getApplicablePublishers().isEmpty();
         boolean hasBookFilter = code.getApplicableBooks() != null && !code.getApplicableBooks().isEmpty();
 
         // İkisi de boşsa → tüm kitaplar geçerli
@@ -156,11 +156,12 @@ public class DiscountCodeService {
                 .filter(item -> {
                     Book book = item.getBook();
 
-                    // Publisher filtresi varsa → publisher eşleşmesi
+                    // Publisher filtresi varsa → publisher set'inde mi
                     if (hasPublisherFilter) {
                         return book.getPublisher() != null &&
-                                book.getPublisher().getId().equals(
-                                        code.getApplicablePublisher().getId());
+                                code.getApplicablePublishers().stream()
+                                        .anyMatch(p -> p.getId().equals(
+                                                book.getPublisher().getId()));
                     }
 
                     // Book filtresi varsa → kitap listesinde mi

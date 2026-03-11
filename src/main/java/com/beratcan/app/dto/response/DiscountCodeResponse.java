@@ -1,10 +1,12 @@
 package com.beratcan.app.dto.response;
 
 import com.beratcan.app.entity.enums.DiscountType;
+import lombok.AllArgsConstructor;
 import lombok.Data;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Data
 public class DiscountCodeResponse {
@@ -20,10 +22,24 @@ public class DiscountCodeResponse {
     private LocalDateTime validFrom;
     private LocalDateTime validUntil;
     private Boolean isActive;
-    private String applicablePublisherName;
-    private Integer applicableBookCount;
     private Integer maxUsagePerUser;
-    private Integer applicableUserCount;
+    private List<PublisherSummary> applicablePublishers;
+    private List<BookSummary> applicableBooks;
+    private List<String> applicableUsernames;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+
+    @Data
+    @AllArgsConstructor
+    public static class PublisherSummary {
+        private Long id;
+        private String name;
+    }
+
+    @Data
+    @AllArgsConstructor
+    public static class BookSummary {
+        private Long id;
+        private String title;
+    }
 }

@@ -5,6 +5,7 @@ import lombok.Getter;
 import lombok.Setter;
 
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 
 @Entity
 @Getter
@@ -34,10 +35,12 @@ public class DiscountCodeUsage {
     @Column(length = 100)
     private String transactionId; // Hangi satın alma işleminde kullanıldı
 
+    private static final ZoneId TURKEY_ZONE = ZoneId.of("Europe/Istanbul");
+
     @PrePersist
     protected void onCreate() {
         if (usedAt == null) {
-            usedAt = LocalDateTime.now();
+            usedAt = LocalDateTime.now(TURKEY_ZONE);
         }
     }
 }

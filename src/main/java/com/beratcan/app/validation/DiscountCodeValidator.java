@@ -7,6 +7,7 @@ import jakarta.validation.ConstraintValidatorContext;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 
 /**
  * Validates discount code request
@@ -73,7 +74,7 @@ public class DiscountCodeValidator implements ConstraintValidator<ValidDiscountC
             }
 
             // validUntil must be in the future
-            if (request.getValidUntil().isBefore(LocalDateTime.now())) {
+            if (request.getValidUntil().isBefore(LocalDateTime.now(ZoneId.of("Europe/Istanbul")))) {
                 context.buildConstraintViolationWithTemplate(
                         "Geçerlilik bitiş tarihi geçmiş bir tarih olamaz")
                         .addPropertyNode("validUntil")
@@ -94,7 +95,7 @@ public class DiscountCodeValidator implements ConstraintValidator<ValidDiscountC
         }
 
         // Publisher ve Books aynı anda dolu olamaz (OR mantığı — ya biri ya öteki)
-        if (request.getApplicablePublisherId() != null &&
+        if (request.getApplicablePublisherIds() != null && !request.getApplicablePublisherIds().isEmpty() &&
                 request.getApplicableBookIds() != null && !request.getApplicableBookIds().isEmpty()) {
             context.buildConstraintViolationWithTemplate(
                     "Yayınevi ve kitap filtreleri aynı anda kullanılamaz. Ya yayınevi ya da kitap filtresi seçin.")

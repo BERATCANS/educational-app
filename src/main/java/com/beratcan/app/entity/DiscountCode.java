@@ -7,6 +7,7 @@ import lombok.Setter;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -66,9 +67,11 @@ public class DiscountCode {
     private Boolean isActive = true;
 
     // Özel kısıtlamalar
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "publisher_id")
-    private Publisher applicablePublisher; // null ise tüm yayınevleri
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(name = "discount_code_publishers",
+            joinColumns = @JoinColumn(name = "discount_code_id"),
+            inverseJoinColumns = @JoinColumn(name = "publisher_id"))
+    private Set<Publisher> applicablePublishers = new HashSet<>(); // boş ise tüm yayınevleri
 
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(name = "discount_code_books", joinColumns = @JoinColumn(name = "discount_code_id"), inverseJoinColumns = @JoinColumn(name = "book_id"))
@@ -91,10 +94,12 @@ public class DiscountCode {
     @Column(nullable = false)
     private LocalDateTime updatedAt;
 
+    private static final ZoneId TURKEY_ZONE = ZoneId.of("Europe/Istanbul");
+
     @PrePersist
     protected void onCreate() {
-        createdAt = LocalDateTime.now();
-        updatedAt = LocalDateTime.now();
+        createdAt = LocalDateTime.now(TURKEY_ZONE);
+        updatedAt = LocalDateTime.now(TURKEY_ZONE);
         if (usedCount == null) {
             usedCount = 0;
         }
@@ -105,6 +110,6 @@ public class DiscountCode {
 
     @PreUpdate
     protected void onUpdate() {
-        updatedAt = LocalDateTime.now();
+        updatedAt = LocalDateTime.now(TURKEY_ZONE);
     }
 }
