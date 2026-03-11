@@ -64,4 +64,26 @@ public interface PurchaseRepository extends JpaRepository<Purchase, Long> {
             "LEFT JOIN FETCH p.discountCode d " +
             "WHERE p.id = :purchaseId")
     Optional<Purchase> findByIdWithUserAndBook(@Param("purchaseId") Long purchaseId);
+
+    // Admin Listeleme ve Dinamik Filtreleme Sorgusu
+    @Query("SELECT DISTINCT p FROM Purchase p " +
+           "LEFT JOIN p.items i " +
+           "WHERE (:userId IS NULL OR p.user.id = :userId) AND " +
+           "(:bookId IS NULL OR i.book.id = :bookId) AND " +
+           "(:status IS NULL OR p.status = :status) AND " +
+           "(:transactionId IS NULL OR LOWER(p.transactionId) LIKE LOWER(CONCAT('%', :transactionId, '%'))) AND " +
+           "(:startDate IS NULL OR p.purchaseDate >= :startDate) AND " +
+           "(:endDate IS NULL OR p.purchaseDate <= :endDate) AND " +
+           "(:minPrice IS NULL OR p.finalPrice >= :minPrice) AND " +
+           "(:maxPrice IS NULL OR p.finalPrice <= :maxPrice)")
+    org.springframework.data.domain.Page<Purchase> searchPurchases(
+            @Param("userId") Long userId,
+            @Param("bookId") Long bookId,
+            @Param("status") PurchaseStatus status,
+            @Param("transactionId") String transactionId,
+            @Param("startDate") java.time.LocalDateTime startDate,
+            @Param("endDate") java.time.LocalDateTime endDate,
+            @Param("minPrice") java.math.BigDecimal minPrice,
+            @Param("maxPrice") java.math.BigDecimal maxPrice,
+            org.springframework.data.domain.Pageable pageable);
 }
