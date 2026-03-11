@@ -111,6 +111,12 @@ public class PurchaseService {
                     return ex;
                 });
 
+        // Email doğrulama kontrolü
+        if (user.getEmailVerified() == null || !user.getEmailVerified()) {
+            log.warn("Checkout attempted with unverified email: userId={}", userId);
+            throw new BadRequestException("Satın alma işlemi yapabilmek için lütfen email adresinizi doğrulayın.");
+        }
+
         // Sepeti getir (pessimistic lock ile - concurrent checkout'u önlemek için)
         Cart cart = cartRepository.findByUserIdWithLockAndItems(userId)
                 .orElseThrow(() -> {

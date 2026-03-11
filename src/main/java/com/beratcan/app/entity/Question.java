@@ -11,9 +11,14 @@ import lombok.Setter;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.hibernate.annotations.SQLDelete;
+import org.hibernate.annotations.SQLRestriction;
+
 @Entity
 @Getter
 @Setter
+@SQLDelete(sql = "UPDATE questions SET is_deleted = true WHERE id = ?")
+@SQLRestriction("is_deleted = false")
 @Table(name = "questions")
 public class Question {
     @Id
@@ -60,6 +65,9 @@ public class Question {
     @Enumerated(EnumType.STRING)
     @Column(name = "ai_analysis_status")
     private AIAnalysisStatus aiAnalysisStatus = AIAnalysisStatus.PENDING; // AI analiz durumu
+
+    @Column(nullable = false)
+    private boolean isDeleted = false; // Soft Delete mantığı için
 
     // QuestionResult relationship'i kaldırıldı
     // Database seviyesinde ON DELETE CASCADE zaten var (V2 migration)

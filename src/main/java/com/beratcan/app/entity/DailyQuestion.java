@@ -7,9 +7,14 @@ import java.time.LocalTime;
 import java.time.LocalDateTime;
 import com.beratcan.app.entity.enums.OptionLetter;
 
+import org.hibernate.annotations.SQLDelete;
+import org.hibernate.annotations.SQLRestriction;
+
 @Entity
 @Table(name = "daily_questions")
 @Data
+@SQLDelete(sql = "UPDATE daily_questions SET is_deleted = true WHERE id = ?")
+@SQLRestriction("is_deleted = false")
 public class DailyQuestion {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -50,4 +55,7 @@ public class DailyQuestion {
     protected void onCreate() {
         createdAt = LocalDateTime.now();
     }
+
+    @Column(nullable = false)
+    private boolean isDeleted = false; // Soft Delete mantığı için
 }

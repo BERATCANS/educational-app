@@ -8,7 +8,12 @@ import lombok.Setter;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.hibernate.annotations.SQLDelete;
+import org.hibernate.annotations.SQLRestriction;
+
 @Entity
+@SQLDelete(sql = "UPDATE publishers SET is_deleted = true WHERE id = ?")
+@SQLRestriction("is_deleted = false")
 @Table(name = "publishers", uniqueConstraints = {
         @UniqueConstraint(name = "uk_publisher_name", columnNames = "name")
 })
@@ -29,4 +34,7 @@ public class Publisher {
     @OneToMany(mappedBy = "publisher", cascade = CascadeType.ALL, orphanRemoval = false)
     @JsonIgnore
     private List<Book> books = new ArrayList<>();
+
+    @Column(nullable = false)
+    private boolean isDeleted = false; // Soft Delete mantığı için
 }

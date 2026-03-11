@@ -11,9 +11,14 @@ import java.time.ZoneId;
 import java.util.HashSet;
 import java.util.Set;
 
+import org.hibernate.annotations.SQLDelete;
+import org.hibernate.annotations.SQLRestriction;
+
 @Entity
 @Getter
 @Setter
+@SQLDelete(sql = "UPDATE discount_codes SET is_deleted = true WHERE id = ?")
+@SQLRestriction("is_deleted = false")
 @Table(name = "discount_codes", indexes = {
         @Index(name = "idx_discount_code_code", columnList = "code"),
         @Index(name = "idx_discount_code_active", columnList = "is_active")
@@ -112,4 +117,7 @@ public class DiscountCode {
     protected void onUpdate() {
         updatedAt = LocalDateTime.now(TURKEY_ZONE);
     }
+
+    @Column(nullable = false)
+    private boolean isDeleted = false; // Soft Delete mantığı için
 }

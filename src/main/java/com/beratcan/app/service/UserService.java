@@ -230,10 +230,19 @@ public class UserService {
                     return new UserNotFoundException(userId);
                 });
 
-        // Kullanıcıyı sil (cascade sayesinde ilişkili veriler otomatik silinir)
+        // Kullanıcıyı fiziki olarak silmiyoruz (Soft Delete devrede)
+        // Sadece kişisel verilerini (GDPR uyumu için) anonimleştiriyoruz.
+        String randomSuffix = java.util.UUID.randomUUID().toString().substring(0, 8);
+        user.setUsername("deleted_" + randomSuffix);
+        user.setEmail("deleted_" + java.util.UUID.randomUUID().toString() + "@kitapp.local");
+        user.setPhoneNumber("del_" + randomSuffix);
+        user.setFirstName("Deleted");
+        user.setLastName("User");
+        
+        // delete() metodu entitiy üzerindeki @SQLDelete sayesinde "UPDATE is_deleted=true" yapacak.
         userRepository.delete(user);
 
-        log.info("User account deleted successfully: userId={}, username={}", userId, user.getUsername());
+        log.info("User account soft-deleted and anonymized successfully: userId={}", userId);
     }
 
     /**

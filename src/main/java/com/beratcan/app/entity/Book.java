@@ -14,9 +14,14 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+import org.hibernate.annotations.SQLDelete;
+import org.hibernate.annotations.SQLRestriction;
+
 @Entity
 @Getter
 @Setter
+@SQLDelete(sql = "UPDATE books SET is_deleted = true WHERE id = ?")
+@SQLRestriction("is_deleted = false")
 @Table(name = "books", indexes = {
         @Index(name = "idx_book_exam_type", columnList = "exam_type"),
         @Index(name = "idx_book_grade_level", columnList = "grade_level"),
@@ -101,4 +106,7 @@ public class Book {
 
     @Column(nullable = false, columnDefinition = "BIGINT DEFAULT 0")
     private Long reviewCount = 0L; // Toplam yorum sayısı
+
+    @Column(nullable = false)
+    private boolean isDeleted = false; // Soft Delete mantığı için
 }

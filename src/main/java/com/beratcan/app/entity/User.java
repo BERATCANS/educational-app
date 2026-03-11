@@ -11,9 +11,14 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+import org.hibernate.annotations.SQLDelete;
+import org.hibernate.annotations.SQLRestriction;
+
 @Entity
 @Getter
 @Setter
+@SQLDelete(sql = "UPDATE users SET is_deleted = true WHERE id = ?")
+@SQLRestriction("is_deleted = false")
 @Table(name = "users", uniqueConstraints = {
                 @UniqueConstraint(columnNames = { "email" }),
                 @UniqueConstraint(columnNames = { "phoneNumber" }),
@@ -119,4 +124,7 @@ public class User {
 
         @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
         private List<BookReview> bookReviews = new ArrayList<>();
+
+        @Column(nullable = false)
+        private boolean isDeleted = false; // Soft Delete mantığı için
 }
