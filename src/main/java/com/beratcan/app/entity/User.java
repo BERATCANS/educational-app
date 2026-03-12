@@ -111,7 +111,7 @@ public class User {
         @JoinTable(name = "user_flagged_questions", joinColumns = @JoinColumn(name = "user_id"), inverseJoinColumns = @JoinColumn(name = "question_id"))
         private Set<Question> flaggedQuestions = new HashSet<>();
 
-        @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+        @OneToMany(mappedBy = "user", cascade = {CascadeType.PERSIST, CascadeType.MERGE}, fetch = FetchType.LAZY)
         private List<TestResult> testResults = new ArrayList<>();
 
         // ✅ Cart ile bidirectional ilişki (Her kullanıcının bir sepeti var)
@@ -119,7 +119,7 @@ public class User {
         private Cart cart;
 
         // ✅ Purchase ile bidirectional ilişki (Kullanıcının satın alma geçmişi)
-        @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+        @OneToMany(mappedBy = "user", cascade = {CascadeType.PERSIST, CascadeType.MERGE}, fetch = FetchType.LAZY)
         private List<Purchase> purchases = new ArrayList<>();
 
         @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)

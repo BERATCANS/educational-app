@@ -3,6 +3,7 @@ package com.beratcan.app.entity;
 import com.beratcan.app.entity.enums.ExamType;
 import com.beratcan.app.entity.enums.GradeLevel;
 import com.beratcan.app.entity.enums.LessonType;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonManagedReference;
 import jakarta.persistence.*;
 import lombok.Getter;
@@ -77,7 +78,8 @@ public class Book {
     private List<CartItem> cartItems = new ArrayList<>();
 
     // ✅ PurchaseItem ile bidirectional ilişki (Bu kitabın satın alma geçmişi)
-    @OneToMany(mappedBy = "book", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @OneToMany(mappedBy = "book", cascade = {CascadeType.PERSIST, CascadeType.MERGE})
+    @JsonIgnore
     private List<PurchaseItem> purchaseItems = new ArrayList<>();
 
     @OneToMany(mappedBy = "book", cascade = CascadeType.ALL, orphanRemoval = true)
