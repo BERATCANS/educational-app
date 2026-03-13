@@ -4,6 +4,7 @@ import com.beratcan.app.entity.Purchase;
 import com.beratcan.app.entity.enums.PurchaseStatus;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -12,7 +13,7 @@ import java.util.List;
 import java.util.Optional;
 
 @Repository
-public interface PurchaseRepository extends JpaRepository<Purchase, Long> {
+public interface PurchaseRepository extends JpaRepository<Purchase, Long>, JpaSpecificationExecutor<Purchase> {
 
     // Kullanıcının tüm satın almalarını getir (items ve book'larıyla birlikte)
     @Query("SELECT DISTINCT p FROM Purchase p " +
@@ -65,25 +66,4 @@ public interface PurchaseRepository extends JpaRepository<Purchase, Long> {
             "WHERE p.id = :purchaseId")
     Optional<Purchase> findByIdWithUserAndBook(@Param("purchaseId") Long purchaseId);
 
-    // Admin Listeleme ve Dinamik Filtreleme Sorgusu
-    @Query("SELECT DISTINCT p FROM Purchase p " +
-           "LEFT JOIN p.items i " +
-           "WHERE (:userId IS NULL OR p.user.id = :userId) AND " +
-           "(:bookId IS NULL OR i.book.id = :bookId) AND " +
-           "(:status IS NULL OR p.status = :status) AND " +
-           "(:transactionId IS NULL OR LOWER(p.transactionId) LIKE LOWER(CONCAT('%', :transactionId, '%'))) AND " +
-           "(:startDate IS NULL OR p.purchaseDate >= :startDate) AND " +
-           "(:endDate IS NULL OR p.purchaseDate <= :endDate) AND " +
-           "(:minPrice IS NULL OR p.finalPrice >= :minPrice) AND " +
-           "(:maxPrice IS NULL OR p.finalPrice <= :maxPrice)")
-    org.springframework.data.domain.Page<Purchase> searchPurchases(
-            @Param("userId") Long userId,
-            @Param("bookId") Long bookId,
-            @Param("status") PurchaseStatus status,
-            @Param("transactionId") String transactionId,
-            @Param("startDate") java.time.LocalDateTime startDate,
-            @Param("endDate") java.time.LocalDateTime endDate,
-            @Param("minPrice") java.math.BigDecimal minPrice,
-            @Param("maxPrice") java.math.BigDecimal maxPrice,
-            org.springframework.data.domain.Pageable pageable);
 }

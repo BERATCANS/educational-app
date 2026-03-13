@@ -7,12 +7,14 @@ import com.beratcan.app.entity.PurchaseItem;
 import com.beratcan.app.entity.enums.PurchaseStatus;
 import com.beratcan.app.exception.PurchaseNotFoundException;
 import com.beratcan.app.repository.PurchaseRepository;
+import jakarta.persistence.criteria.JoinType;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -43,13 +45,41 @@ public class PurchaseAdminService {
             int page,
             int size) {
 
+        if (transactionId != null && transactionId.trim().isEmpty()) {
+            transactionId = null;
+        }
+
         log.info("Admin search purchases with filters: userId={}, bookId={}, status={}, transactionId={}, dates=[{} - {}], prices=[{} - {}]",
                 userId, bookId, status, transactionId, startDate, endDate, minPrice, maxPrice);
 
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "purchaseDate"));
 
-        Page<Purchase> purchases = purchaseRepository.searchPurchases(
-                userId, bookId, status, transactionId, startDate, endDate, minPrice, maxPrice, pageable);
+        final String finalTransactionId = transactionId;
+
+        Specification<Purchase> spec = (root, q, cb) -> cb.conjunction();
+
+        if (userId != null)
+            spec = spec.and((root, q, cb) -> cb.equal(root.get("user").get("id"), userId));
+        if (bookId != null)
+            spec = spec.and((root, q, cb) -> {
+                q.distinct(true);
+                return cb.equal(root.join("items", JoinType.LEFT).get("book").get("id"), bookId);
+            });
+        if (status != null)
+            spec = spec.and((root, q, cb) -> cb.equal(root.get("status"), status));
+        if (finalTransactionId != null)
+            spec = spec.and((root, q, cb) ->
+                    cb.like(cb.lower(root.get("transactionId")), "%" + finalTransactionId.toLowerCase() + "%"));
+        if (startDate != null)
+            spec = spec.and((root, q, cb) -> cb.greaterThanOrEqualTo(root.get("purchaseDate"), startDate));
+        if (endDate != null)
+            spec = spec.and((root, q, cb) -> cb.lessThanOrEqualTo(root.get("purchaseDate"), endDate));
+        if (minPrice != null)
+            spec = spec.and((root, q, cb) -> cb.greaterThanOrEqualTo(root.get("finalPrice"), minPrice));
+        if (maxPrice != null)
+            spec = spec.and((root, q, cb) -> cb.lessThanOrEqualTo(root.get("finalPrice"), maxPrice));
+
+        Page<Purchase> purchases = purchaseRepository.findAll(spec, pageable);
 
         return purchases.map(this::mapToResponse);
     }
