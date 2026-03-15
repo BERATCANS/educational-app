@@ -2,7 +2,6 @@ package com.beratcan.app.repository;
 
 import com.beratcan.app.entity.Purchase;
 import com.beratcan.app.entity.enums.PurchaseStatus;
-import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;

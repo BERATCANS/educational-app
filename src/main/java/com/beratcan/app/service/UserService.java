@@ -93,7 +93,16 @@ public class UserService {
         user.setPhoneNumber(dto.getPhoneNumber());
         user.setUsername(dto.getUsername());
         user.setPassword(passwordEncoder.encode(dto.getPassword())); // şifreyi hashle
-        user.setRole(Role.valueOf(dto.getRole().toUpperCase()));
+        Role role;
+        try {
+            role = Role.valueOf(dto.getRole().toUpperCase());
+        } catch (Exception e) {
+            throw new BadRequestException("Geçersiz rol.");
+        }
+        if (role == Role.ADMIN) {
+            throw new BadRequestException("Admin hesabı bu endpoint üzerinden oluşturulamaz.");
+        }
+        user.setRole(role);
         // ExamType (zorunlu değil ama eğer gelmişse işleme al)
         if (dto.getExamType() != null) {
             try {

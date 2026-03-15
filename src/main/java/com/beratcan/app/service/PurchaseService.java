@@ -11,7 +11,6 @@ import com.beratcan.app.entity.PurchaseItem;
 import com.beratcan.app.entity.User;
 import com.beratcan.app.entity.enums.PurchaseStatus;
 import com.beratcan.app.exception.BadRequestException;
-import com.beratcan.app.exception.BookNotFoundException;
 import com.beratcan.app.exception.CartNotFoundException;
 import com.beratcan.app.exception.ExternalServiceException;
 import com.beratcan.app.exception.PurchaseNotFoundException;

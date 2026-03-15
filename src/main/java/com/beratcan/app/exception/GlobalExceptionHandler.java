@@ -13,7 +13,6 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import java.time.LocalDateTime;
 import java.util.stream.Collectors;
-import com.beratcan.app.exception.DailyLimitExceededException;
 
 @RestControllerAdvice
 @Slf4j

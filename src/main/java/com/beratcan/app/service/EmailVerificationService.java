@@ -137,6 +137,20 @@ public class EmailVerificationService {
     }
 
     /**
+     * Şifre sıfırlama kodu emailini asenkron olarak gönder
+     */
+    @Async
+    public void sendPasswordResetEmail(User user, String code) {
+        try {
+            sendEmail(user.getEmail(), "Şifre Sıfırlama Kodunuz - KitApp",
+                    buildPasswordResetEmail(user.getFirstName(), code));
+            log.info("Password reset email sent (async): userId={}", user.getId());
+        } catch (Exception e) {
+            log.error("Failed to send password reset email (async): userId={}", user.getId(), e);
+        }
+    }
+
+    /**
      * Email gönder
      */
     private void sendEmail(String to, String subject, String body) throws MessagingException {
@@ -149,6 +163,46 @@ public class EmailVerificationService {
         helper.setFrom(fromEmail);
 
         mailSender.send(message);
+    }
+
+    /**
+     * Şifre sıfırlama email template'i oluştur
+     */
+    private String buildPasswordResetEmail(String firstName, String code) {
+        return """
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <meta charset="UTF-8">
+                    <style>
+                        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+                        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+                        .header { background-color: #2196F3; color: white; padding: 20px; text-align: center; border-radius: 5px 5px 0 0; }
+                        .content { background-color: #f9f9f9; padding: 30px; border-radius: 0 0 5px 5px; }
+                        .code { font-size: 36px; font-weight: bold; letter-spacing: 8px; color: #2196F3; text-align: center; padding: 20px; background: #fff; border-radius: 5px; margin: 20px 0; }
+                        .footer { text-align: center; margin-top: 20px; color: #666; font-size: 12px; }
+                    </style>
+                </head>
+                <body>
+                    <div class="container">
+                        <div class="header">
+                            <h1>Şifre Sıfırlama</h1>
+                        </div>
+                        <div class="content">
+                            <p>Merhaba <strong>%s</strong>,</p>
+                            <p>Şifrenizi sıfırlamak için aşağıdaki kodu kullanın:</p>
+                            <div class="code">%s</div>
+                            <p>Bu kod <strong>5 dakika</strong> geçerlidir.</p>
+                            <p>Eğer bu isteği siz yapmadıysanız bu emaili görmezden gelebilirsiniz.</p>
+                        </div>
+                        <div class="footer">
+                            <p>Bu email otomatik olarak gönderilmiştir. Lütfen yanıtlamayın.</p>
+                        </div>
+                    </div>
+                </body>
+                </html>
+                """
+                .formatted(firstName != null ? firstName : "Kullanıcı", code);
     }
 
     /**

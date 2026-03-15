@@ -1,7 +1,5 @@
 package com.beratcan.app.controller;
 
-import com.beratcan.app.annotation.RateLimit;
-import com.beratcan.app.dto.request.PurchaseRequest;
 import com.beratcan.app.dto.response.PurchaseResponse;
 import com.beratcan.app.service.PurchaseService;
 import lombok.RequiredArgsConstructor;

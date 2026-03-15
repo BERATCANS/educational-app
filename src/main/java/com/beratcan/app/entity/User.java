@@ -102,6 +102,19 @@ public class User {
         @Column
         private String activeSessionId; // Tekil oturum ID'si (UUID) - Concurrent session kontrolü için
 
+        // Şifre sıfırlama alanları
+        @Column(length = 6)
+        private String passwordResetCode; // 6 haneli OTP
+
+        @Column
+        private java.time.LocalDateTime passwordResetCodeExpiry; // OTP'nin son geçerlilik tarihi (5 dk)
+
+        @Column(length = 36)
+        private String passwordResetToken; // OTP doğrulandıktan sonra verilen UUID token
+
+        @Column
+        private java.time.LocalDateTime passwordResetTokenExpiry; // Reset token'ın son geçerlilik tarihi (10 dk)
+
         @ManyToMany
         @JoinTable(name = "user_books", joinColumns = @JoinColumn(name = "user_id"), inverseJoinColumns = @JoinColumn(name = "book_id"), uniqueConstraints = @UniqueConstraint(name = "uk_user_book", columnNames = {
                         "user_id", "book_id" }))

@@ -18,6 +18,7 @@ public class PurchaseResponse {
     private Long id;
     private Long userId;
     private String userName;
+    private String userUsername;
 
     // Sipariş toplamları
     private BigDecimal totalPrice;       // Toplam fiyat (indirim öncesi)

@@ -7,6 +7,7 @@ import com.beratcan.app.entity.PurchaseItem;
 import com.beratcan.app.entity.enums.PurchaseStatus;
 import com.beratcan.app.exception.PurchaseNotFoundException;
 import com.beratcan.app.repository.PurchaseRepository;
+import com.beratcan.app.repository.UserRepository;
 import jakarta.persistence.criteria.JoinType;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,14 +29,15 @@ import java.util.stream.Collectors;
 public class PurchaseAdminService {
 
     private final PurchaseRepository purchaseRepository;
+    private final UserRepository userRepository;
 
     /**
      * Admin: Tüm satın almaları dinamik filtrelerle sayfalı olarak getir
      */
     @Transactional(readOnly = true)
     public Page<PurchaseResponse> searchPurchases(
-            Long userId,
-            Long bookId,
+            String username,
+            String bookTitle,
             PurchaseStatus status,
             String transactionId,
             LocalDateTime startDate,
@@ -45,25 +47,39 @@ public class PurchaseAdminService {
             int page,
             int size) {
 
-        if (transactionId != null && transactionId.trim().isEmpty()) {
-            transactionId = null;
-        }
+        if (username != null && username.trim().isEmpty()) username = null;
+        if (bookTitle != null && bookTitle.trim().isEmpty()) bookTitle = null;
+        if (transactionId != null && transactionId.trim().isEmpty()) transactionId = null;
 
-        log.info("Admin search purchases with filters: userId={}, bookId={}, status={}, transactionId={}, dates=[{} - {}], prices=[{} - {}]",
-                userId, bookId, status, transactionId, startDate, endDate, minPrice, maxPrice);
+        log.info("Admin search purchases with filters: username={}, bookTitle={}, status={}, transactionId={}, dates=[{} - {}], prices=[{} - {}]",
+                username, bookTitle, status, transactionId, startDate, endDate, minPrice, maxPrice);
+
+        // username → userId çözümlemesi
+        final Long resolvedUserId;
+        if (username != null) {
+            resolvedUserId = userRepository.findByUsername(username)
+                    .map(u -> u.getId())
+                    .orElse(-1L); // bulunamazsa hiç sonuç dönmesin
+        } else {
+            resolvedUserId = null;
+        }
 
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "purchaseDate"));
 
         final String finalTransactionId = transactionId;
+        final String finalBookTitle = bookTitle;
 
         Specification<Purchase> spec = (root, q, cb) -> cb.conjunction();
 
-        if (userId != null)
-            spec = spec.and((root, q, cb) -> cb.equal(root.get("user").get("id"), userId));
-        if (bookId != null)
+        if (resolvedUserId != null)
+            spec = spec.and((root, q, cb) -> cb.equal(root.get("user").get("id"), resolvedUserId));
+        if (finalBookTitle != null)
             spec = spec.and((root, q, cb) -> {
                 q.distinct(true);
-                return cb.equal(root.join("items", JoinType.LEFT).get("book").get("id"), bookId);
+                return cb.like(
+                        cb.lower(root.join("items", JoinType.LEFT).get("book").get("title")),
+                        "%" + finalBookTitle.toLowerCase() + "%"
+                );
             });
         if (status != null)
             spec = spec.and((root, q, cb) -> cb.equal(root.get("status"), status));
@@ -106,6 +122,7 @@ public class PurchaseAdminService {
         response.setId(purchase.getId());
         response.setUserId(purchase.getUser().getId());
         response.setUserName(purchase.getUser().getFirstName() + " " + purchase.getUser().getLastName());
+        response.setUserUsername(purchase.getUser().getUsername());
         response.setTotalPrice(purchase.getTotalPrice());
         response.setTotalDiscount(purchase.getTotalDiscount());
         response.setFinalPrice(purchase.getFinalPrice());

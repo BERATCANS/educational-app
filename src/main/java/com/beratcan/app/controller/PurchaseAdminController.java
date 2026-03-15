@@ -25,13 +25,13 @@ public class PurchaseAdminController {
 
     /**
      * Tüm satın almaları arama ve filtreleme ile sayfalayarak getirir
-     * GET /api/admin/purchases?userId=5&status=COMPLETED&page=0&size=20
+     * GET /api/admin/purchases?username=john&bookTitle=matematik&status=COMPLETED&page=0&size=20
      */
     @GetMapping
     @RateLimit(requestsPerMinute = 30, keyType = "USER", message = "Too many admin purchase search requests.")
     public ResponseEntity<Page<PurchaseResponse>> searchPurchases(
-            @RequestParam(required = false) Long userId,
-            @RequestParam(required = false) Long bookId,
+            @RequestParam(required = false) String username,
+            @RequestParam(required = false) String bookTitle,
             @RequestParam(required = false) PurchaseStatus status,
             @RequestParam(required = false) String transactionId,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startDate,
@@ -42,7 +42,7 @@ public class PurchaseAdminController {
             @RequestParam(defaultValue = "" + AppConstants.DEFAULT_PAGE_SIZE) int size) {
 
         Page<PurchaseResponse> purchases = purchaseAdminService.searchPurchases(
-                userId, bookId, status, transactionId, startDate, endDate, minPrice, maxPrice, page, size);
+                username, bookTitle, status, transactionId, startDate, endDate, minPrice, maxPrice, page, size);
 
         return ResponseEntity.ok(purchases);
     }

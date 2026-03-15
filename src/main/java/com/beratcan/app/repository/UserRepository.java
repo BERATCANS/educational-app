@@ -30,6 +30,9 @@ public interface UserRepository extends JpaRepository<User, Long> {
     // Email doğrulama için
     Optional<User> findByEmailVerificationToken(String token);
 
+    // Şifre sıfırlama için
+    Optional<User> findByPasswordResetToken(String token);
+
     /**
      * Tüm kullanıcıların günlük çözülen soru sayısını sıfırla
      * Her gece yarısı scheduled job tarafından çağrılır
