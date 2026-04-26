@@ -96,6 +96,20 @@ public class GlobalExceptionHandler {
                 return ResponseEntity.badRequest().body(errorDetails);
         }
 
+        @ExceptionHandler(ActiveClassroomMembershipException.class)
+        public ResponseEntity<java.util.Map<String, Object>> handleActiveClassroomMembership(
+                        ActiveClassroomMembershipException ex, HttpServletRequest request) {
+                log.warn("Account deletion blocked - active classroom memberships: path={}, count={}",
+                                request.getRequestURI(), ex.getActiveClassrooms().size());
+
+                java.util.Map<String, Object> body = new java.util.LinkedHashMap<>();
+                body.put("message", ex.getMessage());
+                body.put("activeClassrooms", ex.getActiveClassrooms());
+                body.put("status", HttpStatus.BAD_REQUEST.value());
+                body.put("timestamp", LocalDateTime.now().toString());
+                return ResponseEntity.badRequest().body(body);
+        }
+
         @ExceptionHandler(DailyLimitExceededException.class)
         public ResponseEntity<ErrorDetails> handleDailyLimitExceeded(
                         DailyLimitExceededException ex, HttpServletRequest request) {

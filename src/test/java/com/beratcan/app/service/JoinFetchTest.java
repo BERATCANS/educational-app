@@ -71,13 +71,13 @@ public class JoinFetchTest {
                 reviewPage.getContent().size() <= reviewPage.getTotalElements(),
                 "Page content size, total elements'ten büyük olamaz!");
 
-        // Test 1.4: User ve Book ilişkileri yüklü mü?
+        // Test 1.4: StudentProfile ve Book ilişkileri yüklü mü?
         reviewPage.getContent().forEach(review -> {
-            assertNotNull(review.getUser(), "User lazy loading hatası! User yüklenmemiş.");
+            assertNotNull(review.getStudentProfile(), "StudentProfile lazy loading hatası! StudentProfile yüklenmemiş.");
             assertNotNull(review.getBook(), "Book lazy loading hatası! Book yüklenmemiş.");
 
             // LazyInitializationException olmadan erişilebilmeli
-            assertNotNull(review.getUser().getId(), "User ID erişilemiyor!");
+            assertNotNull(review.getStudentProfile().getId(), "StudentProfile ID erişilemiyor!");
             assertNotNull(review.getBook().getId(), "Book ID erişilemiyor!");
         });
 

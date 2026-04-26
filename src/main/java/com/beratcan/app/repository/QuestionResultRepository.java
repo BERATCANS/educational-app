@@ -13,7 +13,7 @@ public interface QuestionResultRepository extends JpaRepository<QuestionResult, 
     List<QuestionResult> findByTestResultId(Long testResultId);
 
     // Kullanıcının belirli bir soru için tüm cevapları
-    @Query("SELECT qr FROM QuestionResult qr JOIN qr.testResult tr WHERE tr.user.id = :userId AND qr.question.id = :questionId ORDER BY qr.answeredAt DESC")
+    @Query("SELECT qr FROM QuestionResult qr JOIN qr.testResult tr WHERE tr.studentProfile.user.id = :userId AND qr.question.id = :questionId ORDER BY qr.answeredAt DESC")
     List<QuestionResult> findByUserIdAndQuestionId(@Param("userId") Long userId, @Param("questionId") Long questionId);
 
     // En çok yanlış yapılan sorular
@@ -21,6 +21,6 @@ public interface QuestionResultRepository extends JpaRepository<QuestionResult, 
     List<Object[]> findMostWrongQuestions();
 
     // Kullanıcının en çok zorlandığı sorular
-    @Query("SELECT qr.question.id, COUNT(qr) as wrongCount FROM QuestionResult qr JOIN qr.testResult tr WHERE tr.user.id = :userId AND qr.isCorrect = false GROUP BY qr.question.id ORDER BY wrongCount DESC")
+    @Query("SELECT qr.question.id, COUNT(qr) as wrongCount FROM QuestionResult qr JOIN qr.testResult tr WHERE tr.studentProfile.user.id = :userId AND qr.isCorrect = false GROUP BY qr.question.id ORDER BY wrongCount DESC")
     List<Object[]> findUserMostWrongQuestions(@Param("userId") Long userId);
 }

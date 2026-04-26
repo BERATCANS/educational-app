@@ -29,14 +29,14 @@ public class PublisherController {
     }
 
     @PostMapping
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
     public ResponseEntity<PublisherResponse> createPublisher(
             @Valid @RequestBody PublisherRequest request) {
         return ResponseEntity.ok(publisherService.createPublisher(request));
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
     public ResponseEntity<PublisherResponse> updatePublisher(
             @PathVariable Long id,
             @Valid @RequestBody PublisherRequest request) {
@@ -44,7 +44,7 @@ public class PublisherController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
     public ResponseEntity<Void> deletePublisher(@PathVariable Long id) {
         publisherService.deletePublisher(id);
         return ResponseEntity.noContent().build();

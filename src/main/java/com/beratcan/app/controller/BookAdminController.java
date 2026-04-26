@@ -16,13 +16,13 @@ public class BookAdminController {
 
     private final BookAdminService bookAdminService;
 
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
     @PostMapping("/add")
     public BookResponse addBook(@Valid @RequestBody BookRequest request) {
         return bookAdminService.addBook(request);
     }
 
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
     @PutMapping("/{bookId}")
     public ResponseEntity<BookResponse> updateBook(
             @PathVariable Long bookId,
@@ -32,14 +32,14 @@ public class BookAdminController {
         return ResponseEntity.ok(updatedBook);
     }
 
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
     @DeleteMapping("/{bookId}")
     public ResponseEntity<String> deleteBook(@PathVariable Long bookId) {
         bookAdminService.deleteBook(bookId);
         return ResponseEntity.ok("Book deleted successfully.");
     }
 
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
     @PostMapping("/{bookId}/count")
     public ResponseEntity<String> countBookData(@PathVariable Long bookId) {
         bookAdminService.countBookData(bookId);

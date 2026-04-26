@@ -13,43 +13,42 @@ import java.util.Optional;
 @Repository
 public interface CartRepository extends JpaRepository<Cart, Long> {
 
-    // Kullanıcının sepetini getir (pessimistic lock ile - concurrent checkout'u
-    // önlemek için)
+    // Öğrencinin sepetini getir (pessimistic lock ile)
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("SELECT c FROM Cart c WHERE c.user.id = :userId")
+    @Query("SELECT c FROM Cart c WHERE c.studentProfile.user.id = :userId")
     Optional<Cart> findByUserIdWithLock(@Param("userId") Long userId);
 
     // Kullanıcının sepetini getir (normal okuma için)
-    Optional<Cart> findByUserId(Long userId);
+    @Query("SELECT c FROM Cart c WHERE c.studentProfile.user.id = :userId")
+    Optional<Cart> findByUserId(@Param("userId") Long userId);
 
     /**
-     * Kullanıcının sepetini tüm ilişkilerle birlikte getirir (JOIN FETCH)
-     * N+1 query problemini önler
+     * Öğrencinin sepetini tüm ilişkilerle birlikte getirir (JOIN FETCH)
      */
     @Query("SELECT DISTINCT c FROM Cart c " +
-            "JOIN FETCH c.user u " +
+            "JOIN FETCH c.studentProfile sp " +
+            "JOIN FETCH sp.user u " +
             "LEFT JOIN FETCH c.items i " +
             "LEFT JOIN FETCH i.book b " +
             "LEFT JOIN FETCH b.publisher p " +
             "LEFT JOIN FETCH c.appliedDiscountCode d " +
-            "WHERE c.user.id = :userId")
+            "WHERE u.id = :userId")
     Optional<Cart> findByUserIdWithItemsAndBooks(@Param("userId") Long userId);
 
     /**
-     * Kullanıcının sepetini pessimistic lock ile tüm ilişkilerle birlikte getirir
-     * (JOIN FETCH)
-     * Concurrent checkout'u önlemek için
+     * Öğrencinin sepetini pessimistic lock ile tüm ilişkilerle birlikte getirir
      */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT DISTINCT c FROM Cart c " +
-            "JOIN FETCH c.user u " +
+            "JOIN FETCH c.studentProfile sp " +
+            "JOIN FETCH sp.user u " +
             "LEFT JOIN FETCH c.items i " +
             "LEFT JOIN FETCH i.book b " +
             "LEFT JOIN FETCH b.publisher p " +
             "LEFT JOIN FETCH c.appliedDiscountCode d " +
-            "WHERE c.user.id = :userId")
+            "WHERE u.id = :userId")
     Optional<Cart> findByUserIdWithLockAndItems(@Param("userId") Long userId);
 
-    // Kullanıcının sepeti var mı kontrol et
-    boolean existsByUserId(Long userId);
+    @Query("SELECT COUNT(c) > 0 FROM Cart c WHERE c.studentProfile.user.id = :userId")
+    boolean existsByUserId(@Param("userId") Long userId);
 }

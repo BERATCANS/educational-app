@@ -30,7 +30,7 @@ public class QuestionController {
      * Soru oluştur (görsel + temel bilgiler) + Otomatik AI analiz
      */
     @PostMapping("/add")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
     @RateLimit(requestsPerMinute = 10, keyType = "USER", message = "Too many question creation requests. Please try again later.")
     public QuestionResponse addQuestion(
             @Valid @ModelAttribute CreateQuestionRequest request) {
@@ -59,7 +59,7 @@ public class QuestionController {
     }
 
     // UPDATE
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
     @PutMapping("/{questionId}")
     public QuestionResponse updateQuestion(@PathVariable Long questionId,
             @Valid @ModelAttribute UpdateQuestionRequest request) {
@@ -67,7 +67,7 @@ public class QuestionController {
     }
 
     // DELETE
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
     @DeleteMapping("/{questionId}")
     public void deleteQuestion(@PathVariable Long questionId) {
         questionService.deleteQuestion(questionId);
@@ -106,7 +106,7 @@ public class QuestionController {
      * Soru için hints ve explanation'ı birlikte güncelle
      */
     @PutMapping("/{questionId}/analysis")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
     public ResponseEntity<?> updateAnalysis(
             @PathVariable Long questionId,
             @RequestBody UpdateAnalysisRequest request) {

@@ -14,21 +14,24 @@ import java.util.Optional;
 @Repository
 public interface PurchaseRepository extends JpaRepository<Purchase, Long>, JpaSpecificationExecutor<Purchase> {
 
-    // Kullanıcının tüm satın almalarını getir (items ve book'larıyla birlikte)
+    // Kullanıcının tüm satın almalarını getir
     @Query("SELECT DISTINCT p FROM Purchase p " +
             "LEFT JOIN FETCH p.items i " +
             "LEFT JOIN FETCH i.book b " +
             "LEFT JOIN FETCH b.publisher " +
             "LEFT JOIN FETCH p.discountCode " +
-            "LEFT JOIN FETCH p.user u " +
-            "WHERE p.user.id = :userId " +
+            "JOIN FETCH p.studentProfile sp " +
+            "JOIN FETCH sp.user u " +
+            "WHERE u.id = :userId " +
             "ORDER BY p.purchaseDate DESC")
     List<Purchase> findByUserIdOrderByPurchaseDateDesc(@Param("userId") Long userId);
 
-    // Kullanıcının belirli bir kitap için satın almasını kontrol et (items üzerinden)
+    // Öğrencinin belirli bir kitap için satın almasını kontrol et
     @Query("SELECT DISTINCT p FROM Purchase p " +
             "JOIN p.items i " +
-            "WHERE p.user.id = :userId " +
+            "JOIN p.studentProfile sp " +
+            "JOIN sp.user u " +
+            "WHERE u.id = :userId " +
             "AND i.book.id = :bookId " +
             "AND p.status = :status")
     Optional<Purchase> findByUserIdAndBookIdAndStatus(
@@ -42,22 +45,26 @@ public interface PurchaseRepository extends JpaRepository<Purchase, Long>, JpaSp
             "LEFT JOIN FETCH i.book b " +
             "LEFT JOIN FETCH b.publisher " +
             "LEFT JOIN FETCH p.discountCode " +
-            "LEFT JOIN FETCH p.user u " +
-            "WHERE p.user.id = :userId AND p.status = :status " +
+            "JOIN FETCH p.studentProfile sp " +
+            "JOIN FETCH sp.user u " +
+            "WHERE u.id = :userId AND p.status = :status " +
             "ORDER BY p.purchaseDate DESC")
     List<Purchase> findByUserIdAndStatusOrderByPurchaseDateDesc(
             @Param("userId") Long userId,
             @Param("status") PurchaseStatus status);
 
-    // Bir kitabın toplam satış sayısı (items üzerinden)
+    // Bir kitabın toplam satış sayısı
     @Query("SELECT COUNT(i) FROM PurchaseItem i " +
             "WHERE i.book.id = :bookId " +
             "AND i.purchase.status = 'COMPLETED'")
     Long countCompletedPurchasesByBookId(@Param("bookId") Long bookId);
 
-    // Purchase'ı tüm ilişkileriyle birlikte getirir
+    // Purchase'ı tüm ilişkileriyle birlikte getirir.
+    // user için LEFT JOIN: soft-delete edilmiş kullanıcıların satın almaları da admin'e dönsün
+    // (mapping katmanında "Silinmiş Kullanıcı" placeholder ile işlenecek).
     @Query("SELECT p FROM Purchase p " +
-            "JOIN FETCH p.user u " +
+            "JOIN FETCH p.studentProfile sp " +
+            "LEFT JOIN FETCH sp.user u " +
             "LEFT JOIN FETCH p.items i " +
             "LEFT JOIN FETCH i.book b " +
             "LEFT JOIN FETCH b.publisher pub " +

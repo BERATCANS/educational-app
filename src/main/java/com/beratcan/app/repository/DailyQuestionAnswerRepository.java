@@ -11,9 +11,11 @@ import java.util.Optional;
 @Repository
 public interface DailyQuestionAnswerRepository extends JpaRepository<DailyQuestionAnswer, Long> {
 
-    Optional<DailyQuestionAnswer> findByDailyQuestionIdAndUserId(Long dailyQuestionId, Long userId);
+    @Query("SELECT dqa FROM DailyQuestionAnswer dqa WHERE dqa.dailyQuestion.id = :dailyQuestionId AND dqa.studentProfile.user.id = :userId")
+    Optional<DailyQuestionAnswer> findByDailyQuestionIdAndUserId(@Param("dailyQuestionId") Long dailyQuestionId, @Param("userId") Long userId);
 
-    boolean existsByDailyQuestionIdAndUserId(Long dailyQuestionId, Long userId);
+    @Query("SELECT CASE WHEN COUNT(dqa) > 0 THEN true ELSE false END FROM DailyQuestionAnswer dqa WHERE dqa.dailyQuestion.id = :dailyQuestionId AND dqa.studentProfile.user.id = :userId")
+    boolean existsByDailyQuestionIdAndUserId(@Param("dailyQuestionId") Long dailyQuestionId, @Param("userId") Long userId);
 
     @Query("SELECT COUNT(dqa) FROM DailyQuestionAnswer dqa WHERE dqa.dailyQuestion.id = :questionId")
     long countAnswersByQuestionId(@Param("questionId") Long questionId);

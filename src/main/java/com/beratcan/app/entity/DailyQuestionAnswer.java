@@ -7,7 +7,7 @@ import com.beratcan.app.entity.enums.OptionLetter;
 
 @Entity
 @Table(name = "daily_question_answers",
-       uniqueConstraints = @UniqueConstraint(columnNames = {"daily_question_id", "user_id"}))
+       uniqueConstraints = @UniqueConstraint(columnNames = {"daily_question_id", "student_profile_id"}))
 @Data
 public class DailyQuestionAnswer {
     @Id
@@ -19,8 +19,8 @@ public class DailyQuestionAnswer {
     private DailyQuestion dailyQuestion;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_id", nullable = false)
-    private User user;
+    @JoinColumn(name = "student_profile_id", nullable = false)
+    private StudentProfile studentProfile;
 
     @Column(nullable = false)
     @Enumerated(EnumType.STRING)

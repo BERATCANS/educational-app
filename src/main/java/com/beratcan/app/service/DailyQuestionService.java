@@ -6,16 +6,15 @@ import com.beratcan.app.dto.request.UpdateDailyQuestionRequest;
 import com.beratcan.app.dto.response.DailyQuestionResponse;
 import com.beratcan.app.entity.DailyQuestion;
 import com.beratcan.app.entity.DailyQuestionAnswer;
-import com.beratcan.app.entity.User;
+import com.beratcan.app.entity.StudentProfile;
 import com.beratcan.app.entity.enums.OptionLetter;
 import com.beratcan.app.exception.BadRequestException;
 import com.beratcan.app.exception.ConflictException;
 import com.beratcan.app.exception.ResourceNotFoundException;
 import com.beratcan.app.exception.UnauthorizedOperationException;
-import com.beratcan.app.exception.UserNotFoundException;
 import com.beratcan.app.repository.DailyQuestionRepository;
 import com.beratcan.app.repository.DailyQuestionAnswerRepository;
-import com.beratcan.app.repository.UserRepository;
+import com.beratcan.app.repository.StudentProfileRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -39,7 +38,7 @@ public class DailyQuestionService {
 
     private final DailyQuestionRepository dailyQuestionRepository;
     private final DailyQuestionAnswerRepository answerRepository;
-    private final UserRepository userRepository;
+    private final StudentProfileRepository studentProfileRepository;
     private final FileService fileService;
 
     @Transactional(readOnly = true)
@@ -48,9 +47,9 @@ public class DailyQuestionService {
             throw new UnauthorizedOperationException("Kullanıcı ID'si gerekli");
         }
 
-        // Kullanıcı kontrolü (gerekli değil ama tutarlılık için)
-        userRepository.findById(userId)
-                .orElseThrow(() -> new UserNotFoundException(userId));
+        // Kullanıcı kontrolü
+        studentProfileRepository.findByUserId(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Öğrenci profili bulunamadı: userId=" + userId));
 
         DailyQuestion question = dailyQuestionRepository.findByDisplayDate(LocalDate.now(TURKEY_ZONE))
                 .orElse(null);
@@ -81,8 +80,8 @@ public class DailyQuestionService {
         }
 
         // Kullanıcı kontrolü
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new UserNotFoundException(userId));
+        StudentProfile studentProfile = studentProfileRepository.findByUserId(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Öğrenci profili bulunamadı: userId=" + userId));
 
         // Soru kontrolü
         DailyQuestion question = dailyQuestionRepository.findById(request.getDailyQuestionId())
@@ -108,7 +107,7 @@ public class DailyQuestionService {
         // Cevabı kaydet
         DailyQuestionAnswer answer = new DailyQuestionAnswer();
         answer.setDailyQuestion(question);
-        answer.setUser(user);
+        answer.setStudentProfile(studentProfile);
         answer.setSelectedAnswer(request.getSelectedAnswer());
         answerRepository.save(answer);
 

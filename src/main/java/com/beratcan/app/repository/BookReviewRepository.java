@@ -16,21 +16,18 @@ public interface BookReviewRepository extends JpaRepository<BookReview, Long> {
 
         List<BookReview> findByBookIdOrderByCreatedAtDesc(Long bookId);
 
-        Optional<BookReview> findByBookIdAndUserId(Long bookId, Long userId);
+        Optional<BookReview> findByBookIdAndStudentProfileId(Long bookId, Long studentProfileId);
 
         /**
          * Kullanıcının yorumunu hariç tutarak diğer yorumları pagination ile getirir
-         * Eğer excludeUserId null ise, tüm yorumları getirir
-         * JOIN FETCH ile User ve Book ilişkilerini yükler (N+1 query önleme)
-         * 
-         * Not: DISTINCT kullanılmadı çünkü BookReview -> User -> Book ilişkisi 1:1,
-         * duplicate sonuç olmayacak
+         * JOIN FETCH ile StudentProfile → User ve Book ilişkilerini yükler
          */
         @Query("SELECT br FROM BookReview br " +
-                        "JOIN FETCH br.user u " +
+                        "JOIN FETCH br.studentProfile sp " +
+                        "JOIN FETCH sp.user u " +
                         "JOIN FETCH br.book b " +
                         "WHERE br.book.id = :bookId " +
-                        "AND (:excludeUserId IS NULL OR br.user.id != :excludeUserId) " +
+                        "AND (:excludeUserId IS NULL OR sp.user.id != :excludeUserId) " +
                         "ORDER BY br.createdAt DESC")
         Page<BookReview> findByBookIdExcludingUserId(
                         @Param("bookId") Long bookId,
@@ -38,32 +35,35 @@ public interface BookReviewRepository extends JpaRepository<BookReview, Long> {
                         Pageable pageable);
 
         /**
-         * BookReview'ı User ve Book ile birlikte getirir (JOIN FETCH)
-         * LazyInitializationException önlemek için
+         * BookReview'ı StudentProfile → User ve Book ile birlikte getirir (JOIN FETCH)
          */
         @Query("SELECT br FROM BookReview br " +
-                        "JOIN FETCH br.user u " +
+                        "JOIN FETCH br.studentProfile sp " +
+                        "JOIN FETCH sp.user u " +
                         "JOIN FETCH br.book b " +
                         "WHERE br.id = :reviewId")
-        Optional<BookReview> findByIdWithUserAndBook(@Param("reviewId") Long reviewId);
+        Optional<BookReview> findByIdWithStudentProfileAndBook(@Param("reviewId") Long reviewId);
 
         /**
-         * BookReview'ı User ve Book ile birlikte getirir (JOIN FETCH)
+         * BookReview'ı StudentProfile → User ve Book ile birlikte getirir
          * BookId ve UserId ile
          */
         @Query("SELECT br FROM BookReview br " +
-                        "JOIN FETCH br.user u " +
+                        "JOIN FETCH br.studentProfile sp " +
+                        "JOIN FETCH sp.user u " +
                         "JOIN FETCH br.book b " +
-                        "WHERE br.book.id = :bookId AND br.user.id = :userId")
-        Optional<BookReview> findByBookIdAndUserIdWithUserAndBook(
+                        "WHERE br.book.id = :bookId AND sp.user.id = :userId")
+        Optional<BookReview> findByBookIdAndUserIdWithStudentProfileAndBook(
                         @Param("bookId") Long bookId,
                         @Param("userId") Long userId);
 
         /**
          * Kullanıcının yorumunu hariç tutarak toplam yorum sayısını getirir
          */
-        @Query("SELECT COUNT(br) FROM BookReview br WHERE br.book.id = :bookId " +
-                        "AND (:excludeUserId IS NULL OR br.user.id != :excludeUserId)")
+        @Query("SELECT COUNT(br) FROM BookReview br " +
+                        "JOIN br.studentProfile sp " +
+                        "WHERE br.book.id = :bookId " +
+                        "AND (:excludeUserId IS NULL OR sp.user.id != :excludeUserId)")
         long countByBookIdExcludingUserId(
                         @Param("bookId") Long bookId,
                         @Param("excludeUserId") Long excludeUserId);

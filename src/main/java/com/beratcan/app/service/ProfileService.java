@@ -6,10 +6,13 @@ import com.beratcan.app.dto.request.UpdatePasswordRequest;
 import com.beratcan.app.dto.request.UpdateProfileRequest;
 import com.beratcan.app.dto.request.UpdateQuestionTargetRequest;
 import com.beratcan.app.dto.response.QuestionTargetResponse;
+import com.beratcan.app.entity.StudentProfile;
 import com.beratcan.app.entity.User;
 import com.beratcan.app.entity.enums.ExamType;
 import com.beratcan.app.exception.BadRequestException;
 import com.beratcan.app.exception.ConflictException;
+import com.beratcan.app.exception.ResourceNotFoundException;
+import com.beratcan.app.repository.StudentProfileRepository;
 import com.beratcan.app.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -30,29 +33,32 @@ public class ProfileService {
 
     private final UserService userService;
     private final UserRepository userRepository;
+    private final StudentProfileRepository studentProfileRepository;
     private final BCryptPasswordEncoder passwordEncoder;
     private final EmailVerificationService emailVerificationService;
 
     @Transactional
     public User getCurrentUser(Long userId) {
         User user = userService.getUserById(userId);
-        // Her profile/me çağrısında streak güncelle (uygulama açma = aktivite)
-        updateStreak(user);
+        // Her profile/me çağrısında streak güncelle (uygulama açma = aktivite, sadece öğrenciler)
+        studentProfileRepository.findByUserId(userId).ifPresent(this::updateStreak);
         return user;
     }
 
     /**
      * Kullanıcı bilgilerini getirir ve streak güncellemesi yapar
      * Streak güncellenip güncellenmediğini döndürür
-     * 
+     *
      * @param userId Kullanıcı ID
      * @return User ve streak güncellenip güncellenmediği bilgisi
      */
     @Transactional
     public UserWithStreakUpdate getCurrentUserWithStreakUpdate(Long userId) {
         User user = userService.getUserById(userId);
-        // Streak güncelle ve güncellenip güncellenmediğini kontrol et
-        boolean streakUpdated = updateStreak(user);
+        // Streak güncelle (sadece öğrenciler)
+        boolean streakUpdated = studentProfileRepository.findByUserId(userId)
+                .map(this::updateStreak)
+                .orElse(false);
         return new UserWithStreakUpdate(user, streakUpdated);
     }
 
@@ -78,46 +84,44 @@ public class ProfileService {
     }
 
     @Transactional
-    public User updateAcademicInfo(Long userId, UpdateAcademicInfoRequest request) {
+    public StudentProfile updateAcademicInfo(Long userId, UpdateAcademicInfoRequest request) {
         if (request == null) {
             throw new BadRequestException("Güncelleme isteği boş olamaz");
         }
-        User user = userService.getUserById(userId);
+        StudentProfile profile = studentProfileRepository.findByUserId(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Öğrenci profili bulunamadı: userId=" + userId));
 
         ExamType examType = request.getExamType();
 
         // ExamType güncelle
-        user.setExamType(examType);
+        profile.setExamType(examType);
 
         // YKS: fieldType, gradeLevel ve schoolType zorunlu (validator kontrol etti)
         if (examType == ExamType.YKS) {
-            user.setGradeLevel(request.getGradeLevel());
-            user.setFieldType(request.getFieldType());
-            user.setSchoolType(request.getSchoolType());
+            profile.setGradeLevel(request.getGradeLevel());
+            profile.setFieldType(request.getFieldType());
+            profile.setSchoolType(request.getSchoolType());
         }
         // LGS: sadece gradeLevel zorunlu (validator kontrol etti)
         else if (examType == ExamType.LGS) {
-            user.setGradeLevel(request.getGradeLevel());
-            // LGS için fieldType ve schoolType null olmalı
-            user.setFieldType(null);
-            user.setSchoolType(null);
+            profile.setGradeLevel(request.getGradeLevel());
+            profile.setFieldType(null);
+            profile.setSchoolType(null);
         }
         // KPSS ve DIGER: hiçbir şey zorunlu değil
         else if (examType == ExamType.KPSS || examType == ExamType.DIGER) {
-            // GradeLevel opsiyonel, gönderilmişse set et
-            user.setGradeLevel(request.getGradeLevel());
-            // KPSS ve DIGER için fieldType ve schoolType null olmalı
-            user.setFieldType(null);
-            user.setSchoolType(null);
+            profile.setGradeLevel(request.getGradeLevel());
+            profile.setFieldType(null);
+            profile.setSchoolType(null);
         }
         // ExamType null ise tüm alanları temizle
         else {
-            user.setGradeLevel(null);
-            user.setFieldType(null);
-            user.setSchoolType(null);
+            profile.setGradeLevel(null);
+            profile.setFieldType(null);
+            profile.setSchoolType(null);
         }
 
-        return userRepository.save(user);
+        return studentProfileRepository.save(profile);
     }
 
     @Transactional
@@ -265,10 +269,11 @@ public class ProfileService {
 
     @Transactional(readOnly = true)
     public QuestionTargetResponse getQuestionTarget(Long userId) {
-        User user = userService.getUserById(userId);
+        StudentProfile profile = studentProfileRepository.findByUserId(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Öğrenci profili bulunamadı: userId=" + userId));
         LocalDate today = LocalDate.now(TURKEY_ZONE);
-        int target = user.getDailyQuestionTarget() != null ? user.getDailyQuestionTarget() : 0;
-        int solvedToday = user.getDailySolvedQuestions() != null ? user.getDailySolvedQuestions() : 0;
+        int target = profile.getDailyQuestionTarget() != null ? profile.getDailyQuestionTarget() : 0;
+        int solvedToday = profile.getDailySolvedQuestions() != null ? profile.getDailySolvedQuestions() : 0;
         int remaining = Math.max(target - solvedToday, 0);
         double completion = target > 0 ? Math.min((solvedToday * 100.0) / target, 100.0) : 0.0;
 
@@ -286,9 +291,10 @@ public class ProfileService {
         if (request == null || request.getTarget() <= 0) {
             throw new BadRequestException("Hedef en az 1 olmalıdır");
         }
-        User user = userService.getUserById(userId);
-        user.setDailyQuestionTarget(request.getTarget());
-        userRepository.save(user);
+        StudentProfile profile = studentProfileRepository.findByUserId(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Öğrenci profili bulunamadı: userId=" + userId));
+        profile.setDailyQuestionTarget(request.getTarget());
+        studentProfileRepository.save(profile);
         return getQuestionTarget(userId);
     }
 
@@ -302,57 +308,57 @@ public class ProfileService {
      * @param user Kullanıcı entity
      * @return true eğer streak güncellendiyse, false eğer değişmediyse
      */
-    private boolean updateStreak(User user) {
+    private boolean updateStreak(StudentProfile profile) {
         LocalDate today = LocalDate.now(TURKEY_ZONE);
-        LocalDate lastActivity = user.getLastActivityDate();
+        LocalDate lastActivity = profile.getLastActivityDate();
+        String username = profile.getUser().getUsername();
 
         // İlk aktivite veya lastActivity null ise
         if (lastActivity == null) {
-            user.setCurrentStreak(1);
-            user.setLastActivityDate(today);
-            if (user.getLongestStreak() < 1) {
-                user.setLongestStreak(1);
+            profile.setCurrentStreak(1);
+            profile.setLastActivityDate(today);
+            if (profile.getLongestStreak() < 1) {
+                profile.setLongestStreak(1);
             }
-            userRepository.save(user);
-            log.debug("First activity for user {}: streak set to 1", user.getUsername());
-            return true; // Streak güncellendi
+            studentProfileRepository.save(profile);
+            log.debug("First activity for user {}: streak set to 1", username);
+            return true;
         }
 
         // Bugün zaten aktivite yapılmışsa streak değişmez
         if (lastActivity.equals(today)) {
             log.debug("User {} already had activity today, streak unchanged: {}",
-                    user.getUsername(), user.getCurrentStreak());
-            return false; // Streak değişmedi
+                    username, profile.getCurrentStreak());
+            return false;
         }
 
         // Dün aktivite yapılmışsa streak artır
         LocalDate yesterday = today.minusDays(1);
         if (lastActivity.equals(yesterday)) {
-            int newStreak = user.getCurrentStreak() + 1;
-            user.setCurrentStreak(newStreak);
-            user.setLastActivityDate(today);
+            int newStreak = profile.getCurrentStreak() + 1;
+            profile.setCurrentStreak(newStreak);
+            profile.setLastActivityDate(today);
 
-            // En uzun streak'i güncelle
-            if (newStreak > user.getLongestStreak()) {
-                user.setLongestStreak(newStreak);
+            if (newStreak > profile.getLongestStreak()) {
+                profile.setLongestStreak(newStreak);
             }
 
-            userRepository.save(user);
+            studentProfileRepository.save(profile);
             log.info("User {} streak increased: {} -> {}",
-                    user.getUsername(), user.getCurrentStreak() - 1, newStreak);
-            return true; // Streak güncellendi
+                    username, profile.getCurrentStreak() - 1, newStreak);
+            return true;
         }
 
         // Dünden önce aktivite yapılmışsa streak reset
-        user.setCurrentStreak(1);
-        user.setLastActivityDate(today);
-        if (user.getLongestStreak() < 1) {
-            user.setLongestStreak(1);
+        profile.setCurrentStreak(1);
+        profile.setLastActivityDate(today);
+        if (profile.getLongestStreak() < 1) {
+            profile.setLongestStreak(1);
         }
-        userRepository.save(user);
+        studentProfileRepository.save(profile);
         log.info("User {} streak reset to 1 (last activity: {})",
-                user.getUsername(), lastActivity);
-        return true; // Streak güncellendi (reset)
+                username, lastActivity);
+        return true;
     }
 
 }

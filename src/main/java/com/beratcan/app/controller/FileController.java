@@ -22,7 +22,7 @@ public class FileController {
     private final FileService fileService;
 
     @PostMapping("/upload")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
     @RateLimit(requestsPerMinute = 20, keyType = "USER", message = "Too many file uploads. Please try again later.")
     public ResponseEntity<Map<String, String>> uploadFile(@RequestParam("file") MultipartFile file) {
         String filename = fileService.saveFile(file);
@@ -45,7 +45,7 @@ public class FileController {
      * Dosya silme
      */
     @DeleteMapping("/{filename}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
     public ResponseEntity<?> deleteFile(@PathVariable String filename) {
         fileService.deleteFile(filename);
         return ResponseEntity.ok(Map.of(

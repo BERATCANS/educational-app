@@ -19,7 +19,7 @@ public class TopicController {
         this.topicService = topicService;
     }
 
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
     @PostMapping("/add/{bookId}")
     public TopicResponse addTopic(@PathVariable Long bookId, @Valid @RequestBody TopicRequest request) {
         return topicService.addTopic(bookId, request);
@@ -30,13 +30,13 @@ public class TopicController {
         return topicService.getTopicsByBook(bookId);
     }
 
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
     @PutMapping("/update/{topicId}")
     public TopicResponse updateTopic(@PathVariable Long topicId, @Valid @RequestBody TopicRequest request) {
         return topicService.updateTopic(topicId, request);
     }
 
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
     @DeleteMapping("/delete/{topicId}")
     public void deleteTopic(@PathVariable Long topicId) {
         topicService.deleteTopic(topicId);

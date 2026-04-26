@@ -6,6 +6,7 @@ import com.beratcan.app.dto.response.BookReviewResponse;
 import com.beratcan.app.dto.response.PageResponse;
 import com.beratcan.app.entity.Book;
 import com.beratcan.app.entity.BookReview;
+import com.beratcan.app.entity.StudentProfile;
 import com.beratcan.app.entity.User;
 import com.beratcan.app.entity.enums.Role;
 import com.beratcan.app.exception.BadRequestException;
@@ -16,6 +17,7 @@ import com.beratcan.app.exception.UnauthorizedOperationException;
 import com.beratcan.app.exception.UserNotFoundException;
 import com.beratcan.app.repository.BookRepository;
 import com.beratcan.app.repository.BookReviewRepository;
+import com.beratcan.app.repository.StudentProfileRepository;
 import com.beratcan.app.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -36,6 +38,7 @@ public class BookReviewService {
     private final BookReviewRepository bookReviewRepository;
     private final BookRepository bookRepository;
     private final UserRepository userRepository;
+    private final StudentProfileRepository studentProfileRepository;
 
     @Transactional
     public String addReview(Long userId, Long bookId, BookReviewRequest request) {
@@ -56,13 +59,15 @@ public class BookReviewService {
                     "Puanlar " + AppConstants.MIN_RATING + " ile " + AppConstants.MAX_RATING + " arasında olmalıdır.");
         }
 
+        StudentProfile profile = studentProfileRepository.findByUserId(userId)
+                .orElseThrow(() -> new BadRequestException("Öğrenci profili bulunamadı. userId=" + userId));
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new UserNotFoundException(userId));
+                .orElseThrow(() -> new BadRequestException("Kullanıcı bulunamadı. userId=" + userId));
 
         Book book = bookRepository.findById(bookId)
                 .orElseThrow(() -> new BookNotFoundException(bookId));
 
-        // Kontrol 1: Kullanıcı bu kitaba sahip mi?
+        // Kontrol 1: Öğrenci bu kitaba sahip mi?
         boolean ownsBook = user.getOwnedBooks().stream()
                 .anyMatch(ownedBook -> ownedBook.getId().equals(bookId));
 
@@ -70,8 +75,8 @@ public class BookReviewService {
             throw new UnauthorizedOperationException("Sadece sahip olduğunuz kitaplar için yorum yapabilirsiniz.");
         }
 
-        // Kontrol 2: Bu kullanıcının bu kitap için yorumu var mı?
-        if (bookReviewRepository.findByBookIdAndUserId(bookId, userId).isPresent()) {
+        // Kontrol 2: Bu öğrencinin bu kitap için yorumu var mı?
+        if (bookReviewRepository.findByBookIdAndStudentProfileId(bookId, profile.getId()).isPresent()) {
             throw new ConflictException(
                     "Bu kitap için zaten bir yorumunuz var. Lütfen mevcut yorumunuzu düzenleyin.");
         }
@@ -79,7 +84,7 @@ public class BookReviewService {
         LocalDateTime now = LocalDateTime.now();
         BookReview review = new BookReview();
         review.setBook(book);
-        review.setUser(user);
+        review.setStudentProfile(profile);
         review.setCreatedAt(now);
         review.setUpdatedAt(now);
         review.setOverallRating(overallRating);
@@ -89,7 +94,6 @@ public class BookReviewService {
 
         bookReviewRepository.save(review);
 
-        // Rating istatistiklerini güncelle
         updateBookRatingStats(book);
 
         return "Yorum kaydedildi.";
@@ -114,18 +118,14 @@ public class BookReviewService {
                     "Puanlar " + AppConstants.MIN_RATING + " ile " + AppConstants.MAX_RATING + " arasında olmalıdır.");
         }
 
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new UserNotFoundException(userId));
-
-        // JOIN FETCH ile User ve Book'u tek query'de yükle
-        BookReview review = bookReviewRepository.findByIdWithUserAndBook(reviewId)
+        BookReview review = bookReviewRepository.findByIdWithStudentProfileAndBook(reviewId)
                 .orElseThrow(() -> new ReviewNotFoundException(reviewId));
 
         if (!review.getBook().getId().equals(bookId)) {
             throw new BadRequestException("Bu yorum belirtilen kitaba ait değil.");
         }
 
-        if (!review.getUser().getId().equals(user.getId())) {
+        if (!review.getStudentProfile().getUser().getId().equals(userId)) {
             throw new UnauthorizedOperationException("Yalnızca kendi yorumunuzu düzenleyebilirsiniz.");
         }
 
@@ -137,7 +137,6 @@ public class BookReviewService {
 
         bookReviewRepository.save(review);
 
-        // Rating istatistiklerini güncelle
         updateBookRatingStats(review.getBook());
 
         return "Yorum güncellendi.";
@@ -149,13 +148,10 @@ public class BookReviewService {
             throw new BookNotFoundException(bookId);
         }
 
-        // Repository'den direkt pagination ile yorumları al (kullanıcının yorumunu
-        // hariç tutarak)
         Pageable pageable = PageRequest.of(page, size);
         Page<BookReview> reviewPage = bookReviewRepository.findByBookIdExcludingUserId(
                 bookId, currentUserId, pageable);
 
-        // Response'a çevir
         List<BookReviewResponse> pageContent = reviewPage.getContent().stream()
                 .map(this::toBookReviewResponse)
                 .toList();
@@ -173,21 +169,16 @@ public class BookReviewService {
             throw new BadRequestException("Kullanıcı ID gerekli.");
         }
 
-        // JOIN FETCH ile User ve Book'u tek query'de yükle
         Optional<BookReview> reviewOpt = bookReviewRepository
-                .findByBookIdAndUserIdWithUserAndBook(bookId, userId);
+                .findByBookIdAndUserIdWithStudentProfileAndBook(bookId, userId);
 
         if (reviewOpt.isEmpty()) {
-            return null; // Kullanıcının yorumu yok
+            return null;
         }
 
         return toBookReviewResponse(reviewOpt.get());
     }
 
-    /**
-     * Yorum silme işlemi
-     * Sadece yorum sahibi veya admin silebilir
-     */
     @Transactional
     public String deleteReview(Long userId, Long bookId, Long reviewId) {
         User user = userRepository.findById(userId)
@@ -196,18 +187,14 @@ public class BookReviewService {
         Book book = bookRepository.findById(bookId)
                 .orElseThrow(() -> new BookNotFoundException(bookId));
 
-        // JOIN FETCH ile User ve Book'u tek query'de yükle
-        BookReview review = bookReviewRepository.findByIdWithUserAndBook(reviewId)
+        BookReview review = bookReviewRepository.findByIdWithStudentProfileAndBook(reviewId)
                 .orElseThrow(() -> new ReviewNotFoundException(reviewId));
 
-        // Yorumun bu kitaba ait olduğunu kontrol et (Book zaten JOIN FETCH ile yüklü)
         if (!review.getBook().getId().equals(bookId)) {
             throw new BadRequestException("Bu yorum bu kitaba ait değil");
         }
 
-        // Kullanıcı yorum sahibi mi veya admin mi kontrol et (User zaten JOIN FETCH ile
-        // yüklü)
-        boolean isOwner = review.getUser().getId().equals(userId);
+        boolean isOwner = review.getStudentProfile().getUser().getId().equals(userId);
         boolean isAdmin = user.getRole() == Role.ADMIN;
 
         if (!isOwner && !isAdmin) {
@@ -215,17 +202,15 @@ public class BookReviewService {
                     "Bu yorumu silemezsiniz. Sadece yorum sahibi veya admin silebilir.");
         }
 
-        // Yorumu sil
         bookReviewRepository.delete(review);
 
-        // Rating istatistiklerini güncelle
         updateBookRatingStats(book);
 
         return "Yorum başarıyla silindi.";
     }
 
     private BookReviewResponse toBookReviewResponse(BookReview review) {
-        User reviewUser = review.getUser();
+        User reviewUser = review.getStudentProfile() != null ? review.getStudentProfile().getUser() : null;
         String userName = reviewUser != null
                 ? (reviewUser.getFirstName() + " " + reviewUser.getLastName()).trim()
                 : "Anonim";
@@ -240,13 +225,9 @@ public class BookReviewService {
                 review.getVideoQualityRating(),
                 review.getCreatedAt(),
                 review.getUpdatedAt(),
-                false); // isMyReview artık kullanılmıyor, false olarak bırakıyoruz
+                false);
     }
 
-    /**
-     * Kitabın rating istatistiklerini hesaplar ve Book entity'sine kaydeder
-     * Bu metod yorum eklendiğinde/güncellendiğinde çağrılır
-     */
     private void updateBookRatingStats(Book book) {
         List<BookReview> reviews = bookReviewRepository.findByBookIdOrderByCreatedAtDesc(book.getId());
 
@@ -269,11 +250,11 @@ public class BookReviewService {
                 totalVideo += r.getVideoQualityRating();
             }
 
-            int size = reviews.size();
-            book.setAverageOverallRating(Math.round((totalOverall / size) * AppConstants.RATING_DECIMAL_MULTIPLIER) / (double) AppConstants.RATING_DECIMAL_MULTIPLIER);
-            book.setAverageContentQualityRating(Math.round((totalContent / size) * AppConstants.RATING_DECIMAL_MULTIPLIER) / (double) AppConstants.RATING_DECIMAL_MULTIPLIER);
-            book.setAverageDifficultyRating(Math.round((totalDifficulty / size) * AppConstants.RATING_DECIMAL_MULTIPLIER) / (double) AppConstants.RATING_DECIMAL_MULTIPLIER);
-            book.setAverageVideoQualityRating(Math.round((totalVideo / size) * AppConstants.RATING_DECIMAL_MULTIPLIER) / (double) AppConstants.RATING_DECIMAL_MULTIPLIER);
+            int s = reviews.size();
+            book.setAverageOverallRating(Math.round((totalOverall / s) * AppConstants.RATING_DECIMAL_MULTIPLIER) / (double) AppConstants.RATING_DECIMAL_MULTIPLIER);
+            book.setAverageContentQualityRating(Math.round((totalContent / s) * AppConstants.RATING_DECIMAL_MULTIPLIER) / (double) AppConstants.RATING_DECIMAL_MULTIPLIER);
+            book.setAverageDifficultyRating(Math.round((totalDifficulty / s) * AppConstants.RATING_DECIMAL_MULTIPLIER) / (double) AppConstants.RATING_DECIMAL_MULTIPLIER);
+            book.setAverageVideoQualityRating(Math.round((totalVideo / s) * AppConstants.RATING_DECIMAL_MULTIPLIER) / (double) AppConstants.RATING_DECIMAL_MULTIPLIER);
             book.setReviewCount((long) reviews.size());
         }
 

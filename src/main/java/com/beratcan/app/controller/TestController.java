@@ -20,7 +20,7 @@ public class TestController {
     }
 
     // CREATE
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
     @PostMapping("/add/{topicId}")
     public TestResponse addTest(@PathVariable Long topicId, @Valid @RequestBody TestRequest request) {
         return testService.addTest(topicId, request);
@@ -38,14 +38,14 @@ public class TestController {
     }
 
     // UPDATE
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
     @PutMapping("/update/{testId}")
     public TestResponse updateTest(@PathVariable Long testId, @Valid @RequestBody TestRequest request) {
         return testService.updateTest(testId, request);
     }
 
     // DELETE
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
     @DeleteMapping("/delete/{testId}")
     public void deleteTest(@PathVariable Long testId) {
         testService.deleteTest(testId);
