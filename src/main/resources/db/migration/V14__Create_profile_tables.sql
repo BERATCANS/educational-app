@@ -228,8 +228,8 @@ DROP TABLE IF EXISTS user_flagged_questions;
 -- 13. Index'leri güncelle
 -- ============================================================
 
-CREATE INDEX idx_student_profile_user_id ON student_profiles(user_id);
-CREATE INDEX idx_test_results_student_profile ON test_results(student_profile_id);
-CREATE INDEX idx_purchases_user_id ON purchases(user_id);
-CREATE INDEX idx_discount_code_usage_user ON discount_code_usages(user_id);
-CREATE INDEX idx_book_review_student_profile ON book_reviews(student_profile_id);
+CREATE INDEX IF NOT EXISTS idx_student_profile_user_id ON student_profiles(user_id);
+CREATE INDEX IF NOT EXISTS idx_test_results_student_profile ON test_results(student_profile_id);
+CREATE INDEX IF NOT EXISTS idx_purchases_user_id ON purchases(user_id);
+CREATE INDEX IF NOT EXISTS idx_discount_code_usage_user ON discount_code_usages(user_id);
+CREATE INDEX IF NOT EXISTS idx_book_review_student_profile ON book_reviews(student_profile_id);
