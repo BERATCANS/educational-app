@@ -22,6 +22,9 @@ public class UserResponse {
     private Boolean streakUpdated;
     private Integer currentStreak;
     private Integer longestStreak;
+    // Veli davet kodu — sadece STUDENT için doludur (StudentProfile.parentInviteCode).
+    // Diğer rollerde null döner.
+    private String parentInviteCode;
 
     public UserResponse(User user) {
         this.id = user.getId();
@@ -46,6 +49,7 @@ public class UserResponse {
             this.schoolType = sp.getSchoolType() != null ? sp.getSchoolType().name() : null;
             this.currentStreak = sp.getCurrentStreak() != null ? sp.getCurrentStreak() : 0;
             this.longestStreak = sp.getLongestStreak() != null ? sp.getLongestStreak() : 0;
+            this.parentInviteCode = sp.getParentInviteCode();
         }
     }
 
