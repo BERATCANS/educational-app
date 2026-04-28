@@ -43,7 +43,9 @@ public class UserLibraryService {
 
         validateBookOwnershipAllowed(user);
 
-        BookCode code = bookCodeRepository.findByCodeAndUsedFalse(codeValue)
+        // Pessimistic lock: paralel iki redeem'den biri kazanır, diğeri bekler ve
+        // commit sonrası used=true gördüğü için "geçersiz/kullanıldı" alır.
+        BookCode code = bookCodeRepository.findByCodeAndUsedFalseForUpdate(codeValue)
                 .orElseThrow(() -> new BadRequestException("Kod geçersiz veya zaten kullanıldı"));
         Book book = code.getBook();
 
