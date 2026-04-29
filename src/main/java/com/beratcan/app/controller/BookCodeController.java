@@ -22,7 +22,7 @@ public class BookCodeController {
     /**
      * Tüm book code'ları getir
      */
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
     @GetMapping
     public ResponseEntity<List<BookCodeResponse>> getAllBookCodes() {
         List<BookCodeResponse> codes = bookCodeService.getAllBookCodes();
@@ -32,7 +32,7 @@ public class BookCodeController {
     /**
      * Belirli bir kitaba ait tüm code'ları getir
      */
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
     @GetMapping("/book/{bookId}")
     public ResponseEntity<List<BookCodeResponse>> getBookCodesByBookId(@PathVariable Long bookId) {
         List<BookCodeResponse> codes = bookCodeService.getBookCodesByBookId(bookId);
@@ -42,7 +42,7 @@ public class BookCodeController {
     /**
      * Book code güncelle
      */
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
     @PutMapping("/{codeId}")
     public ResponseEntity<BookCodeResponse> updateBookCode(
             @PathVariable Long codeId,
@@ -54,7 +54,7 @@ public class BookCodeController {
     /**
      * Book code sil
      */
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
     @DeleteMapping("/{codeId}")
     public ResponseEntity<Map<String, String>> deleteBookCode(@PathVariable Long codeId) {
         bookCodeService.deleteBookCode(codeId);
@@ -64,7 +64,7 @@ public class BookCodeController {
     /**
      * Bir kitaba birden fazla kod ekle
      */
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
     @PostMapping("/book/{bookId}")
     public ResponseEntity<Map<String, String>> addCodes(
             @PathVariable Long bookId,

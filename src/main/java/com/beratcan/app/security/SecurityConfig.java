@@ -5,6 +5,10 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Lazy;
+import org.springframework.security.access.expression.method.DefaultMethodSecurityExpressionHandler;
+import org.springframework.security.access.expression.method.MethodSecurityExpressionHandler;
+import org.springframework.security.access.hierarchicalroles.RoleHierarchy;
+import org.springframework.security.access.hierarchicalroles.RoleHierarchyImpl;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
@@ -64,7 +68,7 @@ public class SecurityConfig {
                     // Swagger UI endpoints - Production'da sadece admin, dev'de herkese açık
                     if ("prod".equals(activeProfile)) {
                         auth.requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html")
-                                .hasRole("ADMIN");
+                                .hasAnyRole("ADMIN", "SUPER_ADMIN");
                     } else {
                         auth.requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html")
                                 .permitAll();
@@ -176,5 +180,24 @@ public class SecurityConfig {
     @Bean
     public BCryptPasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
+    }
+
+    /**
+     * Role hierarchy: SUPER_ADMIN, ADMIN'in tüm yetkilerini otomatik kapsar.
+     */
+    @Bean
+    public RoleHierarchy roleHierarchy() {
+        return RoleHierarchyImpl.fromHierarchy("ROLE_SUPER_ADMIN > ROLE_ADMIN");
+    }
+
+    /**
+     * @PreAuthorize ifadelerinin RoleHierarchy'i tanıması için gerekli.
+     * static — @EnableMethodSecurity infrastructure bean'lerinden önce yüklenmeli.
+     */
+    @Bean
+    static MethodSecurityExpressionHandler methodSecurityExpressionHandler(RoleHierarchy roleHierarchy) {
+        DefaultMethodSecurityExpressionHandler handler = new DefaultMethodSecurityExpressionHandler();
+        handler.setRoleHierarchy(roleHierarchy);
+        return handler;
     }
 }

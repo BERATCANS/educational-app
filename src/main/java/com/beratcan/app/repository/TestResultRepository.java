@@ -13,26 +13,20 @@ import java.util.Optional;
 public interface TestResultRepository extends JpaRepository<TestResult, Long> {
 
         /**
-         * Kullanıcının tüm test sonuçlarını pagination ile getirir
-         * DB seviyesinde pagination yapar, memory'ye yük bindirmez
-         * JOIN FETCH ile N+1 query problemini önler
+         * Öğrencinin tüm test sonuçlarını pagination ile getirir
          */
         @Query("SELECT tr FROM TestResult tr " +
                         "JOIN FETCH tr.test t " +
                         "JOIN FETCH t.topic tp " +
                         "JOIN FETCH tp.book b " +
-                        "WHERE tr.user.id = :userId " +
+                        "WHERE tr.studentProfile.user.id = :userId " +
                         "ORDER BY tr.completedAt DESC")
         Page<TestResult> findByUserIdOrderByCompletedAtDesc(
                         @Param("userId") Long userId,
                         Pageable pageable);
 
         /**
-         * Kullanıcının tüm test sonuçlarını pagination ile getirir (QuestionResults
-         * ile)
-         * DB seviyesinde pagination yapar, memory'ye yük bindirmez
-         * JOIN FETCH ile N+1 query problemini önler
-         * Detay görünümü için kullanılır
+         * Öğrencinin tüm test sonuçlarını pagination ile getirir (QuestionResults ile)
          */
         @Query("SELECT DISTINCT tr FROM TestResult tr " +
                         "JOIN FETCH tr.test t " +
@@ -40,88 +34,85 @@ public interface TestResultRepository extends JpaRepository<TestResult, Long> {
                         "JOIN FETCH tp.book b " +
                         "LEFT JOIN FETCH tr.questionResults qr " +
                         "LEFT JOIN FETCH qr.question q " +
-                        "WHERE tr.user.id = :userId " +
+                        "WHERE tr.studentProfile.user.id = :userId " +
                         "ORDER BY tr.completedAt DESC")
         Page<TestResult> findByUserIdOrderByCompletedAtDescWithQuestionResults(
                         @Param("userId") Long userId,
                         Pageable pageable);
 
-        // Kullanıcının belirli bir test için en son sonucu (Optional)
-        Optional<TestResult> findFirstByUserIdAndTestIdOrderByCompletedAtDesc(Long userId, Long testId);
+        // Öğrencinin belirli bir test için en son sonucu (studentProfileId ile)
+        Optional<TestResult> findFirstByStudentProfileIdAndTestIdOrderByCompletedAtDesc(
+                        Long studentProfileId, Long testId);
 
         /**
-         * TestResult'ı Test ve User ile birlikte getirir (JOIN FETCH)
-         * LazyInitializationException önlemek için
+         * TestResult'ı Test ve StudentProfile ile birlikte getirir (JOIN FETCH)
          */
         @Query("SELECT tr FROM TestResult tr " +
                         "JOIN FETCH tr.test t " +
-                        "JOIN FETCH tr.user u " +
+                        "JOIN FETCH tr.studentProfile sp " +
+                        "JOIN FETCH sp.user u " +
                         "WHERE tr.id = :testResultId")
         Optional<TestResult> findByIdWithTestAndUser(@Param("testResultId") Long testResultId);
 
         /**
-         * TestResult'ı Test, User ve QuestionResults ile birlikte getirir (JOIN FETCH)
-         * LazyInitializationException önlemek için (detay görünümü için)
+         * TestResult'ı Test, StudentProfile ve QuestionResults ile birlikte getirir
          */
         @Query("SELECT DISTINCT tr FROM TestResult tr " +
                         "JOIN FETCH tr.test t " +
-                        "JOIN FETCH tr.user u " +
+                        "JOIN FETCH tr.studentProfile sp " +
+                        "JOIN FETCH sp.user u " +
                         "LEFT JOIN FETCH tr.questionResults qr " +
                         "LEFT JOIN FETCH qr.question q " +
                         "WHERE tr.id = :testResultId")
         Optional<TestResult> findByIdWithTestUserAndQuestionResults(@Param("testResultId") Long testResultId);
 
         /**
-         * Kullanıcının belirli bir test için en son sonucunu Test, User ve
-         * QuestionResults ile
-         * birlikte getirir (JOIN FETCH)
-         * LazyInitializationException önlemek için
+         * Öğrencinin belirli bir test için en son sonucunu detaylı getirir
          */
         @Query("SELECT DISTINCT tr FROM TestResult tr " +
                         "JOIN FETCH tr.test t " +
-                        "JOIN FETCH tr.user u " +
+                        "JOIN FETCH tr.studentProfile sp " +
+                        "JOIN FETCH sp.user u " +
                         "LEFT JOIN FETCH tr.questionResults qr " +
                         "LEFT JOIN FETCH qr.question q " +
-                        "WHERE tr.user.id = :userId AND tr.test.id = :testId " +
+                        "WHERE sp.user.id = :userId AND tr.test.id = :testId " +
                         "ORDER BY tr.completedAt DESC")
         java.util.List<TestResult> findFirstByUserIdAndTestIdWithTestAndUser(
                         @Param("userId") Long userId,
                         @Param("testId") Long testId);
 
-        // Kullanıcının genel istatistikleri
-        @Query("SELECT AVG(tr.successRate) FROM TestResult tr WHERE tr.user.id = :userId")
+        // Öğrencinin genel istatistikleri
+        @Query("SELECT AVG(tr.successRate) FROM TestResult tr WHERE tr.studentProfile.user.id = :userId")
         Double findAverageSuccessRateByUserId(@Param("userId") Long userId);
 
-        @Query("SELECT COUNT(tr) FROM TestResult tr WHERE tr.user.id = :userId")
+        @Query("SELECT COUNT(tr) FROM TestResult tr WHERE tr.studentProfile.user.id = :userId")
         Long countTestsByUserId(@Param("userId") Long userId);
 
-        // Kullanıcının belirli bir kitap için çözülen test sayısı
+        // Öğrencinin belirli bir kitap için çözülen test sayısı
         @Query("SELECT COUNT(DISTINCT tr.test.id) FROM TestResult tr " +
                         "JOIN tr.test t " +
                         "JOIN t.topic tp " +
                         "JOIN tp.book b " +
-                        "WHERE tr.user.id = :userId AND b.id = :bookId")
+                        "WHERE tr.studentProfile.user.id = :userId AND b.id = :bookId")
         Long countTestsByUserIdAndBookId(@Param("userId") Long userId, @Param("bookId") Long bookId);
 
-        // Kullanıcının belirli bir kitap için en son test çözme tarihi
+        // Öğrencinin belirli bir kitap için en son test çözme tarihi
         @Query("SELECT MAX(tr.completedAt) FROM TestResult tr " +
                         "JOIN tr.test t " +
                         "JOIN t.topic tp " +
                         "JOIN tp.book b " +
-                        "WHERE tr.user.id = :userId AND b.id = :bookId")
+                        "WHERE tr.studentProfile.user.id = :userId AND b.id = :bookId")
         java.time.LocalDateTime findLastCompletedDateByUserIdAndBookId(@Param("userId") Long userId,
                         @Param("bookId") Long bookId);
 
         /**
-         * Kullanıcının belirli bir kitaptaki test sonuçlarını pagination ile getirir
-         * DB seviyesinde filtreleme yapar, memory'ye yük bindirmez
-         * JOIN FETCH ile N+1 query problemini önler
+         * Öğrencinin belirli bir kitaptaki test sonuçlarını pagination ile getirir
          */
         @Query("SELECT tr FROM TestResult tr " +
                         "JOIN FETCH tr.test t " +
                         "JOIN FETCH t.topic tp " +
                         "JOIN FETCH tp.book b " +
-                        "WHERE tr.user.id = :userId AND b.id = :bookId " +
+                        "WHERE tr.studentProfile.user.id = :userId AND b.id = :bookId " +
                         "ORDER BY tr.completedAt DESC")
         Page<TestResult> findByUserIdAndBookId(
                         @Param("userId") Long userId,
@@ -129,21 +120,20 @@ public interface TestResultRepository extends JpaRepository<TestResult, Long> {
                         Pageable pageable);
 
         /**
-         * Kullanıcının belirli bir kitaptaki test sonuçlarını getirir (pagination yok)
-         * JOIN FETCH ile N+1 query problemini önler
+         * Öğrencinin belirli bir kitaptaki test sonuçlarını getirir (pagination yok)
          */
         @Query("SELECT tr FROM TestResult tr " +
                         "JOIN FETCH tr.test t " +
                         "JOIN FETCH t.topic tp " +
                         "JOIN FETCH tp.book b " +
-                        "WHERE tr.user.id = :userId AND b.id = :bookId " +
+                        "WHERE tr.studentProfile.user.id = :userId AND b.id = :bookId " +
                         "ORDER BY tr.completedAt DESC")
         java.util.List<TestResult> findAllByUserIdAndBookId(
                         @Param("userId") Long userId,
                         @Param("bookId") Long bookId);
 
         @Query("SELECT COALESCE(SUM(tr.totalQuestions),0) FROM TestResult tr " +
-                        "WHERE tr.user.id = :userId AND tr.completedAt BETWEEN :start AND :end")
+                        "WHERE tr.studentProfile.user.id = :userId AND tr.completedAt BETWEEN :start AND :end")
         Long sumSolvedQuestionsBetween(
                         @Param("userId") Long userId,
                         @Param("start") LocalDateTime start,

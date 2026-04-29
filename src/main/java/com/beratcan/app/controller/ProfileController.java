@@ -9,6 +9,7 @@ import com.beratcan.app.dto.response.ProfileAcademicResponse;
 import com.beratcan.app.dto.response.ProfileDetailsResponse;
 import com.beratcan.app.dto.response.QuestionTargetResponse;
 import com.beratcan.app.dto.response.UserResponse;
+import com.beratcan.app.entity.StudentProfile;
 import com.beratcan.app.entity.User;
 import com.beratcan.app.service.ProfileService;
 import com.beratcan.app.annotation.RateLimit;
@@ -45,7 +46,7 @@ public class ProfileController {
     public ResponseEntity<ProfileAcademicResponse> getAcademicInfo(Authentication authentication) {
         Long userId = Long.parseLong(authentication.getName());
         User user = profileService.getCurrentUser(userId);
-        return ResponseEntity.ok(ProfileAcademicResponse.fromUser(user));
+        return ResponseEntity.ok(ProfileAcademicResponse.fromStudentProfile(user.getStudentProfile()));
     }
 
     @PutMapping("/academic")
@@ -54,8 +55,8 @@ public class ProfileController {
             @Valid @RequestBody UpdateAcademicInfoRequest request,
             Authentication authentication) {
         Long userId = Long.parseLong(authentication.getName());
-        User updated = profileService.updateAcademicInfo(userId, request);
-        return ResponseEntity.ok(ProfileAcademicResponse.fromUser(updated));
+        StudentProfile updated = profileService.updateAcademicInfo(userId, request);
+        return ResponseEntity.ok(ProfileAcademicResponse.fromStudentProfile(updated));
     }
 
     @GetMapping("/details")

@@ -72,7 +72,7 @@ public class PurchaseAdminService {
         Specification<Purchase> spec = (root, q, cb) -> cb.conjunction();
 
         if (resolvedUserId != null)
-            spec = spec.and((root, q, cb) -> cb.equal(root.get("user").get("id"), resolvedUserId));
+            spec = spec.and((root, q, cb) -> cb.equal(root.get("studentProfile").get("user").get("id"), resolvedUserId));
         if (finalBookTitle != null)
             spec = spec.and((root, q, cb) -> {
                 q.distinct(true);
@@ -120,9 +120,7 @@ public class PurchaseAdminService {
     private PurchaseResponse mapToResponse(Purchase purchase) {
         PurchaseResponse response = new PurchaseResponse();
         response.setId(purchase.getId());
-        response.setUserId(purchase.getUser().getId());
-        response.setUserName(purchase.getUser().getFirstName() + " " + purchase.getUser().getLastName());
-        response.setUserUsername(purchase.getUser().getUsername());
+        populateUserFields(response, purchase);
         response.setTotalPrice(purchase.getTotalPrice());
         response.setTotalDiscount(purchase.getTotalDiscount());
         response.setFinalPrice(purchase.getFinalPrice());
@@ -143,6 +141,28 @@ public class PurchaseAdminService {
         }
 
         return response;
+    }
+
+    /**
+     * Purchase'ın sahibi user soft-delete edilmiş olabilir (@SQLRestriction lazy proxy
+     * initialize sırasında EntityNotFoundException atar). O durumda placeholder göster.
+     */
+    private void populateUserFields(PurchaseResponse response, Purchase purchase) {
+        try {
+            com.beratcan.app.entity.User purchaseUser =
+                    purchase.getStudentProfile() != null ? purchase.getStudentProfile().getUser() : null;
+            if (purchaseUser != null) {
+                response.setUserId(purchaseUser.getId());
+                response.setUserName(purchaseUser.getFirstName() + " " + purchaseUser.getLastName());
+                response.setUserUsername(purchaseUser.getUsername());
+                return;
+            }
+        } catch (Exception e) {
+            log.warn("Purchase user could not be loaded (likely soft-deleted): purchaseId={}",
+                    purchase.getId());
+        }
+        response.setUserName("Silinmiş Kullanıcı");
+        response.setUserUsername("(silinmiş)");
     }
 
     // PurchaseItem entity'sini PurchaseItemResponse'a dönüştür

@@ -222,7 +222,7 @@ public class DiscountCodeService {
 
         // Kullanım kaydı oluştur
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new com.beratcan.app.exception.UserNotFoundException(userId));
+                .orElseThrow(() -> new BadRequestException("Kullanıcı bulunamadı. userId=" + userId));
 
         com.beratcan.app.entity.DiscountCodeUsage usage = new com.beratcan.app.entity.DiscountCodeUsage();
         usage.setDiscountCode(code);

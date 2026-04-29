@@ -13,7 +13,7 @@ import java.util.List;
 @Getter
 @Setter
 @Table(name = "test_results", indexes = {
-        @Index(name = "idx_test_result_user_id", columnList = "user_id"),
+        @Index(name = "idx_test_results_student_profile", columnList = "student_profile_id"),
         @Index(name = "idx_test_result_test_id", columnList = "test_id"),
         @Index(name = "idx_test_result_completed_at", columnList = "completed_at")
 })
@@ -23,9 +23,9 @@ public class TestResult {
     private Long id;
 
     @ManyToOne
-    @JoinColumn(name = "user_id", nullable = false)
+    @JoinColumn(name = "student_profile_id", nullable = false)
     @JsonBackReference
-    private User user;
+    private StudentProfile studentProfile;
 
     @ManyToOne
     @JoinColumn(name = "test_id", nullable = false)

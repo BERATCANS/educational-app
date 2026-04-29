@@ -24,8 +24,8 @@ public class Cart {
     private Long version; // Optimistic locking için version field
 
     @OneToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_id", nullable = false, unique = true)
-    private User user; // Her kullanıcının bir sepeti var
+    @JoinColumn(name = "student_profile_id", nullable = false, unique = true)
+    private StudentProfile studentProfile;
 
     @OneToMany(mappedBy = "cart", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<CartItem> items = new ArrayList<>();

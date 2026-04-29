@@ -8,10 +8,10 @@ import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "book_reviews", uniqueConstraints = {
-        @UniqueConstraint(columnNames = { "book_id", "user_id" })
+        @UniqueConstraint(columnNames = { "book_id", "student_profile_id" })
 }, indexes = {
         @Index(name = "idx_book_review_book_id", columnList = "book_id"),
-        @Index(name = "idx_book_review_user_id", columnList = "user_id")
+        @Index(name = "idx_book_review_student_profile", columnList = "student_profile_id")
 })
 @Getter
 @Setter
@@ -26,8 +26,8 @@ public class BookReview {
     private Book book;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_id", nullable = false)
-    private User user;
+    @JoinColumn(name = "student_profile_id", nullable = false)
+    private StudentProfile studentProfile;
 
     @Column(nullable = false)
     private int overallRating;

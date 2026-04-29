@@ -1,6 +1,6 @@
 package com.beratcan.app.dto.response;
 
-import com.beratcan.app.entity.User;
+import com.beratcan.app.entity.StudentProfile;
 import lombok.Data;
 
 @Data
@@ -10,12 +10,14 @@ public class ProfileAcademicResponse {
     private String fieldType;
     private String schoolType;
 
-    public static ProfileAcademicResponse fromUser(User user) {
+    public static ProfileAcademicResponse fromStudentProfile(StudentProfile profile) {
         ProfileAcademicResponse response = new ProfileAcademicResponse();
-        response.setExamType(user.getExamType() != null ? user.getExamType().name() : null);
-        response.setGradeLevel(user.getGradeLevel() != null ? user.getGradeLevel().name() : null);
-        response.setFieldType(user.getFieldType() != null ? user.getFieldType().name() : null);
-        response.setSchoolType(user.getSchoolType() != null ? user.getSchoolType().name() : null);
+        if (profile != null) {
+            response.setExamType(profile.getExamType() != null ? profile.getExamType().name() : null);
+            response.setGradeLevel(profile.getGradeLevel() != null ? profile.getGradeLevel().name() : null);
+            response.setFieldType(profile.getFieldType() != null ? profile.getFieldType().name() : null);
+            response.setSchoolType(profile.getSchoolType() != null ? profile.getSchoolType().name() : null);
+        }
         return response;
     }
 }

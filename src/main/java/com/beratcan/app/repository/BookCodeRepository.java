@@ -1,7 +1,9 @@
 package com.beratcan.app.repository;
 
 import com.beratcan.app.entity.BookCode;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -9,7 +11,16 @@ import java.util.List;
 import java.util.Optional;
 
 public interface BookCodeRepository extends JpaRepository<BookCode, Long> {
-    Optional<BookCode> findByCodeAndUsedFalse(String code);
+
+    /**
+     * Kodu redeem etmek için pessimistic write lock alarak getirir.
+     * İki paralel "use code" isteğinden ilki satırı kilitler; ikincisi
+     * bekler ve commit'ten sonra used=true gördüğü için boş döner —
+     * böylece aynı kod iki kullanıcıya açılmaz.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT bc FROM BookCode bc WHERE bc.code = :code AND bc.used = false")
+    Optional<BookCode> findByCodeAndUsedFalseForUpdate(@Param("code") String code);
 
     boolean existsByCode(String code);
 
