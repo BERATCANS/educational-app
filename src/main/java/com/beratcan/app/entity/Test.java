@@ -32,7 +32,7 @@ public class Test {
     @JsonBackReference
     private Topic topic;
 
-    @OneToMany(mappedBy = "test", cascade = CascadeType.ALL)
+    @OneToMany(mappedBy = "test", cascade = {CascadeType.PERSIST, CascadeType.MERGE})
     @JsonManagedReference
     private List<Question> questions = new ArrayList<>();
 

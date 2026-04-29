@@ -4,6 +4,7 @@ import com.beratcan.app.annotation.RateLimit;
 import com.beratcan.app.dto.request.AddToCartRequest;
 import com.beratcan.app.dto.response.CartResponse;
 import com.beratcan.app.dto.response.PurchaseResponse;
+import com.beratcan.app.exception.IdempotencyConflictException;
 import com.beratcan.app.service.CartService;
 import com.beratcan.app.service.PurchaseService;
 import jakarta.validation.Valid;
@@ -86,13 +87,28 @@ public class CartController {
     /**
      * Sepeti satın al (tüm kitapları birden)
      * POST /api/cart/checkout
+     *
+     * Idempotency-Key header sent → safe to retry; the same key for the same user
+     * returns the original response without creating a second Purchase.
      */
     @PostMapping("/checkout")
     @RateLimit(requestsPerMinute = 3, keyType = "USER", message = "Too many checkout attempts. Please try again later.")
-    public ResponseEntity<?> checkout(Authentication authentication) {
+    public ResponseEntity<?> checkout(
+            Authentication authentication,
+            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey) {
         Long userId = Long.parseLong(authentication.getName());
-        PurchaseResponse purchase = purchaseService.checkoutCart(userId);
-        return ResponseEntity.status(HttpStatus.CREATED).body(Map.of(
+        PurchaseResponse purchase;
+        try {
+            purchase = purchaseService.checkoutCart(userId, idempotencyKey);
+        } catch (IdempotencyConflictException conflict) {
+            purchase = purchaseService.findByIdempotencyKey(userId, idempotencyKey)
+                    .orElseThrow(() -> conflict);
+        }
+        ResponseEntity.BodyBuilder builder = ResponseEntity.status(HttpStatus.CREATED);
+        if (idempotencyKey != null) {
+            builder = builder.header("Idempotency-Key", idempotencyKey);
+        }
+        return builder.body(Map.of(
                 "message", "Sepetteki tüm kitaplar başarıyla satın alındı",
                 "purchase", purchase,
                 "totalItems", purchase.getItemCount()));

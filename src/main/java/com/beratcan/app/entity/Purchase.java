@@ -56,6 +56,9 @@ public class Purchase {
     @Column(length = 50)
     private String paymentMethod;
 
+    @Column(name = "idempotency_key", length = 80)
+    private String idempotencyKey;
+
     @PrePersist
     protected void onCreate() {
         if (purchaseDate == null) {

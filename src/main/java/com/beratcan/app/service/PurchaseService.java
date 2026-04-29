@@ -15,6 +15,7 @@ import com.beratcan.app.entity.enums.PurchaseStatus;
 import com.beratcan.app.exception.BadRequestException;
 import com.beratcan.app.exception.CartNotFoundException;
 import com.beratcan.app.exception.ExternalServiceException;
+import com.beratcan.app.exception.IdempotencyConflictException;
 import com.beratcan.app.exception.PurchaseNotFoundException;
 import com.beratcan.app.exception.UnauthorizedOperationException;
 import com.beratcan.app.exception.UserNotFoundException;
@@ -34,13 +35,18 @@ import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 @Service
 @Slf4j
 @RequiredArgsConstructor
 public class PurchaseService {
+
+    private static final Pattern IDEMPOTENCY_KEY_PATTERN =
+            Pattern.compile("^[A-Za-z0-9._~+-]{1,80}$");
 
     private final PurchaseRepository purchaseRepository;
     private final BookRepository bookRepository;
@@ -95,9 +101,33 @@ public class PurchaseService {
 
     @Transactional
     public PurchaseResponse checkoutCart(Long userId) {
+        return checkoutCart(userId, null);
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<PurchaseResponse> findByIdempotencyKey(Long userId, String idempotencyKey) {
+        return purchaseRepository.findByUserIdAndIdempotencyKey(userId, idempotencyKey)
+                .map(this::mapToResponse);
+    }
+
+    @Transactional
+    public PurchaseResponse checkoutCart(Long userId, String idempotencyKey) {
         long startTime = System.currentTimeMillis();
 
-        log.info("EVENT: Cart checkout started | userId={}", userId);
+        log.info("EVENT: Cart checkout started | userId={} | idempotencyKey={}",
+                userId, idempotencyKey);
+
+        if (idempotencyKey != null) {
+            validateIdempotencyKey(idempotencyKey);
+
+            Optional<Purchase> existing =
+                    purchaseRepository.findByUserIdAndIdempotencyKey(userId, idempotencyKey);
+            if (existing.isPresent()) {
+                log.info("EVENT: Idempotent checkout replay | userId={} | key={} | purchaseId={}",
+                        userId, idempotencyKey, existing.get().getId());
+                return mapToResponse(existing.get());
+            }
+        }
 
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> {
@@ -250,6 +280,7 @@ public class PurchaseService {
         purchase.setPaymentMethod("Sepet ile satın alma");
         purchase.setTransactionId(transactionId);
         purchase.setStatus(PurchaseStatus.PENDING);
+        purchase.setIdempotencyKey(idempotencyKey);
 
         if (cart.getAppliedDiscountCode() != null && discountAmount.compareTo(BigDecimal.ZERO) > 0) {
             purchase.setDiscountCode(cart.getAppliedDiscountCode());
@@ -291,7 +322,18 @@ public class PurchaseService {
             bookIndex++;
         }
 
-        Purchase savedPurchase = purchaseRepository.save(purchase);
+        Purchase savedPurchase;
+        try {
+            savedPurchase = purchaseRepository.saveAndFlush(purchase);
+        } catch (DataIntegrityViolationException e) {
+            if (idempotencyKey != null && e.getMessage() != null
+                    && e.getMessage().contains("uk_purchases_student_idempotency")) {
+                log.warn("Idempotency conflict on insert: userId={}, key={}",
+                        userId, idempotencyKey);
+                throw new IdempotencyConflictException(userId, idempotencyKey);
+            }
+            throw e;
+        }
 
         // ADIM 5: Ödeme işlemi
         PurchaseRequest paymentRequest = new PurchaseRequest();
@@ -438,6 +480,13 @@ public class PurchaseService {
     private void validateBookOwnershipAllowed(User user) {
         if (user.getRole() == Role.PARENT) {
             throw new BadRequestException("Parent hesapları kitap satın alamaz.");
+        }
+    }
+
+    private void validateIdempotencyKey(String key) {
+        if (!IDEMPOTENCY_KEY_PATTERN.matcher(key).matches()) {
+            throw new BadRequestException(
+                    "Idempotency-Key must match [A-Za-z0-9._~+-]{1,80}");
         }
     }
 }

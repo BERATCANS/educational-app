@@ -72,4 +72,16 @@ public interface PurchaseRepository extends JpaRepository<Purchase, Long>, JpaSp
             "WHERE p.id = :purchaseId")
     Optional<Purchase> findByIdWithUserAndBook(@Param("purchaseId") Long purchaseId);
 
+    @Query("SELECT p FROM Purchase p " +
+            "JOIN FETCH p.studentProfile sp " +
+            "JOIN FETCH sp.user u " +
+            "LEFT JOIN FETCH p.items i " +
+            "LEFT JOIN FETCH i.book b " +
+            "LEFT JOIN FETCH b.publisher " +
+            "LEFT JOIN FETCH p.discountCode " +
+            "WHERE u.id = :userId AND p.idempotencyKey = :key")
+    Optional<Purchase> findByUserIdAndIdempotencyKey(
+            @Param("userId") Long userId,
+            @Param("key") String idempotencyKey);
+
 }

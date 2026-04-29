@@ -2,6 +2,7 @@ package com.beratcan.app.exception;
 
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -17,6 +18,9 @@ import java.util.stream.Collectors;
 @RestControllerAdvice
 @Slf4j
 public class GlobalExceptionHandler {
+
+        @Value("${spring.profiles.active:dev}")
+        private String activeProfile;
 
         @ExceptionHandler(MethodArgumentNotValidException.class)
         public ResponseEntity<ErrorDetails> handleValidationExceptions(MethodArgumentNotValidException ex) {
@@ -208,9 +212,13 @@ public class GlobalExceptionHandler {
                                 ex.getMessage(),
                                 ex);
 
+                String details = "prod".equals(activeProfile)
+                                ? "Internal server error"
+                                : ex.getMessage();
+
                 ErrorDetails errorDetails = buildErrorDetails(
                                 "An unexpected error occurred",
-                                ex.getMessage(),
+                                details,
                                 HttpStatus.INTERNAL_SERVER_ERROR);
 
                 return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorDetails);
