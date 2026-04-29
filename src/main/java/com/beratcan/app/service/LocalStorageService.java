@@ -51,13 +51,31 @@ public class LocalStorageService implements StorageService {
                 : Paths.get(original).getFileName().toString();
         String filename = UUID.randomUUID() + "_" + basename;
 
-        Path target = resolveSafe(filename);
+        return writeMultipart(file, filename);
+    }
 
+    @Override
+    public String saveFile(MultipartFile file, String logicalPath) {
+        if (file == null || file.isEmpty()) {
+            throw new FileStorageException("Dosya boş olamaz");
+        }
+
+        String contentType = file.getContentType();
+        if (contentType == null
+                || !ALLOWED_CONTENT_TYPES.contains(contentType.toLowerCase())) {
+            throw new FileStorageException("İzin verilmeyen dosya tipi: " + contentType);
+        }
+
+        return writeMultipart(file, logicalPath);
+    }
+
+    private String writeMultipart(MultipartFile file, String logicalPath) {
+        Path target = resolveSafe(logicalPath);
         try {
             Files.createDirectories(target.getParent());
             Files.write(target, file.getBytes());
-            log.info("Dosya yüklendi (local): {}", filename);
-            return filename;
+            log.info("Dosya yüklendi (local): {}", logicalPath);
+            return logicalPath;
         } catch (IOException e) {
             log.error("Dosya yükleme hatası: ", e);
             throw new FileStorageException("Dosya yüklenemedi: " + e.getMessage(), e);

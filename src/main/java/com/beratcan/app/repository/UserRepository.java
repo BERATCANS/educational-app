@@ -29,4 +29,10 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     // Şifre sıfırlama için
     Optional<User> findByPasswordResetToken(String token);
+
+    /**
+     * One-row EXISTS lookup over the user_books join table — does this user
+     * own this specific book? Avoids hydrating the entire ownedBooks Set.
+     */
+    boolean existsByIdAndOwnedBooks_Id(Long userId, Long bookId);
 }

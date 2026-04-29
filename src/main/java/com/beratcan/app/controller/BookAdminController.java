@@ -8,6 +8,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequestMapping("/api/books")
@@ -37,6 +38,14 @@ public class BookAdminController {
     public ResponseEntity<String> deleteBook(@PathVariable Long bookId) {
         bookAdminService.deleteBook(bookId);
         return ResponseEntity.ok("Book deleted successfully.");
+    }
+
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
+    @PostMapping(value = "/{bookId}/cover", consumes = "multipart/form-data")
+    public ResponseEntity<BookResponse> uploadCover(
+            @PathVariable Long bookId,
+            @RequestParam("file") MultipartFile file) {
+        return ResponseEntity.ok(bookAdminService.uploadCover(bookId, file));
     }
 
     @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")

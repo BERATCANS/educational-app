@@ -15,11 +15,13 @@ import com.beratcan.app.repository.BookRepository;
 import com.beratcan.app.repository.TestRepository;
 import com.beratcan.app.repository.TopicRepository;
 import com.beratcan.app.repository.PublisherRepository;
+import com.beratcan.app.storage.StoragePaths;
 import lombok.RequiredArgsConstructor;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
+import org.springframework.web.multipart.MultipartFile;
 import lombok.extern.slf4j.Slf4j;
 
 import java.math.BigDecimal;
@@ -35,6 +37,7 @@ public class BookAdminService {
     private final TestRepository testRepository;
     private final PublisherRepository publisherRepository;
     private final com.beratcan.app.repository.QuestionRepository questionRepository;
+    private final StorageService storageService;
 
     @Transactional
     public BookResponse addBook(BookRequest request) {
@@ -100,6 +103,38 @@ public class BookAdminService {
 
         // Entity'yi yükledik, şimdi cascade delete çalışacak
         bookRepository.delete(book);
+    }
+
+    /**
+     * Replace the book's cover image. Stores under
+     * {@code books/{bookId}/cover-{rand8}.{ext}} and deletes the previous
+     * cover (if any) once the new one is safely persisted.
+     */
+    @Transactional
+    public BookResponse uploadCover(Long bookId, MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw new BadRequestException("Kapak dosyası boş olamaz");
+        }
+        Book book = bookRepository.findById(bookId)
+                .orElseThrow(() -> new BookNotFoundException(bookId));
+
+        String ext = StoragePaths.safeExtension(file);
+        String newPath = StoragePaths.bookCover(book.getId(), ext);
+        storageService.saveFile(file, newPath);
+
+        String oldPath = book.getCoverImageUrl();
+        book.setCoverImageUrl(newPath);
+        Book saved = bookRepository.save(book);
+
+        if (oldPath != null && !oldPath.isBlank() && !oldPath.equals(newPath)) {
+            try {
+                storageService.deleteFile(oldPath);
+            } catch (Exception e) {
+                log.warn("Eski kapak silinemedi (yenisi kaydedildi): bookId={}, oldPath={}, error={}",
+                        bookId, oldPath, e.getMessage());
+            }
+        }
+        return toBookResponse(saved);
     }
 
     /**
