@@ -13,6 +13,7 @@ import com.beratcan.app.exception.TestResultNotFoundException;
 import com.beratcan.app.exception.UnauthorizedOperationException;
 import com.beratcan.app.exception.UserNotFoundException;
 import com.beratcan.app.repository.*;
+import com.beratcan.app.constants.AppTime;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -20,7 +21,6 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 
@@ -31,17 +31,20 @@ public class TestResultService {
     private final TestResultRepository testResultRepository;
     private final QuestionResultRepository questionResultRepository;
     private final UserRepository userRepository;
+    private final StudentProfileRepository studentProfileRepository;
     private final TestRepository testRepository;
     private final QuestionRepository questionRepository;
 
     public TestResultService(TestResultRepository testResultRepository,
             QuestionResultRepository questionResultRepository,
             UserRepository userRepository,
+            StudentProfileRepository studentProfileRepository,
             TestRepository testRepository,
             QuestionRepository questionRepository) {
         this.testResultRepository = testResultRepository;
         this.questionResultRepository = questionResultRepository;
         this.userRepository = userRepository;
+        this.studentProfileRepository = studentProfileRepository;
         this.testRepository = testRepository;
         this.questionRepository = questionRepository;
     }
@@ -62,15 +65,15 @@ public class TestResultService {
         log.info("EVENT: Test submission started | userId={} | testId={} | questionCount={}",
                 userId, testId, userAnswers.size());
 
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new UserNotFoundException(userId));
+        StudentProfile studentProfile = studentProfileRepository.findByUserId(userId)
+                .orElseThrow(() -> new BadRequestException("Öğrenci profili bulunamadı. userId=" + userId));
 
         Test test = testRepository.findById(testId)
                 .orElseThrow(() -> new TestNotFoundException(testId));
 
         // Önce mevcut test sonucunu kontrol et
         TestResult existingTestResult = testResultRepository
-                .findFirstByUserIdAndTestIdOrderByCompletedAtDesc(userId, testId)
+                .findFirstByStudentProfileIdAndTestIdOrderByCompletedAtDesc(studentProfile.getId(), testId)
                 .orElse(null);
 
         TestResult testResult;
@@ -78,14 +81,14 @@ public class TestResultService {
             // Mevcut test sonucunu güncelle
             testResult = existingTestResult;
             testResult.setTimeSpentSeconds(totalTimeSeconds);
-            testResult.setCompletedAt(LocalDateTime.now());
+            testResult.setCompletedAt(AppTime.now());
         } else {
             // Yeni test sonucu oluştur
             testResult = new TestResult();
-            testResult.setUser(user);
+            testResult.setStudentProfile(studentProfile);
             testResult.setTest(test);
             testResult.setTimeSpentSeconds(totalTimeSeconds);
-            testResult.setCompletedAt(LocalDateTime.now());
+            testResult.setCompletedAt(AppTime.now());
         }
 
         int correctCount = 0;
@@ -116,7 +119,7 @@ public class TestResultService {
                 questionResult.setTestResult(testResult);
                 questionResult.setSelectedAnswer(selectedAnswer);
                 questionResult.setIsCorrect(isCorrect);
-                questionResult.setAnsweredAt(LocalDateTime.now());
+                questionResult.setAnsweredAt(AppTime.now());
             } else {
                 // Yeni QuestionResult oluştur
                 questionResult = new QuestionResult();
@@ -124,7 +127,7 @@ public class TestResultService {
                 questionResult.setQuestion(question);
                 questionResult.setSelectedAnswer(selectedAnswer);
                 questionResult.setIsCorrect(isCorrect);
-                questionResult.setAnsweredAt(LocalDateTime.now());
+                questionResult.setAnsweredAt(AppTime.now());
             }
 
             testResult.getQuestionResults().add(questionResult);
@@ -142,8 +145,8 @@ public class TestResultService {
 
         TestResult savedTestResult = testResultRepository.save(testResult);
 
-        // Kullanıcının günlük çözülen soru sayısını güncelle
-        updateDailySolvedQuestions(user, totalQuestions);
+        // Öğrencinin günlük çözülen soru sayısını güncelle
+        updateDailySolvedQuestions(studentProfile, totalQuestions);
 
         // QuestionResults'ı da yüklemek için yeniden çek (lazy loading sorununu önlemek
         // için)
@@ -173,11 +176,11 @@ public class TestResultService {
      * @param user            Kullanıcı entity
      * @param solvedQuestions Çözülen soru sayısı
      */
-    private void updateDailySolvedQuestions(User user, int solvedQuestions) {
+    private void updateDailySolvedQuestions(StudentProfile studentProfile, int solvedQuestions) {
         // Sadece bugünkü sayıya ekle (tarih kontrolü yapmadan)
-        int currentSolved = user.getDailySolvedQuestions() != null ? user.getDailySolvedQuestions() : 0;
-        user.setDailySolvedQuestions(currentSolved + solvedQuestions);
-        userRepository.save(user);
+        int currentSolved = studentProfile.getDailySolvedQuestions() != null ? studentProfile.getDailySolvedQuestions() : 0;
+        studentProfile.setDailySolvedQuestions(currentSolved + solvedQuestions);
+        studentProfileRepository.save(studentProfile);
     }
 
     /**
@@ -223,8 +226,8 @@ public class TestResultService {
         TestResult testResult = testResultRepository.findByIdWithTestUserAndQuestionResults(testResultId)
                 .orElseThrow(() -> new TestResultNotFoundException(testResultId));
 
-        // Authorization kontrolü (User zaten JOIN FETCH ile yüklü)
-        if (!testResult.getUser().getId().equals(userId)) {
+        // Authorization kontrolü (StudentProfile → User zaten JOIN FETCH ile yüklü)
+        if (!testResult.getStudentProfile().getUser().getId().equals(userId)) {
             throw new UnauthorizedOperationException("You can only access your own test results");
         }
 

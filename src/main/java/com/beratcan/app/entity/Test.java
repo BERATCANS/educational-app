@@ -9,9 +9,14 @@ import lombok.Setter;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.hibernate.annotations.SQLDelete;
+import org.hibernate.annotations.SQLRestriction;
+
 @Entity
 @Getter
 @Setter
+@SQLDelete(sql = "UPDATE tests SET is_deleted = true WHERE id = ?")
+@SQLRestriction("is_deleted = false")
 @Table(name = "tests")
 public class Test {
 
@@ -27,7 +32,7 @@ public class Test {
     @JsonBackReference
     private Topic topic;
 
-    @OneToMany(mappedBy = "test", cascade = CascadeType.ALL)
+    @OneToMany(mappedBy = "test", cascade = {CascadeType.PERSIST, CascadeType.MERGE})
     @JsonManagedReference
     private List<Question> questions = new ArrayList<>();
 
@@ -36,4 +41,7 @@ public class Test {
 
     @Column(name = "sequence_number")
     private Integer sequenceNumber;
+
+    @Column(nullable = false)
+    private boolean isDeleted = false; // Soft Delete mantığı için
 }

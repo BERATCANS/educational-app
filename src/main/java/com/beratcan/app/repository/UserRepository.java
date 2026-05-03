@@ -2,9 +2,6 @@ package com.beratcan.app.repository;
 
 import com.beratcan.app.entity.User;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Modifying;
-import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.query.Param;
 
 import java.util.Optional;
 
@@ -30,56 +27,12 @@ public interface UserRepository extends JpaRepository<User, Long> {
     // Email doğrulama için
     Optional<User> findByEmailVerificationToken(String token);
 
-    /**
-     * Tüm kullanıcıların günlük çözülen soru sayısını sıfırla
-     * Her gece yarısı scheduled job tarafından çağrılır
-     * 
-     * @return Güncellenen kullanıcı sayısı
-     */
-    @Modifying(clearAutomatically = true)
-    @Query("UPDATE User u SET u.dailySolvedQuestions = 0")
-    int resetAllDailySolvedQuestions();
+    // Şifre sıfırlama için
+    Optional<User> findByPasswordResetToken(String token);
 
     /**
-     * Kullanıcının belirli bir kitaba sahip olup olmadığını kontrol eder
-     * Sadece boolean döndürür, entity yüklemez (performans için optimize edilmiş)
-     * 
-     * @param userId Kullanıcı ID
-     * @param bookId Kitap ID
-     * @return true eğer kullanıcı kitaba sahipse, false değilse
+     * One-row EXISTS lookup over the user_books join table — does this user
+     * own this specific book? Avoids hydrating the entire ownedBooks Set.
      */
-    @Query("SELECT COUNT(ub) > 0 FROM User u JOIN u.ownedBooks ub WHERE u.id = :userId AND ub.id = :bookId")
-    boolean existsByUserIdAndBookId(@Param("userId") Long userId, @Param("bookId") Long bookId);
-
-    /**
-     * Kullanıcıyı flaggedQuestions koleksiyonu ile birlikte getirir (JOIN FETCH)
-     * Question'ların Test, Topic, Book ilişkilerini de yükler
-     * LazyInitializationException önlemek için
-     * 
-     * @param userId Kullanıcı ID
-     * @return User entity with flaggedQuestions loaded
-     */
-    @Query("SELECT DISTINCT u FROM User u " +
-            "LEFT JOIN FETCH u.flaggedQuestions fq " +
-            "LEFT JOIN FETCH fq.test t " +
-            "LEFT JOIN FETCH t.topic tp " +
-            "LEFT JOIN FETCH tp.book b " +
-            "LEFT JOIN FETCH fq.hints h " +
-            "LEFT JOIN FETCH fq.explanation e " +
-            "WHERE u.id = :userId")
-    Optional<User> findByIdWithFlaggedQuestions(@Param("userId") Long userId);
-
-    /**
-     * Kullanıcıyı ownedBooks koleksiyonu ile birlikte getirir (JOIN FETCH)
-     * Book'ların Publisher ilişkilerini de yükler
-     * N+1 query problemini önlemek için
-     * 
-     * @param userId Kullanıcı ID
-     * @return User entity with ownedBooks and publishers loaded
-     */
-    @Query("SELECT DISTINCT u FROM User u " +
-            "LEFT JOIN FETCH u.ownedBooks b " +
-            "LEFT JOIN FETCH b.publisher p " +
-            "WHERE u.id = :userId")
-    Optional<User> findByIdWithOwnedBooks(@Param("userId") Long userId);
+    boolean existsByIdAndOwnedBooks_Id(Long userId, Long bookId);
 }

@@ -2,11 +2,12 @@ package com.beratcan.app.service;
 
 import com.beratcan.app.dto.response.FlaggedResponse;
 import com.beratcan.app.entity.Question;
+import com.beratcan.app.entity.StudentProfile;
+import com.beratcan.app.exception.BadRequestException;
 import com.beratcan.app.exception.ConflictException;
 import com.beratcan.app.exception.QuestionNotFoundException;
-import com.beratcan.app.exception.UserNotFoundException;
 import com.beratcan.app.repository.QuestionRepository;
-import com.beratcan.app.repository.UserRepository;
+import com.beratcan.app.repository.StudentProfileRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -20,54 +21,51 @@ import java.util.Set;
 @Slf4j
 public class QuestionFlagService {
 
-    private final UserRepository userRepository;
+    private final StudentProfileRepository studentProfileRepository;
     private final QuestionRepository questionRepository;
 
     @Transactional
     public void flagQuestion(Long userId, Long questionId) {
-        var user = userRepository.findById(userId)
-                .orElseThrow(() -> new UserNotFoundException(userId));
+        StudentProfile profile = getStudentProfile(userId);
 
         var question = questionRepository.findById(questionId)
                 .orElseThrow(() -> new QuestionNotFoundException(questionId));
 
-        if (user.getFlaggedQuestions().contains(question)) {
+        if (profile.getFlaggedQuestions().contains(question)) {
             throw new ConflictException("Question is already flagged");
         }
 
-        user.getFlaggedQuestions().add(question);
-        userRepository.save(user);
+        profile.getFlaggedQuestions().add(question);
+        studentProfileRepository.save(profile);
 
         log.info("Question flagged: userId={}, questionId={}, totalFlagged={}",
-                userId, questionId, user.getFlaggedQuestions().size());
+                userId, questionId, profile.getFlaggedQuestions().size());
     }
 
     @Transactional
     public void unflagQuestion(Long userId, Long questionId) {
-        var user = userRepository.findById(userId)
-                .orElseThrow(() -> new UserNotFoundException(userId));
+        StudentProfile profile = getStudentProfile(userId);
 
         var question = questionRepository.findById(questionId)
                 .orElseThrow(() -> new QuestionNotFoundException(questionId));
 
-        if (!user.getFlaggedQuestions().contains(question)) {
+        if (!profile.getFlaggedQuestions().contains(question)) {
             throw new ConflictException("Question is not flagged");
         }
 
-        user.getFlaggedQuestions().remove(question);
-        userRepository.save(user);
+        profile.getFlaggedQuestions().remove(question);
+        studentProfileRepository.save(profile);
 
         log.info("Question unflagged: userId={}, questionId={}, totalFlagged={}",
-                userId, questionId, user.getFlaggedQuestions().size());
+                userId, questionId, profile.getFlaggedQuestions().size());
     }
 
     @Transactional(readOnly = true)
     public List<FlaggedResponse> getFlaggedQuestions(Long userId) {
-        // JOIN FETCH ile flaggedQuestions ve tüm ilişkileri tek query'de yükle
-        var user = userRepository.findByIdWithFlaggedQuestions(userId)
-                .orElseThrow(() -> new UserNotFoundException(userId));
+        StudentProfile profile = studentProfileRepository.findByUserIdWithFlaggedQuestions(userId)
+                .orElseThrow(() -> new BadRequestException("Öğrenci profili bulunamadı. userId=" + userId));
 
-        Set<Question> flaggedQuestions = user.getFlaggedQuestions();
+        Set<Question> flaggedQuestions = profile.getFlaggedQuestions();
         return flaggedQuestions.stream()
                 .map(this::toFlaggedResponse)
                 .toList();
@@ -75,12 +73,10 @@ public class QuestionFlagService {
 
     @Transactional(readOnly = true)
     public FlaggedResponse getFlaggedQuestionById(Long userId, Long questionId) {
-        // JOIN FETCH ile flaggedQuestions ve tüm ilişkileri tek query'de yükle
-        var user = userRepository.findByIdWithFlaggedQuestions(userId)
-                .orElseThrow(() -> new UserNotFoundException(userId));
+        StudentProfile profile = studentProfileRepository.findByUserIdWithFlaggedQuestions(userId)
+                .orElseThrow(() -> new BadRequestException("Öğrenci profili bulunamadı. userId=" + userId));
 
-        // Kullanıcının işaretlediği sorular içinde arama yap
-        Question flaggedQuestion = user.getFlaggedQuestions().stream()
+        Question flaggedQuestion = profile.getFlaggedQuestions().stream()
                 .filter(q -> q.getId().equals(questionId))
                 .findFirst()
                 .orElseThrow(() -> new QuestionNotFoundException(questionId));
@@ -88,18 +84,16 @@ public class QuestionFlagService {
         return toFlaggedResponse(flaggedQuestion);
     }
 
+    private StudentProfile getStudentProfile(Long userId) {
+        return studentProfileRepository.findByUserId(userId)
+                .orElseThrow(() -> new BadRequestException("Öğrenci profili bulunamadı. userId=" + userId));
+    }
+
     private FlaggedResponse toFlaggedResponse(Question question) {
         FlaggedResponse fr = new FlaggedResponse();
         fr.setQuestionId(question.getId());
 
-        // Database'de filename var, response'da URL oluştur
-        // Eğer zaten URL formatındaysa (eski kayıtlar için) olduğu gibi bırak
-        String imageUrl = question.getImageUrl();
-        if (imageUrl != null && !imageUrl.isEmpty() && !imageUrl.startsWith("api/files/")) {
-            fr.setImageUrl("api/files/" + imageUrl);
-        } else {
-            fr.setImageUrl(imageUrl);
-        }
+        fr.setImageUrl(question.getImageUrl());
 
         fr.setAnswerNumber(question.getAnswerNumber());
         fr.setCorrectAnswer(question.getCorrectAnswer().name());

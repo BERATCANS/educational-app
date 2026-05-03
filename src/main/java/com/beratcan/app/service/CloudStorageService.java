@@ -18,11 +18,18 @@ import software.amazon.awssdk.services.s3.model.*;
 
 import java.io.IOException;
 import java.time.Instant;
+import java.util.Set;
 
 @Slf4j
 @Service
 @Profile("prod") // Sadece Production ortamında aktif
 public class CloudStorageService implements StorageService {
+
+    private static final Set<String> ALLOWED_CONTENT_TYPES = Set.of(
+            "image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp",
+            "application/pdf",
+            "audio/mpeg", "audio/mp3"
+    );
 
     @Value("${do.spaces.endpoint:}")
     private String endpoint;
@@ -75,6 +82,7 @@ public class CloudStorageService implements StorageService {
     }
 
     @Override
+    @Deprecated
     public String saveFile(MultipartFile file) {
         if (file == null || file.isEmpty()) {
             throw new FileStorageException("Dosya boş olamaz");
@@ -88,23 +96,49 @@ public class CloudStorageService implements StorageService {
                 contentType = "application/octet-stream";
             }
 
-            // S3'e yükle
-            PutObjectRequest putObjectRequest = PutObjectRequest.builder()
-                    .bucket(bucketName)
-                    .key(filename)
-                    .contentType(contentType)
-                    .acl(ObjectCannedACL.PUBLIC_READ) // Public read access
-                    .build();
-
-            getS3Client().putObject(putObjectRequest,
-                    RequestBody.fromInputStream(file.getInputStream(), file.getSize()));
-
-            log.info("Dosya yüklendi (cloud): {}", filename);
-            return filename;
+            return putObject(filename, contentType, RequestBody.fromInputStream(
+                    file.getInputStream(), file.getSize()));
         } catch (IOException e) {
             log.error("Dosya yükleme hatası: ", e);
             throw new FileStorageException("Dosya yüklenemedi: " + e.getMessage(), e);
         }
+    }
+
+    @Override
+    public String saveFile(MultipartFile file, String logicalPath) {
+        if (file == null || file.isEmpty()) {
+            throw new FileStorageException("Dosya boş olamaz");
+        }
+        if (logicalPath == null || logicalPath.isBlank()) {
+            throw new FileStorageException("Yol boş olamaz");
+        }
+
+        String contentType = file.getContentType();
+        if (contentType == null
+                || !ALLOWED_CONTENT_TYPES.contains(contentType.toLowerCase())) {
+            throw new FileStorageException("İzin verilmeyen dosya tipi: " + contentType);
+        }
+
+        try {
+            return putObject(logicalPath, contentType, RequestBody.fromInputStream(
+                    file.getInputStream(), file.getSize()));
+        } catch (IOException e) {
+            log.error("Dosya yükleme hatası: ", e);
+            throw new FileStorageException("Dosya yüklenemedi: " + e.getMessage(), e);
+        }
+    }
+
+    private String putObject(String key, String contentType, RequestBody body) {
+        PutObjectRequest putObjectRequest = PutObjectRequest.builder()
+                .bucket(bucketName)
+                .key(key)
+                .contentType(contentType)
+                .acl(ObjectCannedACL.PUBLIC_READ)
+                .build();
+
+        getS3Client().putObject(putObjectRequest, body);
+        log.info("Dosya yüklendi (cloud): {}", key);
+        return key;
     }
 
     @Override
@@ -186,13 +220,6 @@ public class CloudStorageService implements StorageService {
             }
         }
 
-        // Eğer /api/files/ prefix'i varsa çıkar
-        if (filename.startsWith("/api/files/")) {
-            return filename.substring("/api/files/".length());
-        } else if (filename.startsWith("api/files/")) {
-            return filename.substring("api/files/".length());
-        }
-
         // Direkt key olarak döndür
         return filename;
     }
@@ -204,19 +231,7 @@ public class CloudStorageService implements StorageService {
         }
 
         try {
-            // S3'e yükle
-            PutObjectRequest putObjectRequest = PutObjectRequest.builder()
-                    .bucket(bucketName)
-                    .key(path)
-                    .contentType(contentType)
-                    .acl(ObjectCannedACL.PUBLIC_READ) // Public read access
-                    .build();
-
-            getS3Client().putObject(putObjectRequest,
-                    RequestBody.fromBytes(content));
-
-            log.info("Dosya yüklendi (cloud): {}", path);
-            return path;
+            return putObject(path, contentType, RequestBody.fromBytes(content));
         } catch (Exception e) {
             log.error("Dosya yükleme hatası: ", e);
             throw new FileStorageException("Dosya yüklenemedi: " + e.getMessage(), e);

@@ -8,9 +8,11 @@ import com.beratcan.app.exception.BadRequestException;
 import com.beratcan.app.exception.ConflictException;
 import com.beratcan.app.exception.TestNotFoundException;
 import com.beratcan.app.exception.TopicNotFoundException;
+import com.beratcan.app.repository.QuestionRepository;
 import com.beratcan.app.repository.TestRepository;
 import com.beratcan.app.repository.TopicRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationContext;
 import org.springframework.stereotype.Service;
@@ -21,10 +23,12 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class TestService {
 
     private final TestRepository testRepository;
     private final TopicRepository topicRepository;
+    private final QuestionRepository questionRepository;
 
     @Autowired
     private ApplicationContext applicationContext;
@@ -96,6 +100,13 @@ public class TestService {
         Test test = testRepository.findById(testId)
                 .orElseThrow(() -> new TestNotFoundException(testId));
         Long bookId = test.getTopic().getBook().getId();
+
+        int softDeleted = questionRepository.softDeleteByTestId(testId);
+        log.info("Soft-deleted {} questions for testId={}", softDeleted, testId);
+
+        // softDeleteByTestId clears the persistence context; reload Test before delete.
+        test = testRepository.findById(testId)
+                .orElseThrow(() -> new TestNotFoundException(testId));
         testRepository.delete(test);
         // Book data sayılarını asenkron olarak hesapla (ana işlemi bloklamaz)
         // ApplicationContext üzerinden çağır (self-invocation sorununu çözmek için)

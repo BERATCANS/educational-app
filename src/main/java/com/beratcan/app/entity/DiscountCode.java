@@ -1,5 +1,6 @@
 package com.beratcan.app.entity;
 
+import com.beratcan.app.constants.AppTime;
 import com.beratcan.app.entity.enums.DiscountType;
 import jakarta.persistence.*;
 import lombok.Getter;
@@ -10,9 +11,14 @@ import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.Set;
 
+import org.hibernate.annotations.SQLDelete;
+import org.hibernate.annotations.SQLRestriction;
+
 @Entity
 @Getter
 @Setter
+@SQLDelete(sql = "UPDATE discount_codes SET is_deleted = true WHERE id = ?")
+@SQLRestriction("is_deleted = false")
 @Table(name = "discount_codes", indexes = {
         @Index(name = "idx_discount_code_code", columnList = "code"),
         @Index(name = "idx_discount_code_active", columnList = "is_active")
@@ -66,9 +72,11 @@ public class DiscountCode {
     private Boolean isActive = true;
 
     // Özel kısıtlamalar
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "publisher_id")
-    private Publisher applicablePublisher; // null ise tüm yayınevleri
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(name = "discount_code_publishers",
+            joinColumns = @JoinColumn(name = "discount_code_id"),
+            inverseJoinColumns = @JoinColumn(name = "publisher_id"))
+    private Set<Publisher> applicablePublishers = new HashSet<>(); // boş ise tüm yayınevleri
 
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(name = "discount_code_books", joinColumns = @JoinColumn(name = "discount_code_id"), inverseJoinColumns = @JoinColumn(name = "book_id"))
@@ -78,6 +86,13 @@ public class DiscountCode {
     @Column
     private Integer maxUsagePerUser; // null ise sınırsız
 
+    // Kullanıcıya özel kod (opsiyonel)
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(name = "discount_code_users",
+            joinColumns = @JoinColumn(name = "discount_code_id"),
+            inverseJoinColumns = @JoinColumn(name = "user_id"))
+    private Set<User> applicableUsers = new HashSet<>(); // boş ise herkese açık
+
     @Column(nullable = false)
     private LocalDateTime createdAt;
 
@@ -86,8 +101,8 @@ public class DiscountCode {
 
     @PrePersist
     protected void onCreate() {
-        createdAt = LocalDateTime.now();
-        updatedAt = LocalDateTime.now();
+        createdAt = AppTime.now();
+        updatedAt = AppTime.now();
         if (usedCount == null) {
             usedCount = 0;
         }
@@ -98,6 +113,9 @@ public class DiscountCode {
 
     @PreUpdate
     protected void onUpdate() {
-        updatedAt = LocalDateTime.now();
+        updatedAt = AppTime.now();
     }
+
+    @Column(nullable = false)
+    private boolean isDeleted = false; // Soft Delete mantığı için
 }

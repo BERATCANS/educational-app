@@ -1,5 +1,6 @@
 package com.beratcan.app.entity;
 
+import com.beratcan.app.constants.AppTime;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
@@ -37,7 +38,7 @@ public class DiscountCodeUsage {
     @PrePersist
     protected void onCreate() {
         if (usedAt == null) {
-            usedAt = LocalDateTime.now();
+            usedAt = AppTime.now();
         }
     }
 }

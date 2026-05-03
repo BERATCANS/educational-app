@@ -1,12 +1,12 @@
 package com.beratcan.app.validation;
 
+import com.beratcan.app.constants.AppTime;
 import com.beratcan.app.dto.request.DiscountCodeRequest;
 import com.beratcan.app.entity.enums.DiscountType;
 import jakarta.validation.ConstraintValidator;
 import jakarta.validation.ConstraintValidatorContext;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
 
 /**
  * Validates discount code request
@@ -73,7 +73,7 @@ public class DiscountCodeValidator implements ConstraintValidator<ValidDiscountC
             }
 
             // validUntil must be in the future
-            if (request.getValidUntil().isBefore(LocalDateTime.now())) {
+            if (request.getValidUntil().isBefore(AppTime.now())) {
                 context.buildConstraintViolationWithTemplate(
                         "Geçerlilik bitiş tarihi geçmiş bir tarih olamaz")
                         .addPropertyNode("validUntil")
@@ -91,6 +91,15 @@ public class DiscountCodeValidator implements ConstraintValidator<ValidDiscountC
                         .addConstraintViolation();
                 isValid = false;
             }
+        }
+
+        // Publisher ve Books aynı anda dolu olamaz (OR mantığı — ya biri ya öteki)
+        if (request.getApplicablePublisherIds() != null && !request.getApplicablePublisherIds().isEmpty() &&
+                request.getApplicableBookIds() != null && !request.getApplicableBookIds().isEmpty()) {
+            context.buildConstraintViolationWithTemplate(
+                    "Yayınevi ve kitap filtreleri aynı anda kullanılamaz. Ya yayınevi ya da kitap filtresi seçin.")
+                    .addConstraintViolation();
+            isValid = false;
         }
 
         return isValid;

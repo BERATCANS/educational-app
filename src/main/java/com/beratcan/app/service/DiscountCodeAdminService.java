@@ -2,15 +2,22 @@ package com.beratcan.app.service;
 
 import com.beratcan.app.dto.request.DiscountCodeRequest;
 import com.beratcan.app.dto.response.DiscountCodeResponse;
+import com.beratcan.app.dto.response.DiscountCodeUsageResponse;
 import com.beratcan.app.entity.Book;
 import com.beratcan.app.entity.DiscountCode;
+import com.beratcan.app.entity.DiscountCodeUsage;
 import com.beratcan.app.entity.Publisher;
+import com.beratcan.app.entity.User;
 import com.beratcan.app.exception.BadRequestException;
 import com.beratcan.app.exception.ConflictException;
 import com.beratcan.app.exception.DiscountCodeNotFoundException;
 import com.beratcan.app.repository.BookRepository;
 import com.beratcan.app.repository.DiscountCodeRepository;
+import com.beratcan.app.repository.DiscountCodeUsageRepository;
 import com.beratcan.app.repository.PublisherRepository;
+import com.beratcan.app.repository.UserRepository;
+import com.beratcan.app.exception.PublisherNotFoundException;
+import com.beratcan.app.exception.BookNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -18,9 +25,8 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import com.beratcan.app.exception.PublisherNotFoundException;
-import com.beratcan.app.exception.BookNotFoundException;
 
+import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -30,8 +36,10 @@ import java.util.stream.Collectors;
 public class DiscountCodeAdminService {
 
     private final DiscountCodeRepository discountCodeRepository;
+    private final DiscountCodeUsageRepository discountCodeUsageRepository;
     private final PublisherRepository publisherRepository;
     private final BookRepository bookRepository;
+    private final UserRepository userRepository;
 
     /**
      * Admin: İndirim kodu oluştur
@@ -61,12 +69,13 @@ public class DiscountCodeAdminService {
         discountCode.setIsActive(request.getIsActive() != null ? request.getIsActive() : true);
         discountCode.setMaxUsagePerUser(request.getMaxUsagePerUser());
 
-        // Yayınevi
-        if (request.getApplicablePublisherId() != null) {
-            Publisher publisher = publisherRepository.findById(request.getApplicablePublisherId())
-                    .orElseThrow(() -> new PublisherNotFoundException(
-                            request.getApplicablePublisherId()));
-            discountCode.setApplicablePublisher(publisher);
+        // Yayınevleri
+        if (request.getApplicablePublisherIds() != null && !request.getApplicablePublisherIds().isEmpty()) {
+            Set<Publisher> publishers = request.getApplicablePublisherIds().stream()
+                    .map(publisherId -> publisherRepository.findById(publisherId)
+                            .orElseThrow(() -> new PublisherNotFoundException(publisherId)))
+                    .collect(Collectors.toSet());
+            discountCode.setApplicablePublishers(publishers);
         }
 
         // Kitaplar
@@ -76,6 +85,16 @@ public class DiscountCodeAdminService {
                             .orElseThrow(() -> new BookNotFoundException(bookId)))
                     .collect(Collectors.toSet());
             discountCode.setApplicableBooks(books);
+        }
+
+        // Kullanıcılar (username ile)
+        if (request.getApplicableUsernames() != null && !request.getApplicableUsernames().isEmpty()) {
+            Set<User> users = request.getApplicableUsernames().stream()
+                    .map(username -> userRepository.findByUsername(username)
+                            .orElseThrow(() -> new BadRequestException(
+                                    "Kullanıcı adı bulunamadı: " + username)))
+                    .collect(Collectors.toSet());
+            discountCode.setApplicableUsers(users);
         }
 
         discountCode = discountCodeRepository.save(discountCode);
@@ -92,6 +111,24 @@ public class DiscountCodeAdminService {
         Pageable pageable = PageRequest.of(page, size);
         Page<DiscountCode> discountCodes = discountCodeRepository.findAll(pageable);
         return discountCodes.map(this::toDiscountCodeResponse);
+    }
+
+    /**
+     * Admin: İndirim kodunun kullanım detaylarını getir (sayfalayarak)
+     */
+    @Transactional(readOnly = true)
+    public Page<DiscountCodeUsageResponse> getDiscountCodeUsages(Long id, int page, int size) {
+        log.info("Fetching usages for discount code: id={}", id);
+
+        // Kodu bul, yoksa hata at
+        if (!discountCodeRepository.existsById(id)) {
+            throw new DiscountCodeNotFoundException(id);
+        }
+
+        Pageable pageable = PageRequest.of(page, size);
+        Page<DiscountCodeUsage> usages = discountCodeUsageRepository.findByDiscountCodeIdOrderByUsedAtDesc(id, pageable);
+
+        return usages.map(this::toDiscountCodeUsageResponse);
     }
 
     /**
@@ -157,15 +194,17 @@ public class DiscountCodeAdminService {
             discountCode.setMaxUsagePerUser(request.getMaxUsagePerUser());
         }
 
-        // Yayınevi güncelle
-        if (request.getApplicablePublisherId() != null) {
-            Publisher publisher = publisherRepository.findById(request.getApplicablePublisherId())
-                    .orElseThrow(() -> new com.beratcan.app.exception.PublisherNotFoundException(
-                            request.getApplicablePublisherId()));
-            discountCode.setApplicablePublisher(publisher);
-        } else if (request.getApplicablePublisherId() == null && discountCode.getApplicablePublisher() != null) {
-            // null gönderilirse kaldır
-            discountCode.setApplicablePublisher(null);
+        // Yayınevleri güncelle
+        if (request.getApplicablePublisherIds() != null) {
+            if (request.getApplicablePublisherIds().isEmpty()) {
+                discountCode.getApplicablePublishers().clear();
+            } else {
+                Set<Publisher> publishers = request.getApplicablePublisherIds().stream()
+                        .map(publisherId -> publisherRepository.findById(publisherId)
+                                .orElseThrow(() -> new PublisherNotFoundException(publisherId)))
+                        .collect(Collectors.toSet());
+                discountCode.setApplicablePublishers(publishers);
+            }
         }
 
         // Kitaplar güncelle
@@ -175,9 +214,23 @@ public class DiscountCodeAdminService {
             } else {
                 Set<Book> books = request.getApplicableBookIds().stream()
                         .map(bookId -> bookRepository.findById(bookId)
-                                .orElseThrow(() -> new com.beratcan.app.exception.BookNotFoundException(bookId)))
+                                .orElseThrow(() -> new BookNotFoundException(bookId)))
                         .collect(Collectors.toSet());
                 discountCode.setApplicableBooks(books);
+            }
+        }
+
+        // Kullanıcılar güncelle (username ile)
+        if (request.getApplicableUsernames() != null) {
+            if (request.getApplicableUsernames().isEmpty()) {
+                discountCode.getApplicableUsers().clear();
+            } else {
+                Set<User> users = request.getApplicableUsernames().stream()
+                        .map(username -> userRepository.findByUsername(username)
+                                .orElseThrow(() -> new BadRequestException(
+                                        "Kullanıcı adı bulunamadı: " + username)))
+                        .collect(Collectors.toSet());
+                discountCode.setApplicableUsers(users);
             }
         }
 
@@ -236,13 +289,44 @@ public class DiscountCodeAdminService {
         response.setCreatedAt(code.getCreatedAt());
         response.setUpdatedAt(code.getUpdatedAt());
 
-        if (code.getApplicablePublisher() != null) {
-            response.setApplicablePublisherName(code.getApplicablePublisher().getName());
-        }
-        if (code.getApplicableBooks() != null) {
-            response.setApplicableBookCount(code.getApplicableBooks().size());
+        // Yayınevleri
+        if (code.getApplicablePublishers() != null && !code.getApplicablePublishers().isEmpty()) {
+            List<DiscountCodeResponse.PublisherSummary> publishers = code.getApplicablePublishers().stream()
+                    .map(p -> new DiscountCodeResponse.PublisherSummary(p.getId(), p.getName()))
+                    .collect(Collectors.toList());
+            response.setApplicablePublishers(publishers);
         }
 
+        // Kitaplar
+        if (code.getApplicableBooks() != null && !code.getApplicableBooks().isEmpty()) {
+            List<DiscountCodeResponse.BookSummary> books = code.getApplicableBooks().stream()
+                    .map(b -> new DiscountCodeResponse.BookSummary(b.getId(), b.getTitle()))
+                    .collect(Collectors.toList());
+            response.setApplicableBooks(books);
+        }
+
+        // Kullanıcılar
+        if (code.getApplicableUsers() != null && !code.getApplicableUsers().isEmpty()) {
+            List<String> usernames = code.getApplicableUsers().stream()
+                    .map(User::getUsername)
+                    .collect(Collectors.toList());
+            response.setApplicableUsernames(usernames);
+        }
+
+        return response;
+    }
+
+    /**
+     * DiscountCodeUsage'u DiscountCodeUsageResponse'a dönüştür
+     */
+    private DiscountCodeUsageResponse toDiscountCodeUsageResponse(DiscountCodeUsage usage) {
+        DiscountCodeUsageResponse response = new DiscountCodeUsageResponse();
+        response.setId(usage.getId());
+        response.setUserId(usage.getUser().getId());
+        response.setUsername(usage.getUser().getUsername());
+        response.setEmail(usage.getUser().getEmail());
+        response.setUsedAt(usage.getUsedAt());
+        response.setTransactionId(usage.getTransactionId());
         return response;
     }
 }

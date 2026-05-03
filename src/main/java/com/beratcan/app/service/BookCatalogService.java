@@ -4,13 +4,14 @@ import com.beratcan.app.dto.response.BookDetailResponse;
 import com.beratcan.app.dto.response.BookStoreResponse;
 import com.beratcan.app.dto.response.PageResponse;
 import com.beratcan.app.entity.Book;
+import com.beratcan.app.entity.StudentProfile;
 import com.beratcan.app.entity.User;
 import com.beratcan.app.entity.enums.ExamType;
 import com.beratcan.app.entity.enums.GradeLevel;
 import com.beratcan.app.entity.enums.LessonType;
 import com.beratcan.app.exception.BookNotFoundException;
-import com.beratcan.app.exception.UserNotFoundException;
 import com.beratcan.app.repository.BookRepository;
+import com.beratcan.app.repository.StudentProfileRepository;
 import com.beratcan.app.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -30,6 +31,7 @@ import java.util.Set;
 public class BookCatalogService {
 
         private final BookRepository bookRepository;
+        private final StudentProfileRepository studentProfileRepository;
         private final UserRepository userRepository;
         private final FilterLabelService filterLabelService;
 
@@ -46,16 +48,20 @@ public class BookCatalogService {
                 ExamType userExamType = null;
 
                 if (userId != null) {
-                        User user = userRepository.findById(userId)
-                                        .orElseThrow(() -> new UserNotFoundException(userId));
+                        User user = userRepository.findById(userId).orElse(null);
+                        StudentProfile profile = studentProfileRepository.findByUserId(userId).orElse(null);
 
-                        // Sahip olunan kitaplar (Set kullanarak O(1) lookup)
-                        ownedBookIds = user.getOwnedBooks().stream()
-                                        .map(Book::getId)
-                                        .collect(java.util.stream.Collectors.toSet());
+                        if (user != null) {
+                                ownedBookIds = user.getOwnedBooks().stream()
+                                                .map(Book::getId)
+                                                .collect(java.util.stream.Collectors.toSet());
+                        } else {
+                                ownedBookIds = new HashSet<>();
+                        }
 
-                        // Kullanıcının examType'ı
-                        userExamType = user.getExamType();
+                        if (profile != null) {
+                                userExamType = profile.getExamType();
+                        }
                 } else {
                         ownedBookIds = new HashSet<>();
                 }
@@ -106,24 +112,21 @@ public class BookCatalogService {
                 Book book = bookRepository.findById(bookId)
                                 .orElseThrow(() -> new BookNotFoundException(bookId));
 
-                // Kullanıcının kitabı sahip olup olmadığını kontrol et
+                // Öğrencinin kitabı sahip olup olmadığını kontrol et
                 boolean isOwned = false;
                 if (userId != null) {
-                        isOwned = userRepository.existsByUserIdAndBookId(userId, bookId);
+                        User user = userRepository.findById(userId).orElse(null);
+                        if (user != null) {
+                                isOwned = user.getOwnedBooks().stream()
+                                                .anyMatch(b -> b.getId().equals(bookId));
+                        }
                 }
 
                 BookDetailResponse response = new BookDetailResponse();
                 response.setId(book.getId());
                 response.setTitle(book.getTitle());
                 response.setPublisher(book.getPublisher() != null ? book.getPublisher().getName() : null);
-                // Database'de filename var, response'da URL oluştur
-                // Eğer zaten URL formatındaysa (eski kayıtlar için) olduğu gibi bırak
-                String coverImageUrl = book.getCoverImageUrl();
-                if (coverImageUrl != null && !coverImageUrl.isEmpty() && !coverImageUrl.startsWith("api/files/")) {
-                        response.setCoverImageUrl("api/files/" + coverImageUrl);
-                } else {
-                        response.setCoverImageUrl(coverImageUrl);
-                }
+                response.setCoverImageUrl(book.getCoverImageUrl());
                 response.setPaid(book.isPaid());
                 response.setNumberOfTopics(book.getNumberOfTopics());
                 response.setNumberOfTests(book.getNumberOfTests());
@@ -153,14 +156,7 @@ public class BookCatalogService {
                 BookStoreResponse response = new BookStoreResponse();
                 response.setId(book.getId());
                 response.setTitle(book.getTitle());
-                // Database'de filename var, response'da URL oluştur
-                // Eğer zaten URL formatındaysa (eski kayıtlar için) olduğu gibi bırak
-                String coverImageUrl = book.getCoverImageUrl();
-                if (coverImageUrl != null && !coverImageUrl.isEmpty() && !coverImageUrl.startsWith("api/files/")) {
-                        response.setCoverImageUrl("api/files/" + coverImageUrl);
-                } else {
-                        response.setCoverImageUrl(coverImageUrl);
-                }
+                response.setCoverImageUrl(book.getCoverImageUrl());
                 response.setPublisher(book.getPublisher() != null ? book.getPublisher().getName() : null);
                 response.setPaid(book.isPaid());
                 response.setPrice(book.getPrice());

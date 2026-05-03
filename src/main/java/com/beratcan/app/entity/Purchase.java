@@ -1,5 +1,6 @@
 package com.beratcan.app.entity;
 
+import com.beratcan.app.constants.AppTime;
 import com.beratcan.app.entity.enums.PurchaseStatus;
 import jakarta.persistence.*;
 import lombok.Getter;
@@ -7,6 +8,8 @@ import lombok.Setter;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Getter
@@ -19,25 +22,27 @@ public class Purchase {
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_id", nullable = false)
-    private User user;
+    @JoinColumn(name = "student_profile_id", nullable = false)
+    private StudentProfile studentProfile;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "book_id", nullable = false)
-    private Book book;
+    @OneToMany(mappedBy = "purchase", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<PurchaseItem> items = new ArrayList<>();
 
     @Column(nullable = false, precision = 10, scale = 2)
-    private BigDecimal price; // Satın alma anındaki fiyat (indirim öncesi)
+    private BigDecimal totalPrice; // Toplam fiyat (indirim öncesi)
+
+    @Column(precision = 10, scale = 2)
+    private BigDecimal totalDiscount; // Toplam indirim tutarı
+
+    @Column(nullable = false, precision = 10, scale = 2)
+    private BigDecimal finalPrice; // İndirim sonrası ödenen toplam tutar
+
+    @Column(nullable = false)
+    private int itemCount; // Kaç kitap satın alındı
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "discount_code_id")
     private DiscountCode discountCode; // Kullanılan indirim kodu (varsa)
-
-    @Column(precision = 10, scale = 2)
-    private BigDecimal discountAmount; // Uygulanan indirim tutarı
-
-    @Column(precision = 10, scale = 2)
-    private BigDecimal finalPrice; // İndirim sonrası ödenen tutar
 
     @Column(nullable = false)
     private LocalDateTime purchaseDate;
@@ -46,19 +51,28 @@ public class Purchase {
     @Column(nullable = false)
     private PurchaseStatus status;
 
-    @Column(unique = true, length = 100)
-    private String transactionId; // Ödeme işlem numarası (unique - duplicate önleme için)
+    @Column(length = 100)
+    private String transactionId; // Benzersiz işlem numarası
 
     @Column(length = 50)
-    private String paymentMethod; // Kredi kartı, havale, vb. (isteğe bağlı)
+    private String paymentMethod;
+
+    @Column(name = "idempotency_key", length = 80)
+    private String idempotencyKey;
 
     @PrePersist
     protected void onCreate() {
         if (purchaseDate == null) {
-            purchaseDate = LocalDateTime.now();
+            purchaseDate = AppTime.now();
         }
         if (status == null) {
             status = PurchaseStatus.PENDING;
         }
+    }
+
+    // Helper metotlar
+    public void addItem(PurchaseItem item) {
+        items.add(item);
+        item.setPurchase(this);
     }
 }

@@ -9,9 +9,14 @@ import lombok.Setter;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.hibernate.annotations.SQLDelete;
+import org.hibernate.annotations.SQLRestriction;
+
 @Entity
 @Getter
 @Setter
+@SQLDelete(sql = "UPDATE topics SET is_deleted = true WHERE id = ?")
+@SQLRestriction("is_deleted = false")
 @Table(name = "topics")
 public class Topic {
 
@@ -38,5 +43,8 @@ public class Topic {
 
     @Column(name = "sequence_number")
     private Integer sequenceNumber;
+
+    @Column(nullable = false)
+    private boolean isDeleted = false; // Soft Delete mantığı için
 
 }

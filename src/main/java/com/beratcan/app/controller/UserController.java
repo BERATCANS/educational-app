@@ -1,6 +1,9 @@
 package com.beratcan.app.controller;
 
 import com.beratcan.app.annotation.RateLimit;
+import com.beratcan.app.dto.request.ForgotPasswordRequest;
+import com.beratcan.app.dto.request.ResetPasswordRequest;
+import com.beratcan.app.dto.request.VerifyResetCodeRequest;
 import com.beratcan.app.dto.response.JwtResponse;
 import com.beratcan.app.dto.request.LoginRequest;
 import com.beratcan.app.dto.request.UserRequest;
@@ -8,6 +11,7 @@ import com.beratcan.app.entity.User;
 import com.beratcan.app.entity.enums.City;
 import com.beratcan.app.service.AuthService;
 import com.beratcan.app.service.EmailVerificationService;
+import com.beratcan.app.service.PasswordResetService;
 import com.beratcan.app.service.UserService;
 import com.beratcan.app.dto.response.RegisterResponse;
 
@@ -37,6 +41,7 @@ public class UserController {
     private final UserService userService;
     private final AuthService authService;
     private final EmailVerificationService emailVerificationService;
+    private final PasswordResetService passwordResetService;
 
     @PostMapping("/register")
     @RateLimit(requestsPerMinute = 3, keyType = "IP", message = "Too many registration attempts. Please try again later.")
@@ -128,6 +133,43 @@ public class UserController {
         emailVerificationService.verifyEmail(token);
         return ResponseEntity.ok(Map.of(
                 "message", "Email başarıyla doğrulandı",
+                "status", "success"));
+    }
+
+    /**
+     * Şifre sıfırlama - 1. adım: OTP gönder
+     * POST /api/users/forgot-password
+     */
+    @PostMapping("/forgot-password")
+    @RateLimit(requestsPerMinute = 3, keyType = "IP", message = "Çok fazla istek. Lütfen daha sonra tekrar deneyin.")
+    public ResponseEntity<Map<String, String>> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
+        passwordResetService.forgotPassword(request);
+        return ResponseEntity.ok(Map.of(
+                "message", "Şifre sıfırlama kodu email adresinize gönderildi",
+                "status", "success"));
+    }
+
+    /**
+     * Şifre sıfırlama - 2. adım: OTP doğrula, reset token al
+     * POST /api/users/verify-reset-code
+     */
+    @PostMapping("/verify-reset-code")
+    @RateLimit(requestsPerMinute = 5, keyType = "IP", message = "Çok fazla istek. Lütfen daha sonra tekrar deneyin.")
+    public ResponseEntity<Map<String, String>> verifyResetCode(@Valid @RequestBody VerifyResetCodeRequest request) {
+        Map<String, String> result = passwordResetService.verifyResetCode(request);
+        return ResponseEntity.ok(result);
+    }
+
+    /**
+     * Şifre sıfırlama - 3. adım: Yeni şifreyi kaydet
+     * POST /api/users/reset-password
+     */
+    @PostMapping("/reset-password")
+    @RateLimit(requestsPerMinute = 5, keyType = "IP", message = "Çok fazla istek. Lütfen daha sonra tekrar deneyin.")
+    public ResponseEntity<Map<String, String>> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
+        passwordResetService.resetPassword(request);
+        return ResponseEntity.ok(Map.of(
+                "message", "Şifreniz başarıyla güncellendi",
                 "status", "success"));
     }
 

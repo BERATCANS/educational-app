@@ -3,6 +3,7 @@ package com.beratcan.app.entity;
 import com.beratcan.app.entity.enums.ExamType;
 import com.beratcan.app.entity.enums.GradeLevel;
 import com.beratcan.app.entity.enums.LessonType;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonManagedReference;
 import jakarta.persistence.*;
 import lombok.Getter;
@@ -14,9 +15,14 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+import org.hibernate.annotations.SQLDelete;
+import org.hibernate.annotations.SQLRestriction;
+
 @Entity
 @Getter
 @Setter
+@SQLDelete(sql = "UPDATE books SET is_deleted = true WHERE id = ?")
+@SQLRestriction("is_deleted = false")
 @Table(name = "books", indexes = {
         @Index(name = "idx_book_exam_type", columnList = "exam_type"),
         @Index(name = "idx_book_grade_level", columnList = "grade_level"),
@@ -32,7 +38,7 @@ public class Book {
     @Column(nullable = false, length = 200)
     private String title;
 
-    @ManyToOne(fetch = FetchType.EAGER)
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "publisher_id")
     private Publisher publisher;
 
@@ -71,9 +77,10 @@ public class Book {
     @OneToMany(mappedBy = "book", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private List<CartItem> cartItems = new ArrayList<>();
 
-    // ✅ Purchase ile bidirectional ilişki (Bu kitabın satın alma geçmişi)
-    @OneToMany(mappedBy = "book", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
-    private List<Purchase> purchases = new ArrayList<>();
+    // ✅ PurchaseItem ile bidirectional ilişki (Bu kitabın satın alma geçmişi)
+    @OneToMany(mappedBy = "book", cascade = {CascadeType.PERSIST, CascadeType.MERGE})
+    @JsonIgnore
+    private List<PurchaseItem> purchaseItems = new ArrayList<>();
 
     @OneToMany(mappedBy = "book", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<BookReview> reviews = new ArrayList<>();
@@ -101,4 +108,7 @@ public class Book {
 
     @Column(nullable = false, columnDefinition = "BIGINT DEFAULT 0")
     private Long reviewCount = 0L; // Toplam yorum sayısı
+
+    @Column(nullable = false)
+    private boolean isDeleted = false; // Soft Delete mantığı için
 }

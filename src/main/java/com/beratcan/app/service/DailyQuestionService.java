@@ -6,16 +6,17 @@ import com.beratcan.app.dto.request.UpdateDailyQuestionRequest;
 import com.beratcan.app.dto.response.DailyQuestionResponse;
 import com.beratcan.app.entity.DailyQuestion;
 import com.beratcan.app.entity.DailyQuestionAnswer;
-import com.beratcan.app.entity.User;
+import com.beratcan.app.entity.StudentProfile;
 import com.beratcan.app.entity.enums.OptionLetter;
 import com.beratcan.app.exception.BadRequestException;
 import com.beratcan.app.exception.ConflictException;
 import com.beratcan.app.exception.ResourceNotFoundException;
 import com.beratcan.app.exception.UnauthorizedOperationException;
-import com.beratcan.app.exception.UserNotFoundException;
 import com.beratcan.app.repository.DailyQuestionRepository;
 import com.beratcan.app.repository.DailyQuestionAnswerRepository;
-import com.beratcan.app.repository.UserRepository;
+import com.beratcan.app.repository.StudentProfileRepository;
+import com.beratcan.app.constants.AppTime;
+import com.beratcan.app.storage.StoragePaths;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -36,7 +37,7 @@ public class DailyQuestionService {
 
     private final DailyQuestionRepository dailyQuestionRepository;
     private final DailyQuestionAnswerRepository answerRepository;
-    private final UserRepository userRepository;
+    private final StudentProfileRepository studentProfileRepository;
     private final FileService fileService;
 
     @Transactional(readOnly = true)
@@ -45,11 +46,11 @@ public class DailyQuestionService {
             throw new UnauthorizedOperationException("Kullanıcı ID'si gerekli");
         }
 
-        // Kullanıcı kontrolü (gerekli değil ama tutarlılık için)
-        userRepository.findById(userId)
-                .orElseThrow(() -> new UserNotFoundException(userId));
+        // Kullanıcı kontrolü
+        studentProfileRepository.findByUserId(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Öğrenci profili bulunamadı: userId=" + userId));
 
-        DailyQuestion question = dailyQuestionRepository.findByDisplayDate(LocalDate.now())
+        DailyQuestion question = dailyQuestionRepository.findByDisplayDate(LocalDate.now(AppTime.ZONE))
                 .orElse(null);
 
         if (question == null) {
@@ -78,15 +79,15 @@ public class DailyQuestionService {
         }
 
         // Kullanıcı kontrolü
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new UserNotFoundException(userId));
+        StudentProfile studentProfile = studentProfileRepository.findByUserId(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Öğrenci profili bulunamadı: userId=" + userId));
 
         // Soru kontrolü
         DailyQuestion question = dailyQuestionRepository.findById(request.getDailyQuestionId())
                 .orElseThrow(() -> new ResourceNotFoundException("Soru bulunamadı"));
 
         // Zaman kontrolü
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = AppTime.now();
         LocalDateTime startTime = LocalDateTime.of(question.getDisplayDate(), question.getStartTime());
         LocalDateTime endTime = LocalDateTime.of(question.getDisplayDate(), question.getEndTime());
 
@@ -105,7 +106,7 @@ public class DailyQuestionService {
         // Cevabı kaydet
         DailyQuestionAnswer answer = new DailyQuestionAnswer();
         answer.setDailyQuestion(question);
-        answer.setUser(user);
+        answer.setStudentProfile(studentProfile);
         answer.setSelectedAnswer(request.getSelectedAnswer());
         answerRepository.save(answer);
 
@@ -121,13 +122,10 @@ public class DailyQuestionService {
         log.info("Günlük soru oluşturma başlatıldı: displayDate={}, correctAnswer={}",
                 request.getDisplayDate(), request.getCorrectAnswer());
 
-        // 1. Görseli kaydet (FileService kullan)
-        String imageUrl = fileService.saveFile(request.getImage());
-        log.info("Görsel kaydedildi: {}", imageUrl);
-
-        // 2. Yeni soru oluştur
+        // 1. Soruyu placeholder imageUrl ile kaydet (path için questionId lazım,
+        //    imageUrl NOT NULL olduğu için boş bırakılamıyor)
         DailyQuestion question = new DailyQuestion();
-        question.setImageUrl(imageUrl); // FileService'ten gelen filename
+        question.setImageUrl("__pending__");
         question.setAnswerNumber(request.getAnswerNumber());
         question.setCorrectAnswer(request.getCorrectAnswer());
         question.setVideoUrl(request.getVideoUrl());
@@ -135,10 +133,19 @@ public class DailyQuestionService {
         question.setDisplayDate(request.getDisplayDate());
         question.setStartTime(request.getStartTime());
         question.setEndTime(request.getEndTime());
-        question.setEndTime(request.getEndTime());
         question.setActive(false); // Deprecated field, calculated on-the-fly
 
-        DailyQuestion saved = dailyQuestionRepository.save(question);
+        DailyQuestion saved = dailyQuestionRepository.saveAndFlush(question);
+
+        // 2. Görseli ID'li path ile kaydet
+        String ext = StoragePaths.safeExtension(request.getImage());
+        String imageUrl = StoragePaths.dailyQuestionImage(saved.getId(), ext);
+        fileService.saveFile(request.getImage(), imageUrl);
+        log.info("Görsel kaydedildi: {}", imageUrl);
+
+        // 3. imageUrl güncelle
+        saved.setImageUrl(imageUrl);
+        saved = dailyQuestionRepository.save(saved);
         log.info("Günlük soru oluşturuldu: questionId={}", saved.getId());
         return saved;
     }
@@ -181,16 +188,23 @@ public class DailyQuestionService {
 
         log.info("Günlük soru güncelleme başlatıldı: questionId={}", questionId);
 
-        // Görsel güncelleme (opsiyonel)
+        // Görsel güncelleme (opsiyonel) — yeni dosyayı önce kaydet,
+        // sonra eski dosyayı sil (yenisi başarısız olursa eskiyi kaybetmeyelim).
         if (request.getImage() != null && !request.getImage().isEmpty()) {
-            // Eski görseli sil
-            if (question.getImageUrl() != null && !question.getImageUrl().isEmpty()) {
-                fileService.deleteFile(question.getImageUrl());
-            }
-            // Yeni görseli kaydet
-            String newImageUrl = fileService.saveFile(request.getImage());
+            String oldImageUrl = question.getImageUrl();
+            String ext = StoragePaths.safeExtension(request.getImage());
+            String newImageUrl = StoragePaths.dailyQuestionImage(question.getId(), ext);
+            fileService.saveFile(request.getImage(), newImageUrl);
             question.setImageUrl(newImageUrl);
             log.info("Görsel güncellendi: {}", newImageUrl);
+
+            if (oldImageUrl != null && !oldImageUrl.isEmpty() && !oldImageUrl.equals(newImageUrl)) {
+                try {
+                    fileService.deleteFile(oldImageUrl);
+                } catch (Exception e) {
+                    log.warn("Eski görsel silinemedi (yenisi kaydedildi): {}", oldImageUrl, e);
+                }
+            }
         }
 
         // Diğer alanları güncelle (sadece null değilse)
@@ -255,14 +269,7 @@ public class DailyQuestionService {
     private DailyQuestionResponse toDailyQuestionResponse(DailyQuestion question, Long userId) {
         DailyQuestionResponse response = new DailyQuestionResponse();
         response.setId(question.getId());
-        // Database'de filename var, response'da URL oluştur
-        // Eğer zaten URL formatındaysa (eski kayıtlar için) olduğu gibi bırak
-        String imageUrl = question.getImageUrl();
-        if (imageUrl != null && !imageUrl.isEmpty() && !imageUrl.startsWith("/api/files/")) {
-            response.setImageUrl("/api/files/" + imageUrl);
-        } else {
-            response.setImageUrl(imageUrl);
-        }
+        response.setImageUrl(question.getImageUrl());
         response.setAnswerNumber(question.getAnswerNumber());
         response.setVideoUrl(question.getVideoUrl());
         response.setDisplayDate(question.getDisplayDate());
@@ -270,7 +277,7 @@ public class DailyQuestionService {
         response.setEndTime(question.getEndTime());
         
         // Active durumunu dinamik olarak hesapla
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = AppTime.now();
         LocalDateTime startTime = LocalDateTime.of(question.getDisplayDate(), question.getStartTime());
         LocalDateTime endTime = LocalDateTime.of(question.getDisplayDate(), question.getEndTime());
         
@@ -320,13 +327,7 @@ public class DailyQuestionService {
         DailyQuestionResponse response = new DailyQuestionResponse();
         response.setId(question.getId());
 
-        // Görsel URL'i oluştur
-        String imageUrl = question.getImageUrl();
-        if (imageUrl != null && !imageUrl.isEmpty() && !imageUrl.startsWith("/api/files/")) {
-            response.setImageUrl("/api/files/" + imageUrl);
-        } else {
-            response.setImageUrl(imageUrl);
-        }
+        response.setImageUrl(question.getImageUrl());
 
         response.setAnswerNumber(question.getAnswerNumber());
         response.setVideoUrl(question.getVideoUrl());
@@ -334,7 +335,7 @@ public class DailyQuestionService {
         response.setStartTime(question.getStartTime());
         response.setEndTime(question.getEndTime());
         // Active durumunu dinamik olarak hesapla
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = AppTime.now();
         LocalDateTime startTime = LocalDateTime.of(question.getDisplayDate(), question.getStartTime());
         LocalDateTime endTime = LocalDateTime.of(question.getDisplayDate(), question.getEndTime());
         boolean isActive = now.isAfter(startTime) && now.isBefore(endTime);

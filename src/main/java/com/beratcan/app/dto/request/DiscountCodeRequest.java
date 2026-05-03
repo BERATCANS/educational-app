@@ -49,11 +49,12 @@ public class DiscountCodeRequest {
 
     private Boolean isActive;
 
-    @Min(value = 1, message = "Yayınevi ID en az 1 olmalıdır")
-    private Long applicablePublisherId; // Yayınevi ID (opsiyonel)
+    private List<Long> applicablePublisherIds; // Yayınevi ID'leri (opsiyonel)
 
     private List<Long> applicableBookIds; // Kitap ID'leri (opsiyonel)
 
     @Min(value = 1, message = "Kullanıcı başına limit en az 1 olmalıdır")
     private Integer maxUsagePerUser; // Kullanıcı başına limit (opsiyonel)
+
+    private List<String> applicableUsernames; // Kullanıcı adları (opsiyonel, boş=herkes)
 }

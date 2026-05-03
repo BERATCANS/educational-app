@@ -5,16 +5,18 @@ import com.beratcan.app.dto.response.CartResponse;
 import com.beratcan.app.entity.Book;
 import com.beratcan.app.entity.Cart;
 import com.beratcan.app.entity.CartItem;
+import com.beratcan.app.entity.StudentProfile;
 import com.beratcan.app.entity.User;
+import com.beratcan.app.entity.enums.Role;
 import com.beratcan.app.exception.BadRequestException;
 import com.beratcan.app.exception.BookNotFoundException;
 import com.beratcan.app.exception.CartItemNotFoundException;
 import com.beratcan.app.exception.CartNotFoundException;
 import com.beratcan.app.exception.UnauthorizedOperationException;
-import com.beratcan.app.exception.UserNotFoundException;
 import com.beratcan.app.repository.BookRepository;
 import com.beratcan.app.repository.CartItemRepository;
 import com.beratcan.app.repository.CartRepository;
+import com.beratcan.app.repository.StudentProfileRepository;
 import com.beratcan.app.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -33,6 +35,7 @@ public class CartService {
         private final CartRepository cartRepository;
         private final CartItemRepository cartItemRepository;
         private final UserRepository userRepository;
+        private final StudentProfileRepository studentProfileRepository;
         private final BookRepository bookRepository;
         private final DiscountCodeService discountCodeService;
 
@@ -44,12 +47,10 @@ public class CartService {
         public Cart getOrCreateCart(Long userId) {
                 return cartRepository.findByUserIdWithItemsAndBooks(userId)
                                 .orElseGet(() -> {
-                                        User user = userRepository.findById(userId)
-                                                        .orElseThrow(() -> new UserNotFoundException(userId));
+                                        StudentProfile studentProfile = getEligibleStudentProfile(userId);
                                         Cart cart = new Cart();
-                                        cart.setUser(user);
+                                        cart.setStudentProfile(studentProfile);
                                         Cart savedCart = cartRepository.save(cart);
-                                        // Yeni oluşturulan cart için JOIN FETCH ile tekrar yükle
                                         return cartRepository.findByUserIdWithItemsAndBooks(userId)
                                                         .orElse(savedCart);
                                 });
@@ -61,6 +62,8 @@ public class CartService {
         @Transactional
         public CartResponse addToCart(Long userId, Long bookId) {
                 log.info("Adding book to cart: userId={}, bookId={}", userId, bookId);
+
+                User user = getEligibleUser(userId);
 
                 // Kullanıcının sepetini getir veya oluştur
                 Cart cart = getOrCreateCart(userId);
@@ -82,8 +85,9 @@ public class CartService {
                         throw new BadRequestException("Kitap fiyatı geçerli değil");
                 }
 
-                // Kullanıcı zaten bu kitaba sahip mi?
-                boolean alreadyOwned = userRepository.existsByUserIdAndBookId(userId, bookId);
+                // Öğrenci zaten bu kitaba sahip mi?
+                boolean alreadyOwned = user.getOwnedBooks().stream()
+                                .anyMatch(b -> b.getId().equals(bookId));
                 if (alreadyOwned) {
                         log.info("Book already owned, not added to cart: userId={}, bookId={}, bookTitle={}",
                                         userId, bookId, book.getTitle());
@@ -205,12 +209,40 @@ public class CartService {
         }
 
         /**
+         * Sepetteki tüm item'ların priceAtAdd değerini güncel kitap fiyatına çeker.
+         * Checkout 409 (PRICE_CHANGED) döndüğünde client kullanıcıya yeni toplamı
+         * onaylatıp bu endpoint'i çağırır, sonra checkout'u yeni Idempotency-Key ile
+         * tekrarlar.
+         */
+        @Transactional
+        public CartResponse refreshPrices(Long userId) {
+                Cart cart = cartRepository.findByUserIdWithItemsAndBooks(userId)
+                                .orElseThrow(() -> new CartNotFoundException(userId));
+
+                int updated = 0;
+                for (CartItem item : cart.getItems()) {
+                        Book book = item.getBook();
+                        if (book == null || book.getPrice() == null) {
+                                continue;
+                        }
+                        if (item.getPriceAtAdd() == null
+                                        || item.getPriceAtAdd().compareTo(book.getPrice()) != 0) {
+                                item.setPriceAtAdd(book.getPrice());
+                                updated++;
+                        }
+                }
+
+                log.info("EVENT: Cart prices refreshed | userId={} | updatedItems={}", userId, updated);
+                return mapToResponse(cart);
+        }
+
+        /**
          * Cart'ı CartResponse'a dönüştür
          */
         private CartResponse mapToResponse(Cart cart) {
                 CartResponse response = new CartResponse();
                 response.setId(cart.getId());
-                response.setUserId(cart.getUser().getId());
+                response.setUserId(cart.getStudentProfile().getUser().getId());
                 response.setCreatedAt(cart.getCreatedAt());
                 response.setUpdatedAt(cart.getUpdatedAt());
 
@@ -236,6 +268,24 @@ public class CartService {
                 }
 
                 return response;
+        }
+
+        private User getEligibleUser(Long userId) {
+                User user = userRepository.findById(userId)
+                                .orElseThrow(() -> new BadRequestException("Kullanıcı bulunamadı. userId=" + userId));
+                if (user.getRole() == Role.PARENT) {
+                        throw new BadRequestException("Parent hesapları kitap satın alamaz veya sepete ekleyemez.");
+                }
+                return user;
+        }
+
+        private StudentProfile getEligibleStudentProfile(Long userId) {
+                User user = getEligibleUser(userId);
+                if (user.getRole() != Role.STUDENT) {
+                        throw new BadRequestException("Sepet sadece öğrenci hesaplarında kullanılabilir.");
+                }
+                return studentProfileRepository.findByUserId(userId)
+                                .orElseThrow(() -> new BadRequestException("Öğrenci profili bulunamadı. userId=" + userId));
         }
 
         /**

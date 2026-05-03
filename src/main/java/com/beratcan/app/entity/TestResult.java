@@ -1,5 +1,6 @@
 package com.beratcan.app.entity;
 
+import com.beratcan.app.constants.AppTime;
 import com.fasterxml.jackson.annotation.JsonBackReference;
 import jakarta.persistence.*;
 import lombok.Getter;
@@ -13,7 +14,7 @@ import java.util.List;
 @Getter
 @Setter
 @Table(name = "test_results", indexes = {
-        @Index(name = "idx_test_result_user_id", columnList = "user_id"),
+        @Index(name = "idx_test_results_student_profile", columnList = "student_profile_id"),
         @Index(name = "idx_test_result_test_id", columnList = "test_id"),
         @Index(name = "idx_test_result_completed_at", columnList = "completed_at")
 })
@@ -23,9 +24,9 @@ public class TestResult {
     private Long id;
 
     @ManyToOne
-    @JoinColumn(name = "user_id", nullable = false)
+    @JoinColumn(name = "student_profile_id", nullable = false)
     @JsonBackReference
-    private User user;
+    private StudentProfile studentProfile;
 
     @ManyToOne
     @JoinColumn(name = "test_id", nullable = false)
@@ -44,7 +45,7 @@ public class TestResult {
     private Integer timeSpentSeconds; // Toplam geçen süre
 
     @Column(nullable = false)
-    private LocalDateTime completedAt = LocalDateTime.now();
+    private LocalDateTime completedAt = AppTime.now();
 
     @OneToMany(mappedBy = "testResult", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private List<QuestionResult> questionResults = new ArrayList<>();

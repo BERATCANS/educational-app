@@ -4,8 +4,8 @@ import com.beratcan.app.annotation.RateLimit;
 import com.beratcan.app.dto.response.BookResponse;
 import com.beratcan.app.service.UserLibraryService;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
@@ -15,16 +15,13 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/books")
 @RequiredArgsConstructor
+@PreAuthorize("hasAnyRole('STUDENT','TEACHER')")
 public class BookLibraryController {
 
     private final UserLibraryService userLibraryService;
 
     @GetMapping("/for-user")
     public List<BookResponse> getBooksForUser(Authentication authentication) {
-        if (authentication == null || !authentication.isAuthenticated()) {
-            throw new org.springframework.security.access.AccessDeniedException("Bu işlem için giriş yapmalısınız.");
-        }
-
         Long userId = Long.parseLong(authentication.getName());
         return userLibraryService.getBooksForUser(userId);
     }
@@ -34,10 +31,6 @@ public class BookLibraryController {
     public ResponseEntity<?> useCode(
             @RequestParam String code,
             Authentication authentication) {
-        if (authentication == null || !authentication.isAuthenticated()) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(Map.of("error", "Kod kullanmak için giriş yapmalısınız."));
-        }
         Long userId = Long.parseLong(authentication.getName());
         String result = userLibraryService.useCode(userId, code);
         return ResponseEntity.ok().body(Map.of("message", result));
@@ -47,10 +40,6 @@ public class BookLibraryController {
     public ResponseEntity<?> addFreeBookToLibrary(
             @PathVariable Long bookId,
             Authentication authentication) {
-        if (authentication == null || !authentication.isAuthenticated()) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(Map.of("error", "Ücretsiz kitap eklemek için giriş yapmalısınız."));
-        }
         Long userId = Long.parseLong(authentication.getName());
         String result = userLibraryService.addFreeBookToLibrary(userId, bookId);
         return ResponseEntity.ok().body(Map.of("message", result));

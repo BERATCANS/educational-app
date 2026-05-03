@@ -1,6 +1,7 @@
 package com.beratcan.app.dto.request;
 
 import com.beratcan.app.constants.AppConstants;
+import com.beratcan.app.validation.ValidPassword;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
@@ -32,8 +33,8 @@ public class UserRequest {
     private String username;
 
     @NotBlank(message = "Şifre boş olamaz")
-    @Size(min = 6, message = "Şifre en az 6 karakter olmalıdır")
     @Size(max = 100, message = "Şifre en fazla 100 karakter olabilir")
+    @ValidPassword
     private String password;
 
     @NotBlank(message = "Rol boş olamaz")

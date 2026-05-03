@@ -6,9 +6,17 @@ import com.beratcan.app.dto.request.UpdateAnalysisRequest;
 import com.beratcan.app.dto.request.UpdateQuestionRequest;
 import com.beratcan.app.dto.response.AIAnalysisStatusResponse;
 import com.beratcan.app.dto.response.QuestionResponse;
+import com.beratcan.app.entity.Question;
+import com.beratcan.app.entity.Test;
+import com.beratcan.app.exception.QuestionNotFoundException;
+import com.beratcan.app.exception.UnauthorizedOperationException;
+import com.beratcan.app.repository.QuestionRepository;
+import com.beratcan.app.repository.UserRepository;
 import com.beratcan.app.service.QuestionService;
+import com.beratcan.app.storage.FileServingHelper;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.io.Resource;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -24,13 +32,16 @@ import java.util.Map;
 public class QuestionController {
 
     private final QuestionService questionService;
+    private final QuestionRepository questionRepository;
+    private final UserRepository userRepository;
+    private final FileServingHelper fileServingHelper;
 
     // CREATE
     /**
      * Soru oluştur (görsel + temel bilgiler) + Otomatik AI analiz
      */
     @PostMapping("/add")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
     @RateLimit(requestsPerMinute = 10, keyType = "USER", message = "Too many question creation requests. Please try again later.")
     public QuestionResponse addQuestion(
             @Valid @ModelAttribute CreateQuestionRequest request) {
@@ -50,6 +61,38 @@ public class QuestionController {
     }
 
     /**
+     * Question images are paid content — only owners (or admins) can fetch.
+     * The storage path is resolved server-side from {@code Question.imageUrl};
+     * the client only ever sends a question ID.
+     */
+    @GetMapping("/{questionId}/image")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<Resource> getQuestionImage(
+            @PathVariable Long questionId,
+            Authentication auth) {
+        Question q = questionRepository.findById(questionId)
+                .orElseThrow(() -> new QuestionNotFoundException(questionId));
+
+        boolean isAdmin = auth.getAuthorities().stream().anyMatch(a ->
+                "ROLE_ADMIN".equals(a.getAuthority())
+                        || "ROLE_SUPER_ADMIN".equals(a.getAuthority()));
+
+        if (!isAdmin) {
+            Long userId = Long.parseLong(auth.getName());
+            Test parentTest = q.getTest();
+            Long bookId = parentTest.getTopic().getBook().getId();
+            if (!userRepository.existsByIdAndOwnedBooks_Id(userId, bookId)) {
+                throw new UnauthorizedOperationException("Bu kitaba erişiminiz yok");
+            }
+        }
+
+        return fileServingHelper.serve(
+                q.getImageUrl(),
+                FileServingHelper.mediaTypeFor(q.getImageUrl()),
+                FileServingHelper.CacheVisibility.PRIVATE);
+    }
+
+    /**
      * Soru için AI analiz durumunu getir
      */
     @GetMapping("/{questionId}/ai-status")
@@ -59,7 +102,7 @@ public class QuestionController {
     }
 
     // UPDATE
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
     @PutMapping("/{questionId}")
     public QuestionResponse updateQuestion(@PathVariable Long questionId,
             @Valid @ModelAttribute UpdateQuestionRequest request) {
@@ -67,7 +110,7 @@ public class QuestionController {
     }
 
     // DELETE
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
     @DeleteMapping("/{questionId}")
     public void deleteQuestion(@PathVariable Long questionId) {
         questionService.deleteQuestion(questionId);
@@ -106,7 +149,7 @@ public class QuestionController {
      * Soru için hints ve explanation'ı birlikte güncelle
      */
     @PutMapping("/{questionId}/analysis")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
     public ResponseEntity<?> updateAnalysis(
             @PathVariable Long questionId,
             @RequestBody UpdateAnalysisRequest request) {
