@@ -14,6 +14,7 @@ import com.beratcan.app.exception.ConflictException;
 import com.beratcan.app.exception.ResourceNotFoundException;
 import com.beratcan.app.repository.StudentProfileRepository;
 import com.beratcan.app.repository.UserRepository;
+import com.beratcan.app.constants.AppTime;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -22,14 +23,11 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.time.LocalDate;
-import java.time.ZoneId;
 
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class ProfileService {
-
-    private static final ZoneId TURKEY_ZONE = ZoneId.of("Europe/Istanbul");
 
     private final UserService userService;
     private final UserRepository userRepository;
@@ -271,7 +269,7 @@ public class ProfileService {
     public QuestionTargetResponse getQuestionTarget(Long userId) {
         StudentProfile profile = studentProfileRepository.findByUserId(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Öğrenci profili bulunamadı: userId=" + userId));
-        LocalDate today = LocalDate.now(TURKEY_ZONE);
+        LocalDate today = LocalDate.now(AppTime.ZONE);
         int target = profile.getDailyQuestionTarget() != null ? profile.getDailyQuestionTarget() : 0;
         int solvedToday = profile.getDailySolvedQuestions() != null ? profile.getDailySolvedQuestions() : 0;
         int remaining = Math.max(target - solvedToday, 0);
@@ -309,7 +307,7 @@ public class ProfileService {
      * @return true eğer streak güncellendiyse, false eğer değişmediyse
      */
     private boolean updateStreak(StudentProfile profile) {
-        LocalDate today = LocalDate.now(TURKEY_ZONE);
+        LocalDate today = LocalDate.now(AppTime.ZONE);
         LocalDate lastActivity = profile.getLastActivityDate();
         String username = profile.getUser().getUsername();
 

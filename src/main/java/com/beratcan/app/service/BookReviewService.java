@@ -1,6 +1,7 @@
 package com.beratcan.app.service;
 
 import com.beratcan.app.constants.AppConstants;
+import com.beratcan.app.constants.AppTime;
 import com.beratcan.app.dto.request.BookReviewRequest;
 import com.beratcan.app.dto.response.BookReviewResponse;
 import com.beratcan.app.dto.response.PageResponse;
@@ -81,7 +82,7 @@ public class BookReviewService {
                     "Bu kitap için zaten bir yorumunuz var. Lütfen mevcut yorumunuzu düzenleyin.");
         }
 
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = AppTime.now();
         BookReview review = new BookReview();
         review.setBook(book);
         review.setStudentProfile(profile);
@@ -133,7 +134,7 @@ public class BookReviewService {
         review.setContentQualityRating(contentQualityRating);
         review.setDifficultyRating(difficultyRating);
         review.setVideoQualityRating(videoQualityRating);
-        review.setUpdatedAt(LocalDateTime.now());
+        review.setUpdatedAt(AppTime.now());
 
         bookReviewRepository.save(review);
 

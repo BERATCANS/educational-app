@@ -13,6 +13,7 @@ import com.beratcan.app.exception.TestResultNotFoundException;
 import com.beratcan.app.exception.UnauthorizedOperationException;
 import com.beratcan.app.exception.UserNotFoundException;
 import com.beratcan.app.repository.*;
+import com.beratcan.app.constants.AppTime;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -20,7 +21,6 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 
@@ -81,14 +81,14 @@ public class TestResultService {
             // Mevcut test sonucunu güncelle
             testResult = existingTestResult;
             testResult.setTimeSpentSeconds(totalTimeSeconds);
-            testResult.setCompletedAt(LocalDateTime.now());
+            testResult.setCompletedAt(AppTime.now());
         } else {
             // Yeni test sonucu oluştur
             testResult = new TestResult();
             testResult.setStudentProfile(studentProfile);
             testResult.setTest(test);
             testResult.setTimeSpentSeconds(totalTimeSeconds);
-            testResult.setCompletedAt(LocalDateTime.now());
+            testResult.setCompletedAt(AppTime.now());
         }
 
         int correctCount = 0;
@@ -119,7 +119,7 @@ public class TestResultService {
                 questionResult.setTestResult(testResult);
                 questionResult.setSelectedAnswer(selectedAnswer);
                 questionResult.setIsCorrect(isCorrect);
-                questionResult.setAnsweredAt(LocalDateTime.now());
+                questionResult.setAnsweredAt(AppTime.now());
             } else {
                 // Yeni QuestionResult oluştur
                 questionResult = new QuestionResult();
@@ -127,7 +127,7 @@ public class TestResultService {
                 questionResult.setQuestion(question);
                 questionResult.setSelectedAnswer(selectedAnswer);
                 questionResult.setIsCorrect(isCorrect);
-                questionResult.setAnsweredAt(LocalDateTime.now());
+                questionResult.setAnsweredAt(AppTime.now());
             }
 
             testResult.getQuestionResults().add(questionResult);

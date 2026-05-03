@@ -1,5 +1,6 @@
 package com.beratcan.app.entity;
 
+import com.beratcan.app.constants.AppTime;
 import com.beratcan.app.entity.enums.*;
 import jakarta.persistence.*;
 import lombok.Getter;
@@ -54,7 +55,7 @@ public class StudentProfile {
         private LocalDate lastActivityDate;
 
         @Column(columnDefinition = "TIMESTAMP DEFAULT NOW()")
-        private LocalDateTime createdAt = LocalDateTime.now();
+        private LocalDateTime createdAt = AppTime.now();
 
         @ManyToMany
         @JoinTable(name = "student_flagged_questions",

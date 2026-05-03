@@ -6,6 +6,7 @@ import com.beratcan.app.entity.Cart;
 import com.beratcan.app.entity.CartItem;
 import com.beratcan.app.entity.DiscountCode;
 import com.beratcan.app.entity.User;
+import com.beratcan.app.constants.AppTime;
 import com.beratcan.app.exception.BadRequestException;
 import com.beratcan.app.exception.DiscountCodeNotFoundException;
 import com.beratcan.app.repository.DiscountCodeRepository;
@@ -20,7 +21,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
-import java.time.ZoneId;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -28,8 +28,6 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @Slf4j
 public class DiscountCodeService {
-
-    private static final ZoneId TURKEY_ZONE = ZoneId.of("Europe/Istanbul");
 
     private final DiscountCodeRepository discountCodeRepository;
     private final DiscountCodeUsageRepository discountCodeUsageRepository;
@@ -59,7 +57,7 @@ public class DiscountCodeService {
         }
 
         // 3. Tarih kontrolü (Türkiye saatine göre)
-        LocalDateTime now = LocalDateTime.now(TURKEY_ZONE);
+        LocalDateTime now = AppTime.now();
         if (now.isBefore(discountCode.getValidFrom())) {
             log.warn("Discount code not yet valid: code={}, validFrom={}", code, discountCode.getValidFrom());
             return DiscountValidationResult.invalid("Bu indirim kodu henüz geçerli değil");
@@ -227,7 +225,7 @@ public class DiscountCodeService {
         com.beratcan.app.entity.DiscountCodeUsage usage = new com.beratcan.app.entity.DiscountCodeUsage();
         usage.setDiscountCode(code);
         usage.setUser(user);
-        usage.setUsedAt(LocalDateTime.now(TURKEY_ZONE));
+        usage.setUsedAt(AppTime.now());
         usage.setTransactionId(transactionId);
         discountCodeUsageRepository.save(usage);
 

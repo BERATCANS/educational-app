@@ -1,5 +1,6 @@
 package com.beratcan.app.entity;
 
+import com.beratcan.app.constants.AppTime;
 import com.beratcan.app.entity.enums.PurchaseStatus;
 import jakarta.persistence.*;
 import lombok.Getter;
@@ -56,10 +57,13 @@ public class Purchase {
     @Column(length = 50)
     private String paymentMethod;
 
+    @Column(name = "idempotency_key", length = 80)
+    private String idempotencyKey;
+
     @PrePersist
     protected void onCreate() {
         if (purchaseDate == null) {
-            purchaseDate = LocalDateTime.now();
+            purchaseDate = AppTime.now();
         }
         if (status == null) {
             status = PurchaseStatus.PENDING;

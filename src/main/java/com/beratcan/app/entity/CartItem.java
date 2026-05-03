@@ -1,5 +1,6 @@
 package com.beratcan.app.entity;
 
+import com.beratcan.app.constants.AppTime;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
@@ -33,6 +34,6 @@ public class CartItem {
 
     @PrePersist
     protected void onCreate() {
-        addedAt = LocalDateTime.now();
+        addedAt = AppTime.now();
     }
 }

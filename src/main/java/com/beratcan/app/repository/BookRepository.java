@@ -6,6 +6,7 @@ import com.beratcan.app.entity.enums.GradeLevel;
 import com.beratcan.app.entity.enums.LessonType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -21,6 +22,7 @@ public interface BookRepository extends JpaRepository<Book, Long> {
          * Arama ve filtreleme ile pagination desteği
          * DB seviyesinde pagination yapar, memory'ye yük bindirmez
          */
+        @EntityGraph(attributePaths = "publisher")
         @Query("SELECT b FROM Book b WHERE " +
                         "(:query IS NULL OR :query = '' OR LOWER(b.title) LIKE LOWER(CONCAT('%', :query, '%')) OR LOWER(b.publisher.name) LIKE LOWER(CONCAT('%', :query, '%'))) AND "
                         +
@@ -43,6 +45,7 @@ public interface BookRepository extends JpaRepository<Book, Long> {
          * Kullanıcının examType'ına göre önce o kitapları, sonra diğerlerini sıralar
          * DB seviyesinde pagination yapar, memory'ye yük bindirmez
          */
+        @EntityGraph(attributePaths = "publisher")
         @Query("SELECT b FROM Book b WHERE " +
                         "(:query IS NULL OR :query = '' OR LOWER(b.title) LIKE LOWER(CONCAT('%', :query, '%')) OR LOWER(b.publisher.name) LIKE LOWER(CONCAT('%', :query, '%'))) AND "
                         +
@@ -60,6 +63,26 @@ public interface BookRepository extends JpaRepository<Book, Long> {
                         @Param("minPrice") BigDecimal minPrice,
                         @Param("maxPrice") BigDecimal maxPrice,
                         @Param("userExamType") ExamType userExamType,
+                        Pageable pageable);
+
+        /**
+         * Admin paneli için kitap arama/filtreleme. Mağaza query'sinden farkı:
+         * userExamType-bazlı sıralama yok, en yeni eklenen üstte.
+         * Soft-deleted kitaplar @SQLRestriction ile zaten filtrelenir.
+         */
+        @EntityGraph(attributePaths = "publisher")
+        @Query("SELECT b FROM Book b WHERE " +
+                        "(:query IS NULL OR :query = '' OR LOWER(b.title) LIKE LOWER(CONCAT('%', :query, '%')) OR LOWER(b.publisher.name) LIKE LOWER(CONCAT('%', :query, '%'))) AND "
+                        +
+                        "(:examTypes IS NULL OR b.examType IN :examTypes) AND " +
+                        "(:gradeLevels IS NULL OR b.gradeLevel IN :gradeLevels) AND " +
+                        "(:lessonTypes IS NULL OR b.lessonType IN :lessonTypes) " +
+                        "ORDER BY b.id DESC")
+        Page<Book> searchBooksForAdmin(
+                        @Param("query") String query,
+                        @Param("examTypes") List<ExamType> examTypes,
+                        @Param("gradeLevels") List<GradeLevel> gradeLevels,
+                        @Param("lessonTypes") List<LessonType> lessonTypes,
                         Pageable pageable);
 
         long countByPublisher_Id(Long publisherId);

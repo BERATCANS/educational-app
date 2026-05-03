@@ -15,6 +15,8 @@ import com.beratcan.app.exception.UnauthorizedOperationException;
 import com.beratcan.app.repository.DailyQuestionRepository;
 import com.beratcan.app.repository.DailyQuestionAnswerRepository;
 import com.beratcan.app.repository.StudentProfileRepository;
+import com.beratcan.app.constants.AppTime;
+import com.beratcan.app.storage.StoragePaths;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -22,7 +24,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.ZoneId;
 import java.util.HashMap;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -33,8 +34,6 @@ import java.util.Map;
 @Service
 @RequiredArgsConstructor
 public class DailyQuestionService {
-
-    private static final ZoneId TURKEY_ZONE = ZoneId.of("Europe/Istanbul");
 
     private final DailyQuestionRepository dailyQuestionRepository;
     private final DailyQuestionAnswerRepository answerRepository;
@@ -51,7 +50,7 @@ public class DailyQuestionService {
         studentProfileRepository.findByUserId(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Öğrenci profili bulunamadı: userId=" + userId));
 
-        DailyQuestion question = dailyQuestionRepository.findByDisplayDate(LocalDate.now(TURKEY_ZONE))
+        DailyQuestion question = dailyQuestionRepository.findByDisplayDate(LocalDate.now(AppTime.ZONE))
                 .orElse(null);
 
         if (question == null) {
@@ -88,7 +87,7 @@ public class DailyQuestionService {
                 .orElseThrow(() -> new ResourceNotFoundException("Soru bulunamadı"));
 
         // Zaman kontrolü
-        LocalDateTime now = LocalDateTime.now(TURKEY_ZONE);
+        LocalDateTime now = AppTime.now();
         LocalDateTime startTime = LocalDateTime.of(question.getDisplayDate(), question.getStartTime());
         LocalDateTime endTime = LocalDateTime.of(question.getDisplayDate(), question.getEndTime());
 
@@ -123,13 +122,10 @@ public class DailyQuestionService {
         log.info("Günlük soru oluşturma başlatıldı: displayDate={}, correctAnswer={}",
                 request.getDisplayDate(), request.getCorrectAnswer());
 
-        // 1. Görseli kaydet (FileService kullan)
-        String imageUrl = fileService.saveFile(request.getImage());
-        log.info("Görsel kaydedildi: {}", imageUrl);
-
-        // 2. Yeni soru oluştur
+        // 1. Soruyu placeholder imageUrl ile kaydet (path için questionId lazım,
+        //    imageUrl NOT NULL olduğu için boş bırakılamıyor)
         DailyQuestion question = new DailyQuestion();
-        question.setImageUrl(imageUrl); // FileService'ten gelen filename
+        question.setImageUrl("__pending__");
         question.setAnswerNumber(request.getAnswerNumber());
         question.setCorrectAnswer(request.getCorrectAnswer());
         question.setVideoUrl(request.getVideoUrl());
@@ -137,10 +133,19 @@ public class DailyQuestionService {
         question.setDisplayDate(request.getDisplayDate());
         question.setStartTime(request.getStartTime());
         question.setEndTime(request.getEndTime());
-        question.setEndTime(request.getEndTime());
         question.setActive(false); // Deprecated field, calculated on-the-fly
 
-        DailyQuestion saved = dailyQuestionRepository.save(question);
+        DailyQuestion saved = dailyQuestionRepository.saveAndFlush(question);
+
+        // 2. Görseli ID'li path ile kaydet
+        String ext = StoragePaths.safeExtension(request.getImage());
+        String imageUrl = StoragePaths.dailyQuestionImage(saved.getId(), ext);
+        fileService.saveFile(request.getImage(), imageUrl);
+        log.info("Görsel kaydedildi: {}", imageUrl);
+
+        // 3. imageUrl güncelle
+        saved.setImageUrl(imageUrl);
+        saved = dailyQuestionRepository.save(saved);
         log.info("Günlük soru oluşturuldu: questionId={}", saved.getId());
         return saved;
     }
@@ -183,16 +188,23 @@ public class DailyQuestionService {
 
         log.info("Günlük soru güncelleme başlatıldı: questionId={}", questionId);
 
-        // Görsel güncelleme (opsiyonel)
+        // Görsel güncelleme (opsiyonel) — yeni dosyayı önce kaydet,
+        // sonra eski dosyayı sil (yenisi başarısız olursa eskiyi kaybetmeyelim).
         if (request.getImage() != null && !request.getImage().isEmpty()) {
-            // Eski görseli sil
-            if (question.getImageUrl() != null && !question.getImageUrl().isEmpty()) {
-                fileService.deleteFile(question.getImageUrl());
-            }
-            // Yeni görseli kaydet
-            String newImageUrl = fileService.saveFile(request.getImage());
+            String oldImageUrl = question.getImageUrl();
+            String ext = StoragePaths.safeExtension(request.getImage());
+            String newImageUrl = StoragePaths.dailyQuestionImage(question.getId(), ext);
+            fileService.saveFile(request.getImage(), newImageUrl);
             question.setImageUrl(newImageUrl);
             log.info("Görsel güncellendi: {}", newImageUrl);
+
+            if (oldImageUrl != null && !oldImageUrl.isEmpty() && !oldImageUrl.equals(newImageUrl)) {
+                try {
+                    fileService.deleteFile(oldImageUrl);
+                } catch (Exception e) {
+                    log.warn("Eski görsel silinemedi (yenisi kaydedildi): {}", oldImageUrl, e);
+                }
+            }
         }
 
         // Diğer alanları güncelle (sadece null değilse)
@@ -265,7 +277,7 @@ public class DailyQuestionService {
         response.setEndTime(question.getEndTime());
         
         // Active durumunu dinamik olarak hesapla
-        LocalDateTime now = LocalDateTime.now(TURKEY_ZONE);
+        LocalDateTime now = AppTime.now();
         LocalDateTime startTime = LocalDateTime.of(question.getDisplayDate(), question.getStartTime());
         LocalDateTime endTime = LocalDateTime.of(question.getDisplayDate(), question.getEndTime());
         
@@ -323,7 +335,7 @@ public class DailyQuestionService {
         response.setStartTime(question.getStartTime());
         response.setEndTime(question.getEndTime());
         // Active durumunu dinamik olarak hesapla
-        LocalDateTime now = LocalDateTime.now(TURKEY_ZONE);
+        LocalDateTime now = AppTime.now();
         LocalDateTime startTime = LocalDateTime.of(question.getDisplayDate(), question.getStartTime());
         LocalDateTime endTime = LocalDateTime.of(question.getDisplayDate(), question.getEndTime());
         boolean isActive = now.isAfter(startTime) && now.isBefore(endTime);

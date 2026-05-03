@@ -8,10 +8,15 @@ import com.beratcan.app.dto.response.PageResponse;
 import com.beratcan.app.entity.enums.ExamType;
 import com.beratcan.app.entity.enums.GradeLevel;
 import com.beratcan.app.entity.enums.LessonType;
+import com.beratcan.app.entity.Book;
+import com.beratcan.app.exception.BookNotFoundException;
+import com.beratcan.app.repository.BookRepository;
 import com.beratcan.app.service.BookCatalogService;
 import com.beratcan.app.service.FilterLabelService;
+import com.beratcan.app.storage.FileServingHelper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.core.io.Resource;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
@@ -29,6 +34,8 @@ public class BookStoreController {
 
         private final BookCatalogService bookCatalogService;
         private final FilterLabelService filterLabelService;
+        private final BookRepository bookRepository;
+        private final FileServingHelper fileServingHelper;
 
         @GetMapping("/store")
         public PageResponse<BookStoreResponse> getBookStore(
@@ -57,6 +64,16 @@ public class BookStoreController {
                                 : null;
                 BookDetailResponse response = bookCatalogService.getBookDetail(bookId, userId);
                 return ResponseEntity.ok(response);
+        }
+
+        @GetMapping("/{bookId}/cover")
+        public ResponseEntity<Resource> getCover(@PathVariable Long bookId) {
+                Book book = bookRepository.findById(bookId)
+                                .orElseThrow(() -> new BookNotFoundException(bookId));
+                return fileServingHelper.serve(
+                                book.getCoverImageUrl(),
+                                FileServingHelper.mediaTypeFor(book.getCoverImageUrl()),
+                                FileServingHelper.CacheVisibility.PUBLIC);
         }
 
         /**

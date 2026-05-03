@@ -6,9 +6,13 @@ import com.beratcan.app.dto.request.CreateDailyQuestionRequest;
 import com.beratcan.app.dto.request.UpdateDailyQuestionRequest;
 import com.beratcan.app.dto.response.DailyQuestionResponse;
 import com.beratcan.app.entity.DailyQuestion;
+import com.beratcan.app.exception.ResourceNotFoundException;
+import com.beratcan.app.repository.DailyQuestionRepository;
 import com.beratcan.app.service.DailyQuestionService;
+import com.beratcan.app.storage.FileServingHelper;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.io.Resource;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
@@ -22,6 +26,8 @@ import java.util.List;
 public class DailyQuestionController {
 
     private final DailyQuestionService dailyQuestionService;
+    private final DailyQuestionRepository dailyQuestionRepository;
+    private final FileServingHelper fileServingHelper;
 
     @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
     @PostMapping("/create")
@@ -36,6 +42,16 @@ public class DailyQuestionController {
         Long userId = Long.parseLong(authentication.getName());
         DailyQuestionResponse response = dailyQuestionService.getCurrentQuestion(userId);
         return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/{id}/image")
+    public ResponseEntity<Resource> getDailyQuestionImage(@PathVariable Long id) {
+        var question = dailyQuestionRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Günlük soru bulunamadı: " + id));
+        return fileServingHelper.serve(
+                question.getImageUrl(),
+                FileServingHelper.mediaTypeFor(question.getImageUrl()),
+                FileServingHelper.CacheVisibility.PUBLIC);
     }
 
     @PostMapping("/answer")

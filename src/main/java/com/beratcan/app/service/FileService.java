@@ -21,12 +21,20 @@ public class FileService {
 
     /**
      * Dosya kaydetme
-     * 
+     *
      * @param file Yüklenecek dosya
      * @return Kaydedilen dosya adı (sadece filename, URL değil)
      */
     public String saveFile(MultipartFile file) {
         return storageService.saveFile(file);
+    }
+
+    /**
+     * Save a multipart file under a server-supplied logical path.
+     * Use {@link com.beratcan.app.storage.StoragePaths} to build the path.
+     */
+    public String saveFile(MultipartFile file, String logicalPath) {
+        return storageService.saveFile(file, logicalPath);
     }
 
     /**

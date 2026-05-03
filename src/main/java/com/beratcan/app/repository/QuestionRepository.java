@@ -2,6 +2,7 @@ package com.beratcan.app.repository;
 
 import com.beratcan.app.entity.Question;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -30,4 +31,9 @@ public interface QuestionRepository extends JpaRepository<Question, Long> {
      */
     @Query("SELECT COUNT(q) FROM Question q WHERE q.test.topic.id = :topicId")
     int countByTopicId(@Param("topicId") Long topicId);
+
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("UPDATE Question q SET q.isDeleted = true " +
+            "WHERE q.test.id = :testId AND q.isDeleted = false")
+    int softDeleteByTestId(@Param("testId") Long testId);
 }

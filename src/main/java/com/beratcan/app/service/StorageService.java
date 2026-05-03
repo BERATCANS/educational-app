@@ -10,12 +10,26 @@ import org.springframework.web.multipart.MultipartFile;
 public interface StorageService {
 
     /**
-     * Save a file and return the filename or URL
-     * 
-     * @param file The file to save
-     * @return Filename (for local) or full URL (for cloud storage)
+     * Save a file and return the filename or URL.
+     *
+     * @deprecated Use {@link #saveFile(MultipartFile, String)} with a
+     * server-built path from {@code StoragePaths}. This single-arg variant
+     * stores into a flat namespace without ID partitioning and will be
+     * removed once all callers are migrated.
      */
+    @Deprecated
     String saveFile(MultipartFile file);
+
+    /**
+     * Save a multipart file under a server-supplied logical path.
+     *
+     * <p>The {@code logicalPath} must be built via {@code StoragePaths};
+     * implementations resolve it under their storage root and reject
+     * any value that escapes that root.
+     *
+     * @return the {@code logicalPath} (kept identical to the caller's input)
+     */
+    String saveFile(MultipartFile file, String logicalPath);
 
     /**
      * Save a file from byte array

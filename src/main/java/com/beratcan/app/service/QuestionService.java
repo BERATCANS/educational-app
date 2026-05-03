@@ -20,6 +20,7 @@ import com.beratcan.app.exception.QuestionNotFoundException;
 import com.beratcan.app.exception.TestNotFoundException;
 import com.beratcan.app.repository.QuestionRepository;
 import com.beratcan.app.repository.TestRepository;
+import com.beratcan.app.storage.StoragePaths;
 import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -149,22 +150,30 @@ public class QuestionService {
         Question question = questionRepository.findById(questionId)
                 .orElseThrow(() -> new QuestionNotFoundException(questionId));
 
-        // ✅ Yeni görsel yüklenecekse
+        // ✅ Yeni görsel yüklenecekse — yeni dosyayı önce kaydet,
+        //    sonra eski dosyayı sil (yenisi başarısız olursa eskiyi kaybetmeyelim).
         if (request.getImage() != null && !request.getImage().isEmpty()) {
-            // Eski dosyayı sil
-            if (question.getImageUrl() != null) {
-                try {
-                    fileService.deleteFile(question.getImageUrl());
-                    log.info("Eski görsel silindi: {}", question.getImageUrl());
-                } catch (Exception e) {
-                    log.warn("Eski görsel silinirken hata oluştu: {}", question.getImageUrl(), e);
-                    // Devam et, yeni dosyayı yükle
-                }
-            }
-            // Yeni dosyayı yükle
-            String newImageUrl = fileService.saveFile(request.getImage());
+            String oldImageUrl = question.getImageUrl();
+
+            Test parentTest = question.getTest();
+            Long bookId = parentTest.getTopic().getBook().getId();
+            Long topicId = parentTest.getTopic().getId();
+            Long testId = parentTest.getId();
+            String ext = StoragePaths.safeExtension(request.getImage());
+            String newImageUrl = StoragePaths.questionImage(
+                    bookId, topicId, testId, question.getId(), ext);
+            fileService.saveFile(request.getImage(), newImageUrl);
             question.setImageUrl(newImageUrl);
             log.info("Yeni görsel yüklendi: {}", newImageUrl);
+
+            if (oldImageUrl != null && !oldImageUrl.equals(newImageUrl)) {
+                try {
+                    fileService.deleteFile(oldImageUrl);
+                    log.info("Eski görsel silindi: {}", oldImageUrl);
+                } catch (Exception e) {
+                    log.warn("Eski görsel silinemedi (yeni kaydedildi): {}", oldImageUrl, e);
+                }
+            }
         }
 
         // ✅ Diğer alanları güncelle (partial update - sadece null değilse)
@@ -395,34 +404,41 @@ public class QuestionService {
         log.info("Soru oluşturma başlatıldı: testId={}, correctAnswer={}",
                 request.getTestId(), request.getCorrectAnswer());
 
-        // 1. Görseli kaydet
-        String imageUrl = fileService.saveFile(request.getImage());
-        log.info("Görsel kaydedildi: {}", imageUrl);
-
-        // 2. QuestionRequest oluştur
+        // 1. Soruyu placeholder imageUrl ile kaydet (path için questionId lazım,
+        //    imageUrl NOT NULL olduğu için boş bırakılamıyor)
         QuestionRequest questionRequest = new QuestionRequest();
-        questionRequest.setImageUrl(imageUrl);
+        questionRequest.setImageUrl("__pending__");
         questionRequest.setCorrectAnswer(request.getCorrectAnswer());
         questionRequest.setAnswerNumber(request.getAnswerNumber());
         questionRequest.setVideoUrl(request.getVideoUrl());
         questionRequest.setSequenceNumber(request.getSequenceNumber());
 
-        // 3. Soruyu oluştur
         QuestionResponse question = addQuestion(request.getTestId(), questionRequest);
         log.info("Soru oluşturuldu: questionId={}", question.getId());
 
-        // 4. AI analiz durumunu PROCESSING olarak işaretle
+        // 2. Görseli ID'li deep path ile kaydet
         Question questionEntity = questionRepository.findById(question.getId())
                 .orElseThrow(() -> new QuestionNotFoundException(question.getId()));
+        Test parentTest = questionEntity.getTest();
+        Long bookId = parentTest.getTopic().getBook().getId();
+        Long topicId = parentTest.getTopic().getId();
+        Long testId = parentTest.getId();
+        String ext = StoragePaths.safeExtension(request.getImage());
+        String imageUrl = StoragePaths.questionImage(
+                bookId, topicId, testId, question.getId(), ext);
+        fileService.saveFile(request.getImage(), imageUrl);
+        log.info("Görsel kaydedildi: {}", imageUrl);
+
+        // 3. Question imageUrl + AI status güncelle
+        questionEntity.setImageUrl(imageUrl);
         questionEntity.setAiAnalysisStatus(AIAnalysisStatus.PROCESSING);
         questionRepository.save(questionEntity);
 
-        // 5. Transaction commit edildikten sonra AI analiz başlatmak için event yayınla
-        // Bu sayede asenkron thread soruyu görebilecek
+        // 4. Transaction commit edildikten sonra AI analiz başlatmak için event yayınla
         eventPublisher.publishEvent(new QuestionCreatedEvent(this, question.getId()));
         log.info("QuestionCreatedEvent yayınlandı: questionId={}", question.getId());
 
-        // 6. Hemen response dön (hints ve explanation henüz yok, status PROCESSING)
+        // 5. Hemen response dön (hints ve explanation henüz yok, status PROCESSING)
         return getQuestionById(question.getId());
     }
 

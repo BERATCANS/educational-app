@@ -13,6 +13,7 @@ import com.beratcan.app.repository.BookCodeRepository;
 import com.beratcan.app.repository.BookRepository;
 import com.beratcan.app.repository.TestResultRepository;
 import com.beratcan.app.repository.UserRepository;
+import com.beratcan.app.constants.AppTime;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -147,7 +148,7 @@ public class UserLibraryService {
             return 0.0;
         }
 
-        long daysAgo = ChronoUnit.DAYS.between(lastCompleted, LocalDateTime.now());
+        long daysAgo = ChronoUnit.DAYS.between(lastCompleted, AppTime.now());
         if (daysAgo == 0) {
             daysAgo = 1;
         }

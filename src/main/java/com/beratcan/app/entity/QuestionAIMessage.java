@@ -1,5 +1,6 @@
 package com.beratcan.app.entity;
 
+import com.beratcan.app.constants.AppTime;
 import com.beratcan.app.entity.enums.MessageRole;
 import com.beratcan.app.entity.enums.MessageType;
 import jakarta.persistence.*;
@@ -40,6 +41,6 @@ public class QuestionAIMessage {
 
     @PrePersist
     protected void onCreate() {
-        createdAt = LocalDateTime.now();
+        createdAt = AppTime.now();
     }
 }
