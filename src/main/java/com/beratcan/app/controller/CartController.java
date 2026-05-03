@@ -11,6 +11,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
@@ -19,6 +20,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/cart")
 @RequiredArgsConstructor
+@PreAuthorize("hasRole('STUDENT')")
 public class CartController {
 
     private final CartService cartService;
@@ -112,6 +114,20 @@ public class CartController {
                 "message", "Sepetteki tüm kitaplar başarıyla satın alındı",
                 "purchase", purchase,
                 "totalItems", purchase.getItemCount()));
+    }
+
+    /**
+     * Sepetteki priceAtAdd değerlerini güncel fiyatlara çek.
+     * POST /api/cart/refresh-prices
+     *
+     * Checkout 409 (PRICE_CHANGED) döndüğünde frontend kullanıcıya yeni toplamı
+     * onaylatıp bu endpoint'i çağırır, sonra yeni Idempotency-Key ile checkout'u
+     * tekrarlar.
+     */
+    @PostMapping("/refresh-prices")
+    public ResponseEntity<CartResponse> refreshPrices(Authentication authentication) {
+        Long userId = Long.parseLong(authentication.getName());
+        return ResponseEntity.ok(cartService.refreshPrices(userId));
     }
 
     @PostMapping("/apply-discount")

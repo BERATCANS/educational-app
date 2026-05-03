@@ -1,13 +1,12 @@
 package com.beratcan.app.validation;
 
+import com.beratcan.app.constants.AppTime;
 import com.beratcan.app.dto.request.DiscountCodeRequest;
 import com.beratcan.app.entity.enums.DiscountType;
 import jakarta.validation.ConstraintValidator;
 import jakarta.validation.ConstraintValidatorContext;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
-import java.time.ZoneId;
 
 /**
  * Validates discount code request
@@ -74,7 +73,7 @@ public class DiscountCodeValidator implements ConstraintValidator<ValidDiscountC
             }
 
             // validUntil must be in the future
-            if (request.getValidUntil().isBefore(LocalDateTime.now(ZoneId.of("Europe/Istanbul")))) {
+            if (request.getValidUntil().isBefore(AppTime.now())) {
                 context.buildConstraintViolationWithTemplate(
                         "Geçerlilik bitiş tarihi geçmiş bir tarih olamaz")
                         .addPropertyNode("validUntil")

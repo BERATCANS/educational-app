@@ -1,5 +1,6 @@
 package com.beratcan.app.entity;
 
+import com.beratcan.app.constants.AppTime;
 import com.beratcan.app.entity.enums.ExamType;
 import com.beratcan.app.entity.enums.GradeLevel;
 import jakarta.persistence.*;
@@ -48,7 +49,7 @@ public class Classroom {
     private Boolean isActive = true;
 
     @Column(name = "created_at", nullable = false)
-    private LocalDateTime createdAt = LocalDateTime.now();
+    private LocalDateTime createdAt = AppTime.now();
 
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(name = "classroom_teacher",

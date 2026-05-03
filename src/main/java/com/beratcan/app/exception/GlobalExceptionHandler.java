@@ -1,5 +1,6 @@
 package com.beratcan.app.exception;
 
+import com.beratcan.app.constants.AppTime;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -12,7 +13,6 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
-import java.time.LocalDateTime;
 import java.util.stream.Collectors;
 
 @RestControllerAdvice
@@ -110,7 +110,7 @@ public class GlobalExceptionHandler {
                 body.put("message", ex.getMessage());
                 body.put("activeClassrooms", ex.getActiveClassrooms());
                 body.put("status", HttpStatus.BAD_REQUEST.value());
-                body.put("timestamp", LocalDateTime.now().toString());
+                body.put("timestamp", AppTime.now().toString());
                 return ResponseEntity.badRequest().body(body);
         }
 
@@ -136,6 +136,33 @@ public class GlobalExceptionHandler {
                                 "Conflict detected",
                                 HttpStatus.CONFLICT);
                 return ResponseEntity.status(HttpStatus.CONFLICT).body(errorDetails);
+        }
+
+        @ExceptionHandler(PriceChangedException.class)
+        public ResponseEntity<java.util.Map<String, Object>> handlePriceChanged(
+                        PriceChangedException ex, HttpServletRequest request) {
+                log.info("Price-change conflict at checkout: path={}, changedCount={}",
+                                request.getRequestURI(), ex.getChangedItems().size());
+
+                java.util.List<java.util.Map<String, Object>> changedItems = ex.getChangedItems().stream()
+                                .map(c -> {
+                                        java.util.Map<String, Object> m = new java.util.LinkedHashMap<>();
+                                        m.put("cartItemId", c.getCartItemId());
+                                        m.put("bookId", c.getBookId());
+                                        m.put("bookTitle", c.getBookTitle());
+                                        m.put("oldPrice", c.getOldPrice());
+                                        m.put("newPrice", c.getNewPrice());
+                                        return m;
+                                })
+                                .collect(java.util.stream.Collectors.toList());
+
+                java.util.Map<String, Object> body = new java.util.LinkedHashMap<>();
+                body.put("error", "PRICE_CHANGED");
+                body.put("message", ex.getMessage());
+                body.put("changedItems", changedItems);
+                body.put("status", HttpStatus.CONFLICT.value());
+                body.put("timestamp", AppTime.now().toString());
+                return ResponseEntity.status(HttpStatus.CONFLICT).body(body);
         }
 
         @ExceptionHandler(UnauthorizedOperationException.class)
@@ -228,7 +255,7 @@ public class GlobalExceptionHandler {
                 return ErrorDetails.builder()
                                 .message(message)
                                 .details(details)
-                                .timestamp(LocalDateTime.now().toString())
+                                .timestamp(AppTime.now().toString())
                                 .status(status.value())
                                 .error(status.getReasonPhrase())
                                 .build();

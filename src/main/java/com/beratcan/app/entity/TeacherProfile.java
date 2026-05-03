@@ -1,5 +1,6 @@
 package com.beratcan.app.entity;
 
+import com.beratcan.app.constants.AppTime;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
@@ -23,7 +24,7 @@ public class TeacherProfile {
         private User user;
 
         @Column(columnDefinition = "TIMESTAMP DEFAULT NOW()")
-        private LocalDateTime createdAt = LocalDateTime.now();
+        private LocalDateTime createdAt = AppTime.now();
 
         @ManyToMany(mappedBy = "teachers", fetch = FetchType.LAZY)
         private Set<Classroom> classrooms = new HashSet<>();

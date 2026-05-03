@@ -16,6 +16,7 @@ import com.beratcan.app.exception.BadRequestException;
 import com.beratcan.app.exception.CartNotFoundException;
 import com.beratcan.app.exception.ExternalServiceException;
 import com.beratcan.app.exception.IdempotencyConflictException;
+import com.beratcan.app.exception.PriceChangedException;
 import com.beratcan.app.exception.PurchaseNotFoundException;
 import com.beratcan.app.exception.UnauthorizedOperationException;
 import com.beratcan.app.exception.UserNotFoundException;
@@ -24,9 +25,11 @@ import com.beratcan.app.repository.CartRepository;
 import com.beratcan.app.repository.PurchaseRepository;
 import com.beratcan.app.repository.StudentProfileRepository;
 import com.beratcan.app.repository.UserRepository;
+import com.beratcan.app.constants.AppTime;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -152,6 +155,21 @@ public class PurchaseService {
                     return ex;
                 });
 
+        // Lock altında ikinci idempotency pre-check.
+        // Pre-check (line 124) ile lock alımı arasında paralel bir checkout
+        // commit etmiş olabilir; o durumda yeni Purchase yaratmadan cached
+        // response döndürmeliyiz, yoksa Cart @Version optimistic lock fail
+        // edip 500 oluyor.
+        if (idempotencyKey != null) {
+            Optional<Purchase> existing =
+                    purchaseRepository.findByUserIdAndIdempotencyKey(userId, idempotencyKey);
+            if (existing.isPresent()) {
+                log.info("EVENT: Idempotent checkout replay (post-lock) | userId={} | key={} | purchaseId={}",
+                        userId, idempotencyKey, existing.get().getId());
+                return mapToResponse(existing.get());
+            }
+        }
+
         int cartItemCount = cart.getItems().size();
         BigDecimal initialTotalAmount = cart.getItems().stream()
                 .map(item -> item.getPriceAtAdd() != null ? item.getPriceAtAdd() : BigDecimal.ZERO)
@@ -167,7 +185,9 @@ public class PurchaseService {
 
         // ADIM 1: Tüm kitapları validate et
         List<Book> validBooks = new ArrayList<>();
+        List<BigDecimal> validPrices = new ArrayList<>();
         List<String> validationErrors = new ArrayList<>();
+        List<PriceChangedException.ChangedItem> priceChanges = new ArrayList<>();
         BigDecimal totalAmount = BigDecimal.ZERO;
 
         for (CartItem cartItem : cart.getItems()) {
@@ -201,9 +221,8 @@ public class PurchaseService {
 
             if (priceAtAdd != null && currentPrice != null &&
                     priceAtAdd.compareTo(currentPrice) != 0) {
-                validationErrors.add(book.getTitle() +
-                        ": Fiyat değişti (Sepete eklendiğinde: " + priceAtAdd + " TL, Şimdi: " + currentPrice
-                        + " TL)");
+                priceChanges.add(new PriceChangedException.ChangedItem(
+                        cartItem.getId(), book.getId(), book.getTitle(), priceAtAdd, currentPrice));
                 continue;
             }
 
@@ -212,7 +231,7 @@ public class PurchaseService {
                 continue;
             }
 
-            if (book.getPrice() == null || book.getPrice().compareTo(BigDecimal.ZERO) <= 0) {
+            if (priceAtAdd == null || priceAtAdd.compareTo(BigDecimal.ZERO) <= 0) {
                 validationErrors.add(book.getTitle() + ": Geçersiz fiyat");
                 continue;
             }
@@ -226,7 +245,16 @@ public class PurchaseService {
             }
 
             validBooks.add(book);
-            totalAmount = totalAmount.add(book.getPrice());
+            validPrices.add(priceAtAdd);
+            totalAmount = totalAmount.add(priceAtAdd);
+        }
+
+        // Fiyat değişimi varsa checkout'u 409 ile durdur — kullanıcı yeni toplamı
+        // /api/cart/refresh-prices ile onaylayıp tekrar denemeli.
+        if (!priceChanges.isEmpty()) {
+            log.info("EVENT: Checkout blocked by price change | userId={} | changedCount={}",
+                    userId, priceChanges.size());
+            throw new PriceChangedException(priceChanges);
         }
 
         log.info("Cart validation completed: userId={}, totalItems={}, validBooks={}, invalidBooks={}, totalAmount={}",
@@ -265,7 +293,7 @@ public class PurchaseService {
 
         // ADIM 3: Purchase kaydı oluştur
         String transactionId = generateTransactionId();
-        LocalDateTime purchaseDate = LocalDateTime.now();
+        LocalDateTime purchaseDate = AppTime.now();
 
         StudentProfile studentProfile = studentProfileRepository.findByUserId(userId)
                 .orElseThrow(() -> new BadRequestException("Öğrenci profili bulunamadı. userId=" + userId));
@@ -289,8 +317,9 @@ public class PurchaseService {
         // ADIM 4: PurchaseItem'lar oluştur
         BigDecimal totalDiscountDistributed = BigDecimal.ZERO;
 
-        int bookIndex = 0;
-        for (Book book : validBooks) {
+        for (int bookIndex = 0; bookIndex < validBooks.size(); bookIndex++) {
+            Book book = validBooks.get(bookIndex);
+            BigDecimal itemPrice = validPrices.get(bookIndex);
 
             BigDecimal bookDiscount = BigDecimal.ZERO;
             boolean isLastBook = (bookIndex == validBooks.size() - 1);
@@ -299,7 +328,7 @@ public class PurchaseService {
                 if (isLastBook) {
                     bookDiscount = discountAmount.subtract(totalDiscountDistributed);
                 } else {
-                    bookDiscount = book.getPrice()
+                    bookDiscount = itemPrice
                             .divide(totalAmount, 10, RoundingMode.HALF_UP)
                             .multiply(discountAmount)
                             .setScale(2, RoundingMode.HALF_UP);
@@ -307,19 +336,18 @@ public class PurchaseService {
                 }
             }
 
-            BigDecimal bookFinalPrice = book.getPrice().subtract(bookDiscount);
+            BigDecimal bookFinalPrice = itemPrice.subtract(bookDiscount);
             if (bookFinalPrice.compareTo(BigDecimal.ZERO) < 0) {
                 bookFinalPrice = BigDecimal.ZERO;
             }
 
             PurchaseItem item = new PurchaseItem();
             item.setBook(book);
-            item.setPrice(book.getPrice());
+            item.setPrice(itemPrice);
             item.setDiscountAmount(bookDiscount);
             item.setFinalPrice(bookFinalPrice);
 
             purchase.addItem(item);
-            bookIndex++;
         }
 
         Purchase savedPurchase;
@@ -329,6 +357,18 @@ public class PurchaseService {
             if (idempotencyKey != null && e.getMessage() != null
                     && e.getMessage().contains("uk_purchases_student_idempotency")) {
                 log.warn("Idempotency conflict on insert: userId={}, key={}",
+                        userId, idempotencyKey);
+                throw new IdempotencyConflictException(userId, idempotencyKey);
+            }
+            throw e;
+        } catch (ObjectOptimisticLockingFailureException e) {
+            // Defansif: Cart/CartItem @Version ihlali. Lock altındaki ikinci
+            // pre-check normalde bunu engellemeli; yine de bir refactor lock'u
+            // bypass ederse veya başka bir paralel yazıcı oluşursa, idempotency
+            // key varlığında controller cached response döndürebilsin diye
+            // IdempotencyConflictException'a çeviriyoruz.
+            if (idempotencyKey != null) {
+                log.warn("Optimistic lock during checkout, treating as idempotency replay: userId={}, key={}",
                         userId, idempotencyKey);
                 throw new IdempotencyConflictException(userId, idempotencyKey);
             }

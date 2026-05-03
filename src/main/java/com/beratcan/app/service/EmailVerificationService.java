@@ -4,6 +4,7 @@ import com.beratcan.app.entity.User;
 import com.beratcan.app.exception.BadRequestException;
 import com.beratcan.app.exception.UserNotFoundException;
 import com.beratcan.app.repository.UserRepository;
+import com.beratcan.app.constants.AppTime;
 import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
 import lombok.RequiredArgsConstructor;
@@ -17,7 +18,6 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
 import java.util.UUID;
 
 /**
@@ -107,7 +107,7 @@ public class EmailVerificationService {
 
         // Email'i doğrula
         user.setEmailVerified(true);
-        user.setEmailVerifiedAt(LocalDateTime.now());
+        user.setEmailVerifiedAt(AppTime.now());
         user.setEmailVerificationToken(null);
         userRepository.save(user);
 

@@ -15,6 +15,7 @@ import com.beratcan.app.exception.UnauthorizedOperationException;
 import com.beratcan.app.repository.DailyQuestionRepository;
 import com.beratcan.app.repository.DailyQuestionAnswerRepository;
 import com.beratcan.app.repository.StudentProfileRepository;
+import com.beratcan.app.constants.AppTime;
 import com.beratcan.app.storage.StoragePaths;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -23,7 +24,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.ZoneId;
 import java.util.HashMap;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -34,8 +34,6 @@ import java.util.Map;
 @Service
 @RequiredArgsConstructor
 public class DailyQuestionService {
-
-    private static final ZoneId TURKEY_ZONE = ZoneId.of("Europe/Istanbul");
 
     private final DailyQuestionRepository dailyQuestionRepository;
     private final DailyQuestionAnswerRepository answerRepository;
@@ -52,7 +50,7 @@ public class DailyQuestionService {
         studentProfileRepository.findByUserId(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Öğrenci profili bulunamadı: userId=" + userId));
 
-        DailyQuestion question = dailyQuestionRepository.findByDisplayDate(LocalDate.now(TURKEY_ZONE))
+        DailyQuestion question = dailyQuestionRepository.findByDisplayDate(LocalDate.now(AppTime.ZONE))
                 .orElse(null);
 
         if (question == null) {
@@ -89,7 +87,7 @@ public class DailyQuestionService {
                 .orElseThrow(() -> new ResourceNotFoundException("Soru bulunamadı"));
 
         // Zaman kontrolü
-        LocalDateTime now = LocalDateTime.now(TURKEY_ZONE);
+        LocalDateTime now = AppTime.now();
         LocalDateTime startTime = LocalDateTime.of(question.getDisplayDate(), question.getStartTime());
         LocalDateTime endTime = LocalDateTime.of(question.getDisplayDate(), question.getEndTime());
 
@@ -279,7 +277,7 @@ public class DailyQuestionService {
         response.setEndTime(question.getEndTime());
         
         // Active durumunu dinamik olarak hesapla
-        LocalDateTime now = LocalDateTime.now(TURKEY_ZONE);
+        LocalDateTime now = AppTime.now();
         LocalDateTime startTime = LocalDateTime.of(question.getDisplayDate(), question.getStartTime());
         LocalDateTime endTime = LocalDateTime.of(question.getDisplayDate(), question.getEndTime());
         
@@ -337,7 +335,7 @@ public class DailyQuestionService {
         response.setStartTime(question.getStartTime());
         response.setEndTime(question.getEndTime());
         // Active durumunu dinamik olarak hesapla
-        LocalDateTime now = LocalDateTime.now(TURKEY_ZONE);
+        LocalDateTime now = AppTime.now();
         LocalDateTime startTime = LocalDateTime.of(question.getDisplayDate(), question.getStartTime());
         LocalDateTime endTime = LocalDateTime.of(question.getDisplayDate(), question.getEndTime());
         boolean isActive = now.isAfter(startTime) && now.isBefore(endTime);

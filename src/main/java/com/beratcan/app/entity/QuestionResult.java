@@ -1,5 +1,6 @@
 package com.beratcan.app.entity;
 
+import com.beratcan.app.constants.AppTime;
 import com.beratcan.app.entity.enums.OptionLetter;
 import com.fasterxml.jackson.annotation.JsonBackReference;
 import jakarta.persistence.*;
@@ -37,7 +38,7 @@ public class QuestionResult {
     private Integer timeSpentSeconds; // Bu soruda geçirilen süre
 
     @Column(nullable = false)
-    private LocalDateTime answeredAt = LocalDateTime.now();
+    private LocalDateTime answeredAt = AppTime.now();
 
     // Constructor
     public QuestionResult() {
@@ -49,7 +50,7 @@ public class QuestionResult {
         this.question = question;
         this.selectedAnswer = selectedAnswer;
         this.timeSpentSeconds = timeSpentSeconds;
-        this.answeredAt = LocalDateTime.now();
+        this.answeredAt = AppTime.now();
         this.isCorrect = question.getCorrectAnswer().equals(selectedAnswer);
     }
 }

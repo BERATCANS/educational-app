@@ -1,5 +1,6 @@
 package com.beratcan.app.entity;
 
+import com.beratcan.app.constants.AppTime;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
@@ -21,5 +22,5 @@ public class SuperAdminProfile {
         private User user;
 
         @Column(columnDefinition = "TIMESTAMP DEFAULT NOW()")
-        private LocalDateTime createdAt = LocalDateTime.now();
+        private LocalDateTime createdAt = AppTime.now();
 }

@@ -1,5 +1,6 @@
 package com.beratcan.app.entity;
 
+import com.beratcan.app.constants.AppTime;
 import com.fasterxml.jackson.annotation.JsonBackReference;
 import jakarta.persistence.*;
 import lombok.Getter;
@@ -44,7 +45,7 @@ public class TestResult {
     private Integer timeSpentSeconds; // Toplam geçen süre
 
     @Column(nullable = false)
-    private LocalDateTime completedAt = LocalDateTime.now();
+    private LocalDateTime completedAt = AppTime.now();
 
     @OneToMany(mappedBy = "testResult", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private List<QuestionResult> questionResults = new ArrayList<>();

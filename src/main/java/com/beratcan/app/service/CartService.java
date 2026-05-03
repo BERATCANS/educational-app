@@ -209,6 +209,34 @@ public class CartService {
         }
 
         /**
+         * Sepetteki tüm item'ların priceAtAdd değerini güncel kitap fiyatına çeker.
+         * Checkout 409 (PRICE_CHANGED) döndüğünde client kullanıcıya yeni toplamı
+         * onaylatıp bu endpoint'i çağırır, sonra checkout'u yeni Idempotency-Key ile
+         * tekrarlar.
+         */
+        @Transactional
+        public CartResponse refreshPrices(Long userId) {
+                Cart cart = cartRepository.findByUserIdWithItemsAndBooks(userId)
+                                .orElseThrow(() -> new CartNotFoundException(userId));
+
+                int updated = 0;
+                for (CartItem item : cart.getItems()) {
+                        Book book = item.getBook();
+                        if (book == null || book.getPrice() == null) {
+                                continue;
+                        }
+                        if (item.getPriceAtAdd() == null
+                                        || item.getPriceAtAdd().compareTo(book.getPrice()) != 0) {
+                                item.setPriceAtAdd(book.getPrice());
+                                updated++;
+                        }
+                }
+
+                log.info("EVENT: Cart prices refreshed | userId={} | updatedItems={}", userId, updated);
+                return mapToResponse(cart);
+        }
+
+        /**
          * Cart'ı CartResponse'a dönüştür
          */
         private CartResponse mapToResponse(Cart cart) {

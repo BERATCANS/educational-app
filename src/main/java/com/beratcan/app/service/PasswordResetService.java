@@ -6,6 +6,7 @@ import com.beratcan.app.dto.request.VerifyResetCodeRequest;
 import com.beratcan.app.entity.User;
 import com.beratcan.app.exception.BadRequestException;
 import com.beratcan.app.repository.UserRepository;
+import com.beratcan.app.constants.AppTime;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationContext;
@@ -13,7 +14,6 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Random;
@@ -48,7 +48,7 @@ public class PasswordResetService {
 
         String code = String.format("%06d", new Random().nextInt(1_000_000));
         user.setPasswordResetCode(code);
-        user.setPasswordResetCodeExpiry(LocalDateTime.now().plusMinutes(OTP_EXPIRY_MINUTES));
+        user.setPasswordResetCodeExpiry(AppTime.now().plusMinutes(OTP_EXPIRY_MINUTES));
         // Önceki reset token varsa temizle
         user.setPasswordResetToken(null);
         user.setPasswordResetTokenExpiry(null);
@@ -74,7 +74,7 @@ public class PasswordResetService {
             throw new BadRequestException("Geçersiz kod");
         }
 
-        if (LocalDateTime.now().isAfter(user.getPasswordResetCodeExpiry())) {
+        if (AppTime.now().isAfter(user.getPasswordResetCodeExpiry())) {
             throw new BadRequestException("Kodun süresi dolmuş. Lütfen yeni kod isteyin.");
         }
 
@@ -83,7 +83,7 @@ public class PasswordResetService {
         user.setPasswordResetCode(null);
         user.setPasswordResetCodeExpiry(null);
         user.setPasswordResetToken(resetToken);
-        user.setPasswordResetTokenExpiry(LocalDateTime.now().plusMinutes(RESET_TOKEN_EXPIRY_MINUTES));
+        user.setPasswordResetTokenExpiry(AppTime.now().plusMinutes(RESET_TOKEN_EXPIRY_MINUTES));
         userRepository.save(user);
 
         log.info("Reset code verified, token issued: userId={}", user.getId());
@@ -102,7 +102,7 @@ public class PasswordResetService {
         User user = userRepository.findByPasswordResetToken(request.getResetToken())
                 .orElseThrow(() -> new BadRequestException("Geçersiz veya süresi dolmuş token"));
 
-        if (LocalDateTime.now().isAfter(user.getPasswordResetTokenExpiry())) {
+        if (AppTime.now().isAfter(user.getPasswordResetTokenExpiry())) {
             throw new BadRequestException("Token süresi dolmuş. Lütfen tekrar şifre sıfırlama isteyin.");
         }
 

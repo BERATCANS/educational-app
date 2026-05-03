@@ -1,5 +1,6 @@
 package com.beratcan.app.entity;
 
+import com.beratcan.app.constants.AppTime;
 import com.beratcan.app.entity.enums.DiscountType;
 import jakarta.persistence.*;
 import lombok.Getter;
@@ -7,7 +8,6 @@ import lombok.Setter;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.time.ZoneId;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -99,12 +99,10 @@ public class DiscountCode {
     @Column(nullable = false)
     private LocalDateTime updatedAt;
 
-    private static final ZoneId TURKEY_ZONE = ZoneId.of("Europe/Istanbul");
-
     @PrePersist
     protected void onCreate() {
-        createdAt = LocalDateTime.now(TURKEY_ZONE);
-        updatedAt = LocalDateTime.now(TURKEY_ZONE);
+        createdAt = AppTime.now();
+        updatedAt = AppTime.now();
         if (usedCount == null) {
             usedCount = 0;
         }
@@ -115,7 +113,7 @@ public class DiscountCode {
 
     @PreUpdate
     protected void onUpdate() {
-        updatedAt = LocalDateTime.now(TURKEY_ZONE);
+        updatedAt = AppTime.now();
     }
 
     @Column(nullable = false)

@@ -1,5 +1,6 @@
 package com.beratcan.app.entity;
 
+import com.beratcan.app.constants.AppTime;
 import jakarta.persistence.*;
 import lombok.Data;
 import java.time.LocalDateTime;
@@ -31,6 +32,6 @@ public class DailyQuestionAnswer {
 
     @PrePersist
     protected void onCreate() {
-        answeredAt = LocalDateTime.now();
+        answeredAt = AppTime.now();
     }
 }
