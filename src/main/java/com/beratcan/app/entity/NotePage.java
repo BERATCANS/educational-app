@@ -10,9 +10,7 @@ import lombok.Setter;
  *
  * <p>content_json: ink sayfaları için DrawingPath[] JSON, text/note için
  * metin bloku JSON'u. PostgreSQL TOAST otomatik sıkıştırma uygular.
- *
- * <p>thumbnail_b64: liste ekranı önizlemesi için JPEG base64. ~100KB
- * tipik boyut, sayfa başına bir tane.
+ * Thumbnail tutulmaz — frontend canvas'tan tekrar üretebilir.
  */
 @Entity
 @Getter
@@ -39,9 +37,6 @@ public class NotePage {
 
     @Column(name = "content_json", columnDefinition = "TEXT")
     private String contentJson;
-
-    @Column(name = "thumbnail_b64", columnDefinition = "TEXT")
-    private String thumbnailB64;
 
     @Column(name = "created_at", nullable = false)
     private long createdAt;
