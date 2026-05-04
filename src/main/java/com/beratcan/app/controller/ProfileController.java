@@ -8,6 +8,7 @@ import com.beratcan.app.dto.request.UpdateQuestionTargetRequest;
 import com.beratcan.app.dto.response.ProfileAcademicResponse;
 import com.beratcan.app.dto.response.ProfileDetailsResponse;
 import com.beratcan.app.dto.response.QuestionTargetResponse;
+import com.beratcan.app.dto.response.StudentStatsResponse;
 import com.beratcan.app.dto.response.UserResponse;
 import com.beratcan.app.entity.StudentProfile;
 import com.beratcan.app.entity.User;
@@ -39,6 +40,17 @@ public class ProfileController {
         Long userId = Long.parseLong(authentication.getName());
         ProfileService.UserWithStreakUpdate result = profileService.getCurrentUserWithStreakUpdate(userId);
         return ResponseEntity.ok(new UserResponse(result.getUser(), result.isStreakUpdated()));
+    }
+
+    /**
+     * Dashboard "Hızlı İstatistikler": toplam çözülen soru ve doğruluk oranı.
+     * Aynı soruya birden çok cevap verildiyse SON cevap baz alınır.
+     */
+    @GetMapping("/stats")
+    @RateLimit(requestsPerMinute = 30, keyType = "USER", message = "İstatistikler sık isteniyor, lütfen bekleyin.")
+    public ResponseEntity<StudentStatsResponse> getStats(Authentication authentication) {
+        Long userId = Long.parseLong(authentication.getName());
+        return ResponseEntity.ok(profileService.getStudentStats(userId));
     }
 
     @GetMapping("/academic")

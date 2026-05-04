@@ -6,14 +6,17 @@ import com.beratcan.app.dto.request.UpdatePasswordRequest;
 import com.beratcan.app.dto.request.UpdateProfileRequest;
 import com.beratcan.app.dto.request.UpdateQuestionTargetRequest;
 import com.beratcan.app.dto.response.QuestionTargetResponse;
+import com.beratcan.app.dto.response.StudentStatsResponse;
 import com.beratcan.app.entity.StudentProfile;
 import com.beratcan.app.entity.User;
 import com.beratcan.app.entity.enums.ExamType;
 import com.beratcan.app.exception.BadRequestException;
 import com.beratcan.app.exception.ConflictException;
 import com.beratcan.app.exception.ResourceNotFoundException;
+import com.beratcan.app.repository.QuestionResultRepository;
 import com.beratcan.app.repository.StudentProfileRepository;
 import com.beratcan.app.repository.UserRepository;
+import com.beratcan.app.repository.projection.StudentAccuracyProjection;
 import com.beratcan.app.constants.AppTime;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -32,6 +35,7 @@ public class ProfileService {
     private final UserService userService;
     private final UserRepository userRepository;
     private final StudentProfileRepository studentProfileRepository;
+    private final QuestionResultRepository questionResultRepository;
     private final BCryptPasswordEncoder passwordEncoder;
     private final EmailVerificationService emailVerificationService;
 
@@ -357,6 +361,23 @@ public class ProfileService {
         log.info("User {} streak reset to 1 (last activity: {})",
                 username, lastActivity);
         return true;
+    }
+
+    /**
+     * Dashboard "Hızlı İstatistikler" — toplam çözülen soru ve doğruluk oranı.
+     *
+     * <p>Aynı soruya birden çok cevap verildiyse SON cevap baz alınır
+     * (DISTINCT question_id). Doğru oran 0–100 arası, iki ondalık basamağa
+     * yuvarlanmış olarak döner. Hiç cevap yoksa 0/0.0.
+     */
+    @Transactional(readOnly = true)
+    public StudentStatsResponse getStudentStats(Long userId) {
+        StudentAccuracyProjection p = questionResultRepository.findStudentAccuracy(userId);
+        long total = p == null ? 0L : p.getTotal();
+        long correct = p == null ? 0L : p.getCorrect();
+        double rate = total == 0 ? 0.0
+                : Math.round((correct * 10000.0) / total) / 100.0;
+        return new StudentStatsResponse(total, rate);
     }
 
 }
