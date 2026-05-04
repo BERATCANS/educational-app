@@ -20,6 +20,13 @@ public class TestSubmissionRequest {
 
     private Map<Long, OptionLetter> userAnswers; // questionId -> selectedAnswer
 
+    /**
+     * Soru başına harcanan süre (questionId → saniye). Nullable — frontend
+     * deploy'u senkron olmayabilir, eski clientlardan null gelir ve endpoint
+     * hâlâ 200 döner. Değer aralığı kontrolü servis katmanında: 0 ≤ v ≤ 3600.
+     */
+    private Map<Long, Integer> questionTimeSeconds;
+
     @NotNull(message = "Toplam süre boş olamaz")
     @Min(value = 0, message = "Toplam süre negatif olamaz")
     private Integer totalTimeSeconds;

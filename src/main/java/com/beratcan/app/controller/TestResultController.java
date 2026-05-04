@@ -37,6 +37,7 @@ public class TestResultController {
                 userId, // Authentication'dan alınan userId
                 request.getTestId(),
                 request.getUserAnswers(),
+                request.getQuestionTimeSeconds(),
                 request.getTotalTimeSeconds());
         return ResponseEntity.ok(result);
     }
