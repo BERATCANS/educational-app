@@ -260,13 +260,10 @@ public class NoteSyncService {
         Object orderIndex = p.get("orderIndex");
         if (orderIndex instanceof Number n) page.setOrderIndex(n.intValue());
 
-        // content_json ve thumbnail_b64: payload'da AÇIKÇA varsa overwrite et
+        // content_json: payload'da AÇIKÇA varsa overwrite et
         // (null değer açıkça silmek anlamına gelir).
         if (p.containsKey("contentJson")) {
             page.setContentJson(p.get("contentJson") == null ? null : String.valueOf(p.get("contentJson")));
-        }
-        if (p.containsKey("thumbnailB64")) {
-            page.setThumbnailB64(p.get("thumbnailB64") == null ? null : String.valueOf(p.get("thumbnailB64")));
         }
     }
 

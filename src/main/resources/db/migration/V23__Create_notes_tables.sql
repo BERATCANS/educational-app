@@ -11,8 +11,10 @@
 --  - Soft delete: is_deleted BOOLEAN + deleted_at BIGINT (epoch ms).
 --    @SQLDelete/@SQLRestriction kullanılmıyor — sync sorguları
 --    silinmiş kayıtları da görmek zorunda (delta için deletedIds).
---  - content_json ve thumbnail_b64 TEXT: PostgreSQL TOAST otomatik
---    sıkıştırır. ~1MB'a kadar performans sorunu yok.
+--  - content_json TEXT: PostgreSQL TOAST otomatik sıkıştırır. ~1MB'a
+--    kadar performans sorunu yok. Thumbnail backend'de tutulmaz —
+--    frontend canvas'tan deterministik üretebilir, tekrar saklamak boşa
+--    yer harcar (sayfa başına ~100KB).
 --  - updated_at BIGINT (ms epoch): frontend Date.now() ile birebir
 --    uyumlu, delta sync için index'li.
 -- ============================================================
@@ -39,7 +41,6 @@ CREATE TABLE note_pages (
     page_type     VARCHAR(16) NOT NULL,
     order_index   INTEGER NOT NULL DEFAULT 0,
     content_json  TEXT,
-    thumbnail_b64 TEXT,
     created_at    BIGINT NOT NULL,
     updated_at    BIGINT NOT NULL,
     is_deleted    BOOLEAN NOT NULL DEFAULT FALSE,

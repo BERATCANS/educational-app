@@ -15,14 +15,13 @@ public class NotePageDto {
     private String pageType;
     private int orderIndex;
     private String contentJson;
-    private String thumbnailB64;
     private long createdAt;
     private long updatedAt;
 
     public static NotePageDto from(NotePage p) {
         return new NotePageDto(p.getId(), p.getNoteId(), p.getTitle(),
                 p.getPageType().name().toLowerCase(),
-                p.getOrderIndex(), p.getContentJson(), p.getThumbnailB64(),
+                p.getOrderIndex(), p.getContentJson(),
                 p.getCreatedAt(), p.getUpdatedAt());
     }
 }
