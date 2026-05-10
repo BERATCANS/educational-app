@@ -52,6 +52,7 @@ public class TestResultService {
     @Transactional
     public TestResultDetailResponse saveTestResult(Long userId, Long testId,
             Map<Long, OptionLetter> userAnswers,
+            Map<Long, Integer> questionTimeSeconds,
             Integer totalTimeSeconds) {
         long startTime = System.currentTimeMillis();
 
@@ -60,6 +61,15 @@ public class TestResultService {
         }
         if (totalTimeSeconds == null || totalTimeSeconds < 0) {
             throw new BadRequestException("Total time seconds must be a non-negative number");
+        }
+        if (questionTimeSeconds != null) {
+            for (Map.Entry<Long, Integer> e : questionTimeSeconds.entrySet()) {
+                Integer v = e.getValue();
+                if (v != null && (v < 0 || v > 3600)) {
+                    throw new BadRequestException(
+                            "questionTimeSeconds[" + e.getKey() + "] geçersiz: 0–3600 arası olmalı, gelen=" + v);
+                }
+            }
         }
 
         log.info("EVENT: Test submission started | userId={} | testId={} | questionCount={}",
@@ -112,6 +122,10 @@ public class TestResultService {
             List<QuestionResult> existingQuestionResults = questionResultRepository
                     .findByUserIdAndQuestionId(userId, questionId);
 
+            Integer perQuestionTime = questionTimeSeconds != null
+                    ? questionTimeSeconds.get(questionId)
+                    : null;
+
             QuestionResult questionResult;
             if (!existingQuestionResults.isEmpty()) {
                 // Mevcut QuestionResult'ı güncelle
@@ -119,6 +133,7 @@ public class TestResultService {
                 questionResult.setTestResult(testResult);
                 questionResult.setSelectedAnswer(selectedAnswer);
                 questionResult.setIsCorrect(isCorrect);
+                questionResult.setTimeSpentSeconds(perQuestionTime);
                 questionResult.setAnsweredAt(AppTime.now());
             } else {
                 // Yeni QuestionResult oluştur
@@ -127,6 +142,7 @@ public class TestResultService {
                 questionResult.setQuestion(question);
                 questionResult.setSelectedAnswer(selectedAnswer);
                 questionResult.setIsCorrect(isCorrect);
+                questionResult.setTimeSpentSeconds(perQuestionTime);
                 questionResult.setAnsweredAt(AppTime.now());
             }
 
@@ -142,6 +158,19 @@ public class TestResultService {
         log.info("EVENT: Test scored | userId={} | testId={} | score={}/{} | successRate={}%",
                 userId, testId, correctCount, totalQuestions,
                 successRate != null ? String.format("%.2f", successRate) : "N/A");
+
+        // Sanity check: per-question time toplamı totalTime'ı %20'den fazla aşıyorsa
+        // muhtemelen frontend'de timer bug'ı var. Hard fail değil, sadece log.
+        if (questionTimeSeconds != null && !questionTimeSeconds.isEmpty()) {
+            long sum = questionTimeSeconds.values().stream()
+                    .filter(v -> v != null)
+                    .mapToLong(Integer::longValue)
+                    .sum();
+            if (sum > totalTimeSeconds * 1.2) {
+                log.warn("EVENT: questionTimeSeconds sum exceeds totalTime by >20% | userId={} | testId={} | sum={} | total={}",
+                        userId, testId, sum, totalTimeSeconds);
+            }
+        }
 
         TestResult savedTestResult = testResultRepository.save(testResult);
 
