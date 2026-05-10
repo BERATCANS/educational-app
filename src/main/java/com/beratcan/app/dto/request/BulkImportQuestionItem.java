@@ -32,15 +32,13 @@ public class BulkImportQuestionItem {
     @Size(max = 500, message = "Video URL'si en fazla 500 karakter olabilir")
     private String videoUrl;
 
-    @NotBlank(message = "1. ipucu boş olamaz")
+    // hint1/2/3 ve solution opsiyonel: eksik gelirse o alan boş bırakılır
+    // ve aiAnalysisStatus FAILED olur (admin sonradan tamamlayabilir).
     private String hint1;
 
-    @NotBlank(message = "2. ipucu boş olamaz")
     private String hint2;
 
-    @NotBlank(message = "3. ipucu boş olamaz")
     private String hint3;
 
-    @NotBlank(message = "Çözüm metni boş olamaz")
     private String solution;
 }

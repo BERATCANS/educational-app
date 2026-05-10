@@ -297,17 +297,32 @@ public class BulkImportService {
         question.setVideoUrl(item.getVideoUrl());
         question.setSequenceNumber(sequenceNumber);
         question.setExamType(examType);
-        question.setAiAnalysisStatus(AIAnalysisStatus.COMPLETED);
 
-        question.getHints().add(buildHint(item.getHint1(), 0));
-        question.getHints().add(buildHint(item.getHint2(), 1));
-        question.getHints().add(buildHint(item.getHint3(), 2));
+        boolean h1 = StringUtils.hasText(item.getHint1());
+        boolean h2 = StringUtils.hasText(item.getHint2());
+        boolean h3 = StringUtils.hasText(item.getHint3());
+        boolean hasSolution = StringUtils.hasText(item.getSolution());
 
-        Explanation explanation = new Explanation();
-        explanation.setText(item.getSolution().trim());
-        explanation.setLikes(0);
-        explanation.setDislikes(0);
-        question.setExplanation(explanation);
+        // sequenceNumber 0/1/2 sabit kalır — boş olanlar listeye eklenmez (slot atlanır,
+        // admin elle doldurduğunda doğru slot'a düşer).
+        if (h1) question.getHints().add(buildHint(item.getHint1(), 0));
+        if (h2) question.getHints().add(buildHint(item.getHint2(), 1));
+        if (h3) question.getHints().add(buildHint(item.getHint3(), 2));
+
+        if (hasSolution) {
+            Explanation explanation = new Explanation();
+            explanation.setText(item.getSolution().trim());
+            explanation.setLikes(0);
+            explanation.setDislikes(0);
+            question.setExplanation(explanation);
+        }
+
+        // 3 hint + solution dolu ise COMPLETED; eksik varsa FAILED ki admin paneli
+        // analiz tamamlanmamış soruları işaretleyebilsin.
+        boolean allProvided = h1 && h2 && h3 && hasSolution;
+        question.setAiAnalysisStatus(allProvided
+                ? AIAnalysisStatus.COMPLETED
+                : AIAnalysisStatus.FAILED);
 
         return question;
     }
